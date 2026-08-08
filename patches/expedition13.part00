@@ -1,0 +1,94 @@
+diff --git a/README.md b/README.md
+index 7514d45..eed27b4 100644
+--- a/README.md
++++ b/README.md
+@@ -92,3 +92,15 @@ The original 847 MB `IBCAO_v4_2_13_400m_bedrock.tif` in the separate Arctic Map
+ - Fjord research now strongly favors coastal/plankton programs; glacier and shore work is constrained to appropriate terrain, with Svalbard glacier anchors based on real glacier locations.
+ - Dark-season weather can produce aurora events and atmospheric research opportunities. Seasonal terrain overlay retains year-round high-elevation/glacier snow and strengthens snow cover into winter.
+ - Successful publications no longer impose a submission cooldown. Research-operation windows show all qualified scientists and equipment in use.
++
++## Browser saves and analytics (Expedition 13)
++
++The game now keeps one automatic save and three manual save slots in browser `localStorage`. Saves remain on the same browser/device and include both navigation state and the research-program state.
++
++Google Analytics 4 instrumentation is built in but remains disabled until a GA4 Measurement ID is supplied. Set the ID in `index.html`:
++
++```html
++<meta name="ar-analytics-id" content="G-XXXXXXXXXX">
++```
++
++When configured, the game sends gameplay events such as game starts/loads/saves, session duration, menu and research UI actions, navigation interactions, port visits, grant activity, mission starts/completions, station completion, publications, scientist/equipment/vessel changes, wildlife observations, resupply actions, and game-over reasons. Events also carry current gameplay context (game date, vessel, resources, money, citations, data, crew/equipment/grant counts, completed missions, papers, wildlife observations, and active play time). No player name, email address, or real-world location is intentionally collected by the game code.
+diff --git a/game.js b/game.js
+index a3b8e86..945d057 100644
+--- a/game.js
++++ b/game.js
+@@ -333,6 +333,101 @@
+   const wildlifeClearOfPorts=(x,y)=>cityWorldPositions.every(city=>Math.hypot(x-city.x,y-city.y)>=WILDLIFE_PORT_CLEARANCE);
+   currentPortCity=cityLabels.find(city=>city.name==='LONGYEARBYEN')||cityLabels[0]||null;
+   if(currentPortCity)state.dockedPort=currentPortCity.name;
++
++  // Expedition 13: local saves, title/pause menu, and analytics instrumentation.
++  const GAME_VERSION='expedition-13',SAVE_VERSION=1;
++  const SAVE_KEYS={auto:'arctic-research-save-auto-v1',slot1:'arctic-research-save-slot-1-v1',slot2:'arctic-research-save-slot-2-v1',slot3:'arctic-research-save-slot-3-v1'};
++  const AUTO_NEW_KEY='arctic-research-start-new-v1';
++  let menuOpen=true,autosaveSuspended=false,autosaveTimer=0,lastResearchAnalytics=null;
++  const safeJson=value=>{try{return JSON.parse(JSON.stringify(value));}catch(error){return null;}};
++  const readSave=slot=>{try{const raw=localStorage.getItem(SAVE_KEYS[slot]);if(!raw)return null;const parsed=JSON.parse(raw);return parsed?.version===SAVE_VERSION?parsed:null;}catch(error){return null;}};
++  const hasAnySave=()=>Object.keys(SAVE_KEYS).some(slot=>!!readSave(slot));
++  const activeClock={total:0,since:document.visibilityState==='visible'?performance.now():null};
++  const updateActiveClock=()=>{if(activeClock.since!=null){activeClock.total+=performance.now()-activeClock.since;activeClock.since=null;}if(document.visibilityState==='visible')activeClock.since=performance.now();};
++  const activeSeconds=()=>Math.max(0,Math.round((activeClock.total+(activeClock.since==null?0:performance.now()-activeClock.since))/1000));
++
++  function analyticsContext(){
++    const rs=research?.getState?.()||{},ship=research?.getVesselModifiers?.()||{},player=rs.scientists?.find?.(item=>item.isPlayer),pos=unpolar(state.x,state.y);
++    return {
++      game_version:GAME_VERSION,game_started:state.started?1:0,game_year:state.year,season_day:Math.round(state.seasonDay*10)/10,
++      latitude:Math.round(pos.lat*100)/100,longitude:Math.round(pos.lon*100)/100,vessel_id:rs.currentVessel||'',money:Math.round(rs.money||0),
++      citations:Math.floor(rs.citations||0),science_data:Math.round(rs.data||0),fuel_pct:Math.round(state.fuel),food_pct:Math.round(state.food),
++      crew_count:rs.scientists?.length||0,equipment_count:rs.installedEquipment?.length||0,active_grants:rs.targets?.filter?.(item=>item.kind==='grant'||item.kind==='contract').length||0,
++      missions_completed:rs.completed?.length||0,papers:rs.papers?.length||0,wildlife_seen:rs.observed?.length||0,port_visits:rs.portVisits||0,play_seconds:activeSeconds(),
++      player_career:player?.career||'',player_specialty:player?.specialty||'',viewport:`${innerWidth}x${innerHeight}`,returning_player:hasAnySave()?1:0
++    };
++  }
++  const analytics=(()=>{
++    const measurementId=document.querySelector('meta[name="ar-analytics-id"]')?.content?.trim()||'';
++    let enabled=/^G-[A-Z0-9]+$/i.test(measurementId);
++    if(enabled){
++      window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};
++      window.gtag('js',new Date());window.gtag('config',measurementId,{send_page_view:true});
++      const script=document.createElement('script');script.async=true;script.src=`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;document.head.appendChild(script);
++    }
++    const clean=value=>typeof value==='number'?(Number.isFinite(value)?value:0):typeof value==='boolean'?(value?1:0):String(value??'').slice(0,100);
++    const track=(name,extra={})=>{
++      if(!enabled)return false;
++      const raw={...extra,...analyticsContext()},params={};let count=0;
++      for(const [key,value] of Object.entries(raw)){if(value==null||value==='')continue;if(count>=25)break;params[key.slice(0,40)]=clean(value);count++;}
++      window.gtag?.('event',String(name).replace(/[^a-zA-Z0-9_]/g,'_').slice(0,40),params);return true;
++    };
++    return{track,isEnabled:()=>enabled,measurementId};
++  })();
++  window.ARAnalytics=analytics;
++
++  function saveMeta(){
++    const rs=research?.getState?.()||{},ship=research?.getVesselModifiers?.()||{},pos=unpolar(state.x,state.y);
++    return {savedAt:new Date().toISOString(),location:currentPortCity?.name||state.dockedPort||locationName(pos.lat,pos.lon),vessel:ship.name||rs.currentVessel||'Research Vessel',money:Math.round(rs.money||0),missions:rs.completed?.length||0,papers:rs.papers?.length||0,year:state.year,seasonDay:state.seasonDay};
++  }
++  function createGameSave(){return{version:SAVE_VERSION,gameVersion:GAME_VERSION,savedAt:new Date().toISOString(),meta:saveMeta(),navigation:safeJson(state),currentPortName:currentPortCity?.name||null,checkpoint:safeJson(checkpoint),research:safeJson(research?.createCheckpoint?.()||research?.getState?.()||null)};}
++  function saveGame(slot='auto',reason='auto'){
++    if(!state.started||!SAVE_KEYS[slot]||autosaveSuspended)return false;
++    try{const payload=createGameSave();localStorage.setItem(SAVE_KEYS[slot],JSON.stringify(payload));refreshMenu();if(slot!=='auto')analytics.track('game_saved',{save_slot:slot,save_reason:reason});return true;}catch(error){showToast('SAVE FAILED — BROWSER STORAGE IS NOT AVAILABLE',2600);return false;}
++  }
++  function scheduleAutosave(delay=450){if(!state.started||autosaveSuspended)return;clearTimeout(autosaveTimer);autosaveTimer=setTimeout(()=>saveGame('auto','state_change'),delay);}
++  function restoreGameSave(payload,source='auto'){
++    if(!payload?.navigation||!payload?.research)return false;
++    try{
++      const nav=safeJson(payload.navigation)||{};Object.assign(state,nav,{started:true,gameOver:false,moving:false,commandActive:false,ramming:false,ramClock:0});
++      state.tx=Number.isFinite(nav.tx)?nav.tx:state.x;state.ty=Number.isFinite(nav.ty)?nav.ty:state.y;
++      checkpoint=payload.checkpoint||checkpoint;currentPortCity=payload.currentPortName?cityLabels.find(item=>item.name===payload.currentPortName)||null:null;
++      research?.restoreCheckpoint?.(payload.research);pendingResearchTargetId=null;announcedWeatherEvent=null;iceFloes.length=0;wakeFloes.length=0;brokenIceChannels.length=0;brokenIceGrid.clear();
++      ui.gameOver.classList.add('hidden');ui.fuelLevel.style.width=state.fuel+'%';ui.foodLevel.style.width=state.food+'%';updateResourceWarning();
++      updateVesselButton(research?.getVesselModifiers?.()||vesselModifiers());zoomLevel=(research?.getVesselModifiers?.()||vesselModifiers()).minZoom||zoomLevel;setZoom(0,true);
++      if(currentPortCity&&state.dockedPort)research?.enterPort?.(currentPortCity,{resume:true});else research?.leavePort?.();
++      menuOpen=false;ui.welcome.classList.add('hidden');lastResearchAnalytics=research?.getState?.()||null;showToast(`EXPEDITION LOADED — ${payload.meta?.location||'ARCTIC OCEAN'}`,2400);
++      analytics.track(source==='auto'?'continue_game':'load_game',{save_slot:source,save_age_hours:Math.round((Date.now()-Date.parse(payload.savedAt||Date.now()))/360000)/10});scheduleAutosave(900);return true;
++    }catch(error){showToast('CO
