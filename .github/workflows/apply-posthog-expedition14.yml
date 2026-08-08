@@ -1,0 +1,29 @@
+name: Apply PostHog Expedition 14
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'patches/posthog-expedition14.patch'
+      - '.github/workflows/apply-posthog-expedition14.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply verified patch
+        run: |
+          git apply --check patches/posthog-expedition14.patch
+          git apply patches/posthog-expedition14.patch
+          git rm patches/posthog-expedition14.patch .github/workflows/apply-posthog-expedition14.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html game.js README.md
+          git commit -m "Switch analytics to PostHog"
+          git push
