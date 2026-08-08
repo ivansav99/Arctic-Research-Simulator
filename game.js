@@ -10,6 +10,29 @@
   const research=window.ArcticResearch||null;
   const SMALL_PASSENGER_SVG='data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360"><rect width="900" height="360" fill="#dcecf0"/><path d="M105 250h665l-78 65H182z" fill="#173c50"/><path d="M220 160h420l45 90H175z" fill="#f7faf9" stroke="#315f70" stroke-width="8"/><path d="M275 92h250l80 68H230z" fill="#f7faf9" stroke="#315f70" stroke-width="8"/><path d="M360 48h105l28 44H330z" fill="#f7faf9" stroke="#315f70" stroke-width="8"/><rect x="390" y="20" width="18" height="45" fill="#315f70"/><path d="M408 25l80 22" stroke="#315f70" stroke-width="7"/><g fill="#5cb1d0">${Array.from({length:8},(_,i)=>`<rect x="${250+i*45}" y="118" width="28" height="20" rx="5"/>`).join('')}${Array.from({length:11},(_,i)=>`<rect x="${205+i*43}" y="190" width="28" height="22" rx="5"/>`).join('')}</g><path d="M160 315h580" stroke="#69b4c9" stroke-width="8" stroke-linecap="round"/><text x="450" y="342" text-anchor="middle" font-family="sans-serif" font-size="24" fill="#315f70">SMALL ARCTIC PASSENGER VESSEL</text></svg>`);
 
+  const loadSprite=src=>{const img=new Image();img.decoding='async';img.src=src;return img;};
+  const SPRITE_ATLAS=loadSprite('assets/map-sprites-atlas.svg');
+  const atlasSprite=(sx,sy,sw,sh)=>({image:SPRITE_ATLAS,sx,sy,sw,sh});
+  const SPRITES={
+    vessels:{
+      fishing:atlasSprite(6,6,33,64),
+      trawler:atlasSprite(6,6,33,64),
+      coastal:atlasSprite(45,6,33,64),
+      global:atlasSprite(84,6,37,64),
+      icebreaker:atlasSprite(127,6,38,64),
+      nuclear:atlasSprite(127,6,38,64)
+    },
+    wildlife:{
+      whale:atlasSprite(6,76,64,64),
+      seal:atlasSprite(76,76,40,64),
+      walrus:atlasSprite(122,76,64,63),
+      polarBear:atlasSprite(6,146,48,64),
+      birds:atlasSprite(60,146,64,39),
+      narwhal:atlasSprite(130,146,64,50)
+    }
+  };
+  const spriteReady=sprite=>!!(sprite?.image&&sprite.image.complete&&sprite.image.naturalWidth>0);
+
   // Arctic terrain overview + high-resolution on-demand tiles. The overview
   // keeps the minimap fast. The main chart requests only the 256 km tiles that
   // intersect the current viewport, at 1024 px per tile (~125 m/pixel request
@@ -335,7 +358,7 @@
   if(currentPortCity)state.dockedPort=currentPortCity.name;
 
   // Expedition 13: local saves, title/pause menu, and analytics instrumentation.
-  const GAME_VERSION='expedition-14',SAVE_VERSION=1;
+  const GAME_VERSION='expedition-15',SAVE_VERSION=1;
   const SAVE_KEYS={auto:'arctic-research-save-auto-v1',slot1:'arctic-research-save-slot-1-v1',slot2:'arctic-research-save-slot-2-v1',slot3:'arctic-research-save-slot-3-v1'};
   const AUTO_NEW_KEY='arctic-research-start-new-v1';
   let menuOpen=true,autosaveSuspended=false,autosaveTimer=0,lastResearchAnalytics=null;
@@ -732,6 +755,61 @@
   function forEachWildlifeVisual(callback){for(const whale of whales)callback(whale,whale.species,'whale',whale);for(const school of fishSchools)callback(school,school.species,'fish',school);for(const animal of iceWildlife)callback(animal,animal.type==='bear'?'POLAR BEAR':animal.species,animal.type==='bear'?'mammal':animal.type==='walrus'?'walrus':'seal',iceAnimalWorld(animal));for(const fox of arcticFoxes)callback(fox,'ARCTIC FOX','mammal',foxWorld(fox));for(const animal of landWildlife)callback(animal,animal.species,'mammal',landAnimalWorld(animal));if(summerWildlifeVisible())for(const bird of summerBirds)callback(bird,bird.species,'bird',summerBirdWorld(bird));}
   function wildlifeAtScreenPoint(clientX,clientY){let result=null,best=30;forEachWildlifeVisual((entity,species,category,w)=>{if(!wildlifeClearOfPorts(w.x,w.y))return;const p=worldToScreen(w.x,w.y);if(p.x<-35||p.x>width+35||p.y<72||p.y>height+35)return;const hit=Math.hypot(p.x-clientX,p.y-clientY);if(hit<best){best=hit;result={species,category,world:w,individualId:ensureWildlifeId(entity),entity};}});return result;}
   function wildlifeObservationAvailable(id){return!!id&&!observedWildlifeFallback.has(id)&&!research?.isWildlifeObserved?.(id);}
+
+  function markerSurfaceTone(x,y){const ice=iceTypeAt(x,y);return isLand(x,y)||ice==='packed'||ice==='cracked'||ice==='fast'||ice==='marginal'?'light':'dark';}
+  function drawMarkerBackdrop(radius,tone='dark'){
+    const r=radius*1.3;
+    const g=ctx.createRadialGradient(0,0,r*.12,0,0,r);
+    if(tone==='light'){
+      g.addColorStop(0,'rgba(8,34,50,.36)');
+      g.addColorStop(.55,'rgba(8,34,50,.18)');
+      g.addColorStop(1,'rgba(8,34,50,0)');
+    }else{
+      g.addColorStop(0,'rgba(239,250,252,.28)');
+      g.addColorStop(.55,'rgba(239,250,252,.14)');
+      g.addColorStop(1,'rgba(239,250,252,0)');
+    }
+    ctx.fillStyle=g;
+    ctx.beginPath();
+    ctx.arc(0,0,r,0,Math.PI*2);
+    ctx.fill();
+  }
+  function drawSpriteCentered(sprite,widthPx,heightPx){ctx.drawImage(sprite.image,sprite.sx,sprite.sy,sprite.sw,sprite.sh,-widthPx/2,-heightPx/2,widthPx,heightPx);}
+  function wildlifeSpriteFor(species,category){
+    const name=String(species||'').toUpperCase();
+    if(category==='whale')return name.includes('NARWHAL')?SPRITES.wildlife.narwhal:SPRITES.wildlife.whale;
+    if(category==='seal')return SPRITES.wildlife.seal;
+    if(category==='walrus')return SPRITES.wildlife.walrus;
+    if(category==='bird')return SPRITES.wildlife.birds;
+    if(name.includes('POLAR BEAR'))return SPRITES.wildlife.polarBear;
+    return null;
+  }
+  function wildlifeSpriteSize(species,category){
+    const name=String(species||'').toUpperCase();
+    if(category==='whale')return name.includes('NARWHAL')?{w:44,h:34,r:21}:{w:40,h:40,r:20};
+    if(category==='seal')return{w:24,h:38,r:15};
+    if(category==='walrus')return{w:31,h:30,r:17};
+    if(category==='bird')return{w:36,h:22,r:15};
+    if(name.includes('POLAR BEAR'))return{w:28,h:38,r:17};
+    return null;
+  }
+  function vesselSpriteFor(item=vesselModifiers()){
+    const key=String(item.id||item.classId||item.image||item.name||'').toLowerCase();
+    if(key.includes('nuclear'))return SPRITES.vessels.nuclear;
+    if(key.includes('icebreaker'))return SPRITES.vessels.icebreaker;
+    if(key.includes('global'))return SPRITES.vessels.global;
+    if(key.includes('coastal'))return SPRITES.vessels.coastal;
+    if(key.includes('trawler'))return SPRITES.vessels.trawler;
+    if(key.includes('fishing'))return SPRITES.vessels.fishing;
+    return SPRITES.vessels.coastal;
+  }
+  function vesselSpriteMetrics(item=vesselModifiers()){
+    const key=String(item.id||item.classId||item.image||item.name||'').toLowerCase();
+    if(key.includes('icebreaker')||key.includes('nuclear'))return{w:44,h:68,r:29};
+    if(key.includes('global'))return{w:40,h:66,r:28};
+    if(key.includes('coastal'))return{w:36,h:62,r:27};
+    return{w:32,h:58,r:25};
+  }
   function drawWildlifeIcons(){
     const weather=currentWeather();
     ctx.save();
@@ -739,15 +817,25 @@
       if(!wildlifeClearOfPorts(w.x,w.y))return;
       const fog=wildlifeFogFactor(w.x,w.y,weather); if(fog<=.03)return;
       const p=worldToScreen(w.x,w.y); if(p.x<-40||p.x>width+40||p.y<70||p.y>height+40)return;
-      ctx.save(); ctx.translate(p.x,p.y); ctx.globalAlpha=.92*fog; ctx.lineWidth=1.4; ctx.strokeStyle='rgba(239,252,252,.9)';
-      if(category==='whale'){
-        ctx.rotate((entity.angle||0)+Math.PI/2);ctx.fillStyle=entity.color||'#355a6d';ctx.beginPath();ctx.ellipse(0,0,12,5.5,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.beginPath();ctx.moveTo(0,-5);ctx.quadraticCurveTo(-2,-10,1,-12);ctx.quadraticCurveTo(4,-9,3,-5);ctx.fill();ctx.beginPath();ctx.moveTo(-11,0);ctx.lineTo(-17,-5);ctx.lineTo(-16,0);ctx.lineTo(-17,5);ctx.closePath();ctx.fill();
+      const sprite=wildlifeSpriteFor(species,category),size=wildlifeSpriteSize(species,category);
+      ctx.save();
+      ctx.translate(p.x,p.y);
+      ctx.globalAlpha=.96*fog;
+      if(spriteReady(sprite)&&size){
+        drawMarkerBackdrop(size.r,markerSurfaceTone(w.x,w.y));
+        ctx.shadowColor='rgba(0,20,30,.22)';
+        ctx.shadowBlur=8;
+        ctx.shadowOffsetY=2;
+        if(category==='whale')ctx.rotate((entity.angle||0)+Math.PI/2);
+        drawSpriteCentered(sprite,size.w,size.h);
+      }else if(category==='whale'){
+        ctx.rotate((entity.angle||0)+Math.PI/2);ctx.fillStyle=entity.color||'#355a6d';ctx.beginPath();ctx.ellipse(0,0,12,5.5,0,0,Math.PI*2);ctx.fill();ctx.lineWidth=1.4;ctx.strokeStyle='rgba(239,252,252,.9)';ctx.stroke();ctx.beginPath();ctx.moveTo(0,-5);ctx.quadraticCurveTo(-2,-10,1,-12);ctx.quadraticCurveTo(4,-9,3,-5);ctx.fill();ctx.beginPath();ctx.moveTo(-11,0);ctx.lineTo(-17,-5);ctx.lineTo(-16,0);ctx.lineTo(-17,5);ctx.closePath();ctx.fill();
       }else if(category==='seal'||category==='walrus'){
-        ctx.fillStyle=category==='walrus'?'#8c684d':'#697d83';ctx.beginPath();ctx.ellipse(0,1,9,5.5,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.beginPath();ctx.arc(7,-1,3.8,0,Math.PI*2);ctx.fill();ctx.stroke();if(category==='walrus'){ctx.strokeStyle='#f0dfbd';ctx.beginPath();ctx.moveTo(9,1);ctx.lineTo(10,6);ctx.moveTo(7.5,1);ctx.lineTo(8,6);ctx.stroke();}
+        ctx.lineWidth=1.4;ctx.strokeStyle='rgba(239,252,252,.9)';ctx.fillStyle=category==='walrus'?'#8c684d':'#697d83';ctx.beginPath();ctx.ellipse(0,1,9,5.5,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.beginPath();ctx.arc(7,-1,3.8,0,Math.PI*2);ctx.fill();ctx.stroke();if(category==='walrus'){ctx.strokeStyle='#f0dfbd';ctx.beginPath();ctx.moveTo(9,1);ctx.lineTo(10,6);ctx.moveTo(7.5,1);ctx.lineTo(8,6);ctx.stroke();}
       }else if(category==='bird'){
         ctx.strokeStyle='#eef9fa';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-8,2);ctx.quadraticCurveTo(-3,-5,0,0);ctx.quadraticCurveTo(3,-5,8,2);ctx.stroke();
       }else if(category==='mammal'){
-        ctx.fillStyle='#d7e8df';ctx.beginPath();ctx.arc(0,0,6,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle='#173f50';ctx.fillRect(-1,-7,2,14);
+        ctx.fillStyle='#d7e8df';ctx.beginPath();ctx.arc(0,0,6,0,Math.PI*2);ctx.fill();ctx.lineWidth=1.4;ctx.strokeStyle='rgba(239,252,252,.9)';ctx.stroke();ctx.fillStyle='#173f50';ctx.fillRect(-1,-7,2,14);
       }
       ctx.restore();
     });
@@ -771,7 +859,47 @@
   function drawNpcVessels(){ctx.save();ctx.textAlign='center';ctx.textBaseline='bottom';for(const npc of npcVessels){if(!npcActive(npc)||!npc.ready)continue;const p=worldToScreen(npc.x,npc.y);if(p.x<-45||p.x>width+45||p.y<70||p.y>height+45)continue;ctx.save();ctx.translate(p.x,p.y);ctx.rotate(npc.angle+Math.PI/2);drawNpcIcon(npc);ctx.restore();if(zoomLevel>=.75||Math.hypot(npc.x-state.x,npc.y-state.y)<90){ctx.font='800 8px system-ui';ctx.lineWidth=3;ctx.strokeStyle='rgba(4,28,42,.9)';ctx.strokeText(npc.name,p.x,p.y-18);ctx.fillStyle='#f4fdff';ctx.fillText(npc.name,p.x,p.y-18);}}ctx.restore();}
   function nearbyNpcVesselAt(clientX,clientY){let match=null,best=27;for(const npc of npcVessels){if(!npcActive(npc)||!npc.ready)continue;const p=worldToScreen(npc.x,npc.y),hit=Math.hypot(p.x-clientX,p.y-clientY);if(hit<best){best=hit;match={npc,p,distance:Math.hypot(npc.x-state.x,npc.y-state.y)};}}return match;}
   function openNpcVessel(encounter){if(!encounter?.npc)return false;const npc=encounter.npc;return!!research?.openNpcVessel?.({id:npc.id,name:npc.name,classId:npc.classId,type:npc.kind,typeLabel:npc.typeLabel,mission:npc.mission,description:`${npc.name} is working independently in Arctic waters.`,captainName:npc.captainName,captainRole:npc.captainRole,captainPortrait:npc.captainPortrait,image:npc.image,distanceKm:encounter.distance,canAssist:npc.kind==='research'});}
-  function drawVessel(){const x=width/2,y=height/2;ctx.save();ctx.translate(x,y);ctx.rotate(state.angle);if(state.moving){ctx.fillStyle='rgba(235,251,255,.42)';ctx.beginPath();ctx.moveTo(-8,15);ctx.quadraticCurveTo(-25,45,-7,70);ctx.lineTo(0,28);ctx.lineTo(7,70);ctx.quadraticCurveTo(25,45,8,15);ctx.fill();}ctx.shadowColor='rgba(0,25,40,.4)';ctx.shadowBlur=12;ctx.shadowOffsetY=5;ctx.fillStyle='#f7f1dc';ctx.beginPath();ctx.moveTo(0,-24);ctx.quadraticCurveTo(13,-10,11,19);ctx.quadraticCurveTo(0,27,-11,19);ctx.quadraticCurveTo(-13,-10,0,-24);ctx.fill();ctx.shadowColor='transparent';ctx.fillStyle='#e85d4c';ctx.fillRect(-9,-5,18,10);ctx.fillStyle='#123c50';ctx.fillRect(-5,-13,10,8);ctx.fillStyle='#f6d365';ctx.fillRect(-1,-29,2,15);ctx.restore();ctx.strokeStyle='rgba(255,255,255,.42)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(x,y,38,0,Math.PI*2);ctx.stroke();}
+  function drawVessel(){
+    const x=width/2,y=height/2,item=vesselModifiers(),sprite=vesselSpriteFor(item),size=vesselSpriteMetrics(item),tone=markerSurfaceTone(state.x,state.y);
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.rotate(state.angle);
+    if(state.moving){
+      ctx.fillStyle='rgba(235,251,255,.42)';
+      ctx.beginPath();
+      ctx.moveTo(-10,18);
+      ctx.quadraticCurveTo(-28,48,-8,76);
+      ctx.lineTo(0,30);
+      ctx.lineTo(8,76);
+      ctx.quadraticCurveTo(28,48,10,18);
+      ctx.fill();
+    }
+    drawMarkerBackdrop(size.r,tone);
+    ctx.shadowColor='rgba(0,25,40,.32)';
+    ctx.shadowBlur=10;
+    ctx.shadowOffsetY=3;
+    if(spriteReady(sprite)){
+      drawSpriteCentered(sprite,size.w,size.h);
+    }else{
+      ctx.fillStyle='#f7f1dc';
+      ctx.beginPath();
+      ctx.moveTo(0,-24);
+      ctx.quadraticCurveTo(13,-10,11,19);
+      ctx.quadraticCurveTo(0,27,-11,19);
+      ctx.quadraticCurveTo(-13,-10,0,-24);
+      ctx.fill();
+      ctx.shadowColor='transparent';
+      ctx.fillStyle='#e85d4c';ctx.fillRect(-9,-5,18,10);
+      ctx.fillStyle='#123c50';ctx.fillRect(-5,-13,10,8);
+      ctx.fillStyle='#f6d365';ctx.fillRect(-1,-29,2,15);
+    }
+    ctx.restore();
+    ctx.strokeStyle='rgba(255,255,255,.42)';
+    ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.arc(x,y,38,0,Math.PI*2);
+    ctx.stroke();
+  }
   function updateCompass(){const length=Math.hypot(state.x,state.y)||1,ux=-state.x/length,uy=-state.y/length,rotation=Math.atan2(uy,ux)+Math.PI/2;compassNeedle.style.transform=`translateY(4px) rotate(${rotation}rad)`;compassNorth.style.left=(27.5+ux*20)+'px';compassNorth.style.top=(27.5+uy*20)+'px';}
 
   function clearDisplacement(x,y,tx,ty){const dx=tx-x,dy=ty-y,dist=Math.hypot(dx,dy);for(let d=3;d<=dist;d+=3){const cx=x+dx*d/dist,cy=y+dy*d/dist;if(isBlocked(cx,cy)||iceTypeAt(cx,cy)==='fast')return false;}return true;}
@@ -813,7 +941,7 @@
   }
   const packedBoundaryValue=(x,y)=>{const p=unpolar(x,y);return p.lat-packIceEdge(p.lon);};
   function slideAlongPackedEdge(x,y,vx,vy){const e=2,gx=(packedBoundaryValue(x+e,y)-packedBoundaryValue(x-e,y))/(2*e),gy=(packedBoundaryValue(x,y+e)-packedBoundaryValue(x,y-e))/(2*e),g2=gx*gx+gy*gy;if(g2<1e-8)return{vx:0,vy:0};const inward=(vx*gx+vy*gy)/g2;if(inward>0){vx-=gx*inward;vy-=gy*inward;}const gl=Math.sqrt(g2);vx-=gx/gl*.12;vy-=gy/gl*.12;return{vx,vy};}
-  function vesselModifiers(){const item=research?.getVesselModifiers?.()||{};return{cruiseKnots:item.cruiseKnots??item.speedKnots??8,maxKnots:item.maxKnots??item.cruiseKnots??item.speedKnots??8,fuelEnduranceDays:item.fuelEnduranceDays??5,foodEnduranceDays:item.foodEnduranceDays??5,nuclearFuel:!!item.nuclearFuel,crackedIceFactor:item.crackedIceFactor??.1,minZoom:item.minZoom??.3,visibilityBonusKm:item.visibilityBonusKm??0,name:item.name??'RV AURORA',image:item.image??'assets/vessels/base-vessel.png'};}
+  function vesselModifiers(){const item=research?.getVesselModifiers?.()||{};return{id:item.id??item.classId??null,classId:item.classId??item.id??null,cruiseKnots:item.cruiseKnots??item.speedKnots??8,maxKnots:item.maxKnots??item.cruiseKnots??item.speedKnots??8,fuelEnduranceDays:item.fuelEnduranceDays??5,foodEnduranceDays:item.foodEnduranceDays??5,nuclearFuel:!!item.nuclearFuel,crackedIceFactor:item.crackedIceFactor??.1,minZoom:item.minZoom??.3,visibilityBonusKm:item.visibilityBonusKm??0,name:item.name??'RV AURORA',image:item.image??'assets/vessels/base-vessel.png'};}
   function updateVesselButton(item=vesselModifiers()){if(ui.vesselButtonImage&&ui.vesselButtonImage.getAttribute('src')!==item.image)ui.vesselButtonImage.setAttribute('src',item.image);ui.vesselButton?.setAttribute('aria-label',`Open ${item.name} information`);}
   function advanceGameDays(days){if(!Number.isFinite(days)||days<=0)return;state.seasonDay+=days;state.fogClearDays=Math.max(0,state.fogClearDays-days);while(state.seasonDay>=365){state.seasonDay-=365;state.year++;}const vessel=vesselModifiers();state.food=Math.max(0,state.food-days*100/vessel.foodEnduranceDays);research?.tickDays?.(days,{position:unpolar(state.x,state.y),source:'station'});}
   function updateCalendar(dt){const effectiveTimeScale=1/zoomLevel,stationBusy=!!research?.isBusy?.(),elapsedDays=state.started&&!stationBusy?dt*.2*(state.frozen?100:effectiveTimeScale):0;state.seasonDay+=elapsedDays;state.fogClearDays=Math.max(0,state.fogClearDays-elapsedDays);if(state.seasonDay>=365){state.seasonDay-=365;state.year++;}const date=new Date(Date.UTC(state.year,8,1+Math.floor(state.seasonDay))),months=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];ui.calendarDate.textContent=String(date.getUTCDate()).padStart(2,'0')+' '+months[date.getUTCMonth()]+' '+date.getUTCFullYear();ui.seasonProgress.style.left=(state.seasonDay/365*100)+'%';const growth=iceGrowth();ui.seasonNote.textContent=state.frozen?'FROZEN IN · TIME ×100':growth<.08?'SEA ICE MINIMUM':growth>.92?'SEA ICE MAXIMUM':state.seasonDay<182.5?'ICE ADVANCING':'ICE RETREATING';ui.timeSpeed.textContent=stationBusy?'PAUSED':state.frozen?'×100':'×'+Number(effectiveTimeScale.toFixed(1));return elapsedDays;}
