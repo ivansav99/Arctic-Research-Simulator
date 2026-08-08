@@ -1,0 +1,104 @@
++        <p>Build a research career from a small local vessel to major Arctic expeditions. Recruit scientists, equip your ship, win grants, complete field missions and publish the results.</p>
++        <div class="title-actions">
++          <button id="continue-button" class="primary hidden" type="button">CONTINUE EXPEDITION</button>
++          <button id="start-button" class="primary" type="button">NEW GAME</button>
++          <button id="save-button" class="secondary hidden" type="button">SAVE GAME</button>
++          <button id="load-button" class="secondary" type="button">LOAD GAME</button>
++          <button id="how-button" class="secondary" type="button">HOW TO PLAY</button>
++          <button id="resume-button" class="secondary hidden" type="button">RETURN TO EXPEDITION</button>
++        </div>
++        <p id="continue-summary" class="save-summary"></p>
++      </div>
++      <div id="title-load" class="title-pane hidden">
++        <button class="title-back" data-title-back type="button">&larr; BACK</button>
++        <small>LOCAL BROWSER SAVES</small>
++        <h2>Load an expedition</h2>
++        <p>Saves are stored only in this browser on this device.</p>
++        <div id="load-slots" class="save-slots"></div>
++      </div>
++      <div id="title-save" class="title-pane hidden">
++        <button class="title-back" data-title-back type="button">&larr; BACK</button>
++        <small>LOCAL BROWSER SAVES</small>
++        <h2>Save expedition</h2>
++        <p>Choose one of three manual save slots. The game also keeps a separate automatic save.</p>
++        <div id="save-slots" class="save-slots"></div>
++      </div>
++      <div id="title-help" class="title-pane hidden">
++        <button class="title-back" data-title-back type="button">&larr; BACK</button>
++        <small>HOW TO PLAY</small>
++        <h2>Build an Arctic research program</h2>
++        <div class="how-grid">
++          <article><b>1. PREPARE</b><span>Recruit scientists, buy instruments and accept grants that match your team's capabilities.</span></article>
++          <article><b>2. SAIL</b><span>Navigate between Arctic ports and research sites while managing fuel, food, weather and sea ice.</span></article>
++          <article><b>3. RESEARCH</b><span>Complete field stations and missions to collect scientific data and sponsor payments.</span></article>
++          <article><b>4. PUBLISH</b><span>Turn your data into papers, citations, promotions and stronger research funding.</span></article>
++          <article><b>5. GROW</b><span>Upgrade vessels, expand your team and tackle increasingly ambitious Arctic science.</span></article>
++        </div>
++        <button id="help-start-button" class="primary" type="button">BEGIN EXPEDITION</button>
++      </div>
+     </section>
+     <section id="game-over" class="game-over hud hidden" role="dialog" aria-modal="true" aria-labelledby="game-over-title">
+       <small>EXPEDITION ENDED</small><h2 id="game-over-title">OUT OF FUEL</h2><p id="game-over-message">The vessel is stranded and the expedition cannot continue.</p>
+@@ -50,8 +89,8 @@
+   </main>
+   <script src="coast-data.js"></script>
+   <script src="river-data.js"></script>
+-  <script src="wildlife-data.js?v=expedition-12"></script>
+-  <script src="expedition.js?v=expedition-12"></script>
+-  <script src="game.js?v=expedition-12"></script>
++  <script src="wildlife-data.js?v=expedition-13"></script>
++  <script src="expedition.js?v=expedition-13"></script>
++  <script src="game.js?v=expedition-13"></script>
+ </body>
+ </html>
+diff --git a/style.css b/style.css
+index 5770668..5121cba 100644
+--- a/style.css
++++ b/style.css
+@@ -177,4 +177,44 @@ body { overscroll-behavior: none; touch-action: none; }
+   #arx-root .arx-dashboard-ship { grid-row:auto; }
+   #arx-root .arx-resupply.compact { grid-template-columns:1fr 1fr; }
+   #arx-root .arx-dashboard-ship > img { height:135px; }
+-}
+\ No newline at end of file
++}
++/* Expedition 13: title menu, local saves, and pause menu. */
++.game-menu-button { height: 48px; padding: 0 11px; border: 1px solid rgba(125,211,252,.35); border-radius: 8px; background: rgba(7,31,53,.82); color: #bfeeff; font-size: 8px; font-weight: 900; letter-spacing: .13em; cursor: pointer; }
++.game-menu-button:hover { background: rgba(125,211,252,.14); }
++.title-screen { width: min(640px, calc(100% - 34px)); max-height: min(760px, calc(100vh - 28px)); overflow: auto; padding: 32px; text-align: left; }
++.title-screen .title-pane.hidden { display: none; }
++.title-screen h1 { margin: 12px 0 14px; text-align: left; }
++.title-screen h2 { margin: 10px 0 12px; color: #f4fbfc; font: 800 28px/1.08 Georgia, serif; }
++.title-screen p { max-width: none; margin: 0; text-align: left; }
++.title-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 22px; }
++.title-actions button { width: 100%; margin: 0; min-height: 43px; }
++.title-actions .primary { grid-column: 1 / -1; }
++.secondary, .title-back { padding: 11px 15px; border: 1px solid rgba(166,230,244,.22); border-radius: 8px; background: rgba(24,69,88,.62); color: #d9f5fb; font-size: 9px; font-weight: 900; letter-spacing: .1em; cursor: pointer; }
++.secondary:hover, .title-back:hover { background: rgba(44,101,121,.7); }
++.title-back { margin: 0 0 14px; padding: 7px 10px; }
++.save-summary { min-height: 18px; margin-top: 13px !important; color: #8fc7d4 !important; font-size: 9px !important; }
++.save-slots { display: grid; gap: 8px; margin-top: 17px; }
++.save-slot { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 12px; border: 1px solid rgba(166,230,244,.17); border-radius: 9px; background: rgba(21,63,80,.55); }
++.save-slot.empty { opacity: .72; }
++.save-slot b, .save-slot span, .save-slot small { display: block; }
++.save-slot b { color: #effbff; font-size: 11px; }
++.save-slot span { margin-top: 3px; color: #9ec9d3; font-size: 8px; line-height: 1.45; }
++.save-slot small { margin-top: 4px; color: #6e9daa; font-size: 7px; letter-spacing: .06em; }
++.save-slot button { min-width: 88px; padding: 9px 11px; border: 0; border-radius: 7px; background: #f6d365; color: #17323b; font-size: 8px; font-weight: 900; cursor: pointer; }
++.save-slot button:disabled { background: #315766; color: #7896a0; cursor: default; }
++.how-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 18px 0 6px; }
++.how-grid article { padding: 12px; border: 1px solid rgba(166,230,244,.15); border-radius: 9px; background: rgba(22,65,82,.5); }
++.how-grid article:last-child { grid-column: 1 / -1; }
++.how-grid b, .how-grid span { display: block; }
++.how-grid b { color: #f6d365; font-size: 9px; letter-spacing: .08em; }
++.how-grid span { margin-top: 5px; color: #b8d6df; font-size: 9px; line-height: 1.45; }
++.title-screen .primary { margin-top: 16px; }
++
++@media (max-width: 760px) {
++  .game-menu-button { height: 39px; padding: 0 8px; font-size: 7px; }
++  .title-screen { width: min(560px, calc(100% - 20px)); max-height: calc(100vh - 20px); padding: 24px 18px; }
++  .title-actions, .how-grid { grid-template-columns: 1fr; }
++  .title-actions .primary, .how-grid article:last-child { grid-column: auto; }
++  .save-slot { grid-template-columns: 1fr; }
++  .save-slot button { width: 100%; }
++}
