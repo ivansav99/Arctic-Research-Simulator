@@ -335,7 +335,7 @@
   if(currentPortCity)state.dockedPort=currentPortCity.name;
 
   // Expedition 13: local saves, title/pause menu, and analytics instrumentation.
-  const GAME_VERSION='expedition-13',SAVE_VERSION=1;
+  const GAME_VERSION='expedition-14',SAVE_VERSION=1;
   const SAVE_KEYS={auto:'arctic-research-save-auto-v1',slot1:'arctic-research-save-slot-1-v1',slot2:'arctic-research-save-slot-2-v1',slot3:'arctic-research-save-slot-3-v1'};
   const AUTO_NEW_KEY='arctic-research-start-new-v1';
   let menuOpen=true,autosaveSuspended=false,autosaveTimer=0,lastResearchAnalytics=null;
@@ -358,21 +358,21 @@
     };
   }
   const analytics=(()=>{
-    const measurementId=document.querySelector('meta[name="ar-analytics-id"]')?.content?.trim()||'';
-    let enabled=/^G-[A-Z0-9]+$/i.test(measurementId);
+    const projectToken=document.querySelector('meta[name="ar-posthog-token"]')?.content?.trim()||'';
+    const apiHost=(document.querySelector('meta[name="ar-posthog-host"]')?.content?.trim()||'https://us.i.posthog.com').replace(/\/$/,'');
+    const enabled=/^phc_[A-Za-z0-9]+$/.test(projectToken)&&/^https:\/\//i.test(apiHost);
     if(enabled){
-      window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};
-      window.gtag('js',new Date());window.gtag('config',measurementId,{send_page_view:true});
-      const script=document.createElement('script');script.async=true;script.src=`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;document.head.appendChild(script);
+      !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split('.');2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement('script')).type='text/javascript',p.async=!0,p.src=s.api_host.replace('.i.posthog.com','-assets.i.posthog.com')+'/static/array.js',(r=t.getElementsByTagName('script')[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a='posthog',u.people=u.people||[],u.toString=function(t){var e='posthog';return'posthog'!==a&&(e+='.'+a),t||(e+=' (stub)'),e},u.people.toString=function(){return u.toString(1)+'.people (stub)'},o='init capture register register_once register_for_session unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group identify setPersonProperties setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags resetGroups onFeatureFlags addFeatureFlagsHandler onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep startSessionRecording stopSessionRecording sessionRecordingStarted'.split(' '),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+      window.posthog.init(projectToken,{api_host:apiHost,defaults:'2026-05-30',person_profiles:'identified_only',autocapture:true,capture_pageview:true,capture_pageleave:true,disable_session_recording:false});
     }
-    const clean=value=>typeof value==='number'?(Number.isFinite(value)?value:0):typeof value==='boolean'?(value?1:0):String(value??'').slice(0,100);
+    const clean=value=>typeof value==='number'?(Number.isFinite(value)?value:0):typeof value==='boolean'?(value?1:0):String(value??'').slice(0,250);
     const track=(name,extra={})=>{
       if(!enabled)return false;
-      const raw={...extra,...analyticsContext()},params={};let count=0;
-      for(const [key,value] of Object.entries(raw)){if(value==null||value==='')continue;if(count>=25)break;params[key.slice(0,40)]=clean(value);count++;}
-      window.gtag?.('event',String(name).replace(/[^a-zA-Z0-9_]/g,'_').slice(0,40),params);return true;
+      const raw={...extra,...analyticsContext()},params={};
+      for(const [key,value] of Object.entries(raw)){if(value==null||value==='')continue;params[key.slice(0,80)]=clean(value);}
+      window.posthog?.capture?.(String(name).replace(/[^a-zA-Z0-9_]/g,'_').slice(0,80),params);return true;
     };
-    return{track,isEnabled:()=>enabled,measurementId};
+    return{track,isEnabled:()=>enabled,provider:'posthog',projectToken,apiHost};
   })();
   window.ARAnalytics=analytics;
 
