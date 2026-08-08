@@ -1,0 +1,33 @@
+name: Apply Sprite Expedition 15
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'patches/map-sprites-atlas.part00'
+      - 'patches/map-sprites-atlas.part01'
+      - 'patches/sprite-upgrade.patch'
+      - '.github/workflows/apply-sprite-expedition15.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply verified sprite upgrade
+        run: |
+          git apply --check patches/sprite-upgrade.patch
+          cat patches/map-sprites-atlas.part00 patches/map-sprites-atlas.part01 > assets/map-sprites-atlas.svg
+          git apply patches/sprite-upgrade.patch
+          node --check game.js
+          git rm patches/map-sprites-atlas.part00 patches/map-sprites-atlas.part01 patches/sprite-upgrade.patch .github/workflows/apply-sprite-expedition15.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/map-sprites-atlas.svg game.js index.html
+          git commit -m "Upgrade map vessel and wildlife sprites"
+          git push
