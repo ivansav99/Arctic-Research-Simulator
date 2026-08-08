@@ -1,1 +1,1 @@
-apply Expedition 18
+apply Expedition 18 retry 2
