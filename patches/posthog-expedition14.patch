@@ -1,0 +1,97 @@
+diff --git a/index.html b/index.html
+index 2c04c0b..31eeec1 100644
+--- a/index.html
++++ b/index.html
+@@ -4,9 +4,10 @@
+   <meta charset="utf-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+   <meta name="theme-color" content="#082f49">
+-  <meta name="ar-analytics-id" content="">
++  <meta name="ar-posthog-token" content="phc_rYfM85otBymrrrWNRiBSL3zdTavrripB2vt584ZNV7NM">
++  <meta name="ar-posthog-host" content="https://us.i.posthog.com">
+   <title>Arctic Research</title>
+-  <link rel="stylesheet" href="style.css?v=expedition-13">
++  <link rel="stylesheet" href="style.css?v=expedition-14">
+ </head>
+ <body>
+   <main id="game" aria-label="Arctic Research navigation map">
+@@ -89,8 +90,8 @@
+   </main>
+   <script src="coast-data.js"></script>
+   <script src="river-data.js"></script>
+-  <script src="wildlife-data.js?v=expedition-13"></script>
+-  <script src="expedition.js?v=expedition-13"></script>
+-  <script src="game.js?v=expedition-13"></script>
++  <script src="wildlife-data.js?v=expedition-14"></script>
++  <script src="expedition.js?v=expedition-14"></script>
++  <script src="game.js?v=expedition-14"></script>
+ </body>
+ </html>
+diff --git a/game.js b/game.js
+index 945d057..adda2fe 100644
+--- a/game.js
++++ b/game.js
+@@ -335,7 +335,7 @@
+   if(currentPortCity)state.dockedPort=currentPortCity.name;
+ 
+   // Expedition 13: local saves, title/pause menu, and analytics instrumentation.
+-  const GAME_VERSION='expedition-13',SAVE_VERSION=1;
++  const GAME_VERSION='expedition-14',SAVE_VERSION=1;
+   const SAVE_KEYS={auto:'arctic-research-save-auto-v1',slot1:'arctic-research-save-slot-1-v1',slot2:'arctic-research-save-slot-2-v1',slot3:'arctic-research-save-slot-3-v1'};
+   const AUTO_NEW_KEY='arctic-research-start-new-v1';
+   let menuOpen=true,autosaveSuspended=false,autosaveTimer=0,lastResearchAnalytics=null;
+@@ -358,21 +358,21 @@
+     };
+   }
+   const analytics=(()=>{
+-    const measurementId=document.querySelector('meta[name="ar-analytics-id"]')?.content?.trim()||'';
+-    let enabled=/^G-[A-Z0-9]+$/i.test(measurementId);
++    const projectToken=document.querySelector('meta[name="ar-posthog-token"]')?.content?.trim()||'';
++    const apiHost=(document.querySelector('meta[name="ar-posthog-host"]')?.content?.trim()||'https://us.i.posthog.com').replace(/\/$/,'');
++    const enabled=/^phc_[A-Za-z0-9]+$/.test(projectToken)&&/^https:\/\//i.test(apiHost);
+     if(enabled){
+-      window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};
+-      window.gtag('js',new Date());window.gtag('config',measurementId,{send_page_view:true});
+-      const script=document.createElement('script');script.async=true;script.src=`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;document.head.appendChild(script);
++      !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split('.');2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement('script')).type='text/javascript',p.async=!0,p.src=s.api_host.replace('.i.posthog.com','-assets.i.posthog.com')+'/static/array.js',(r=t.getElementsByTagName('script')[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a='posthog',u.people=u.people||[],u.toString=function(t){var e='posthog';return'posthog'!==a&&(e+='.'+a),t||(e+=' (stub)'),e},u.people.toString=function(){return u.toString(1)+'.people (stub)'},o='init capture register register_once register_for_session unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group identify setPersonProperties setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags resetGroups onFeatureFlags addFeatureFlagsHandler onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep startSessionRecording stopSessionRecording sessionRecordingStarted'.split(' '),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
++      window.posthog.init(projectToken,{api_host:apiHost,defaults:'2026-05-30',person_profiles:'identified_only',autocapture:true,capture_pageview:true,capture_pageleave:true,disable_session_recording:false});
+     }
+-    const clean=value=>typeof value==='number'?(Number.isFinite(value)?value:0):typeof value==='boolean'?(value?1:0):String(value??'').slice(0,100);
++    const clean=value=>typeof value==='number'?(Number.isFinite(value)?value:0):typeof value==='boolean'?(value?1:0):String(value??'').slice(0,250);
+     const track=(name,extra={})=>{
+       if(!enabled)return false;
+-      const raw={...extra,...analyticsContext()},params={};let count=0;
+-      for(const [key,value] of Object.entries(raw)){if(value==null||value==='')continue;if(count>=25)break;params[key.slice(0,40)]=clean(value);count++;}
+-      window.gtag?.('event',String(name).replace(/[^a-zA-Z0-9_]/g,'_').slice(0,40),params);return true;
++      const raw={...extra,...analyticsContext()},params={};
++      for(const [key,value] of Object.entries(raw)){if(value==null||value==='')continue;params[key.slice(0,80)]=clean(value);}
++      window.posthog?.capture?.(String(name).replace(/[^a-zA-Z0-9_]/g,'_').slice(0,80),params);return true;
+     };
+-    return{track,isEnabled:()=>enabled,measurementId};
++    return{track,isEnabled:()=>enabled,provider:'posthog',projectToken,apiHost};
+   })();
+   window.ARAnalytics=analytics;
+ 
+diff --git a/README.md b/README.md
+index eed27b4..afa7505 100644
+--- a/README.md
++++ b/README.md
+@@ -93,14 +93,10 @@ The original 847 MB `IBCAO_v4_2_13_400m_bedrock.tif` in the separate Arctic Map
+ - Dark-season weather can produce aurora events and atmospheric research opportunities. Seasonal terrain overlay retains year-round high-elevation/glacier snow and strengthens snow cover into winter.
+ - Successful publications no longer impose a submission cooldown. Research-operation windows show all qualified scientists and equipment in use.
+ 
+-## Browser saves and analytics (Expedition 13)
++## Browser saves and PostHog analytics (Expedition 14)
+ 
+-The game now keeps one automatic save and three manual save slots in browser `localStorage`. Saves remain on the same browser/device and include both navigation state and the research-program state.
++The game keeps one automatic save and three manual save slots in browser `localStorage`. Saves remain on the same browser/device and include both navigation state and the research-program state.
+ 
+-Google Analytics 4 instrumentation is built in but remains disabled until a GA4 Measurement ID is supplied. Set the ID in `index.html`:
++PostHog Product Analytics, Web Analytics, autocapture, and Session Replay are enabled for the production GitHub Pages build through the public project token and US Cloud host stored in `index.html`. The browser token is intentionally client-side and is not a private API secret.
+ 
+-```html
+-<meta name="ar-analytics-id" content="G-XXXXXXXXXX">
+-```
+-
+-When configured, the game sends gameplay events such as game starts/loads/saves, session duration, menu and research UI actions, navigation interactions, port visits, grant activity, mission starts/completions, station completion, publications, scientist/equipment/vessel changes, wildlife observations, resupply actions, and game-over reasons. Events also carry current gameplay context (game date, vessel, resources, money, citations, data, crew/equipment/grant counts, completed missions, papers, wildlife observations, and active play time). No player name, email address, or real-world location is intentionally collected by the game code.
++The game sends gameplay events such as game starts/loads/saves, session duration, menu and research UI actions, navigation interactions, port visits, grant activity, mission starts/completions, station completion, publications, scientist/equipment/vessel changes, wildlife observations, resupply actions, and game-over reasons. Custom events carry the full available gameplay context (game date, vessel, resources, money, citations, data, crew/equipment/grant counts, completed missions, papers, wildlife observations, active play time, viewport, and other event-specific parameters) rather than being limited to the former GA4 parameter cap. PostHog also records normal web page activity and, when permitted by the browser/project settings, anonymized session replay. The game does not intentionally send a player name or email address.
