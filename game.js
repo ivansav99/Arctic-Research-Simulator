@@ -11,7 +11,7 @@
   const SMALL_PASSENGER_SVG='data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360"><rect width="900" height="360" fill="#dcecf0"/><path d="M105 250h665l-78 65H182z" fill="#173c50"/><path d="M220 160h420l45 90H175z" fill="#f7faf9" stroke="#315f70" stroke-width="8"/><path d="M275 92h250l80 68H230z" fill="#f7faf9" stroke="#315f70" stroke-width="8"/><path d="M360 48h105l28 44H330z" fill="#f7faf9" stroke="#315f70" stroke-width="8"/><rect x="390" y="20" width="18" height="45" fill="#315f70"/><path d="M408 25l80 22" stroke="#315f70" stroke-width="7"/><g fill="#5cb1d0">${Array.from({length:8},(_,i)=>`<rect x="${250+i*45}" y="118" width="28" height="20" rx="5"/>`).join('')}${Array.from({length:11},(_,i)=>`<rect x="${205+i*43}" y="190" width="28" height="22" rx="5"/>`).join('')}</g><path d="M160 315h580" stroke="#69b4c9" stroke-width="8" stroke-linecap="round"/><text x="450" y="342" text-anchor="middle" font-family="sans-serif" font-size="24" fill="#315f70">SMALL ARCTIC PASSENGER VESSEL</text></svg>`);
 
   const loadSprite=src=>{const img=new Image();img.decoding='async';img.src=src;return img;};
-  const SPRITE_ATLAS=loadSprite('assets/map-sprites-atlas.svg');
+  const SPRITE_ATLAS=loadSprite(window.AR_MAP_SPRITE_ATLAS_DATA||'assets/map-sprites-atlas.svg');
   const atlasSprite=(sx,sy,sw,sh)=>({image:SPRITE_ATLAS,sx,sy,sw,sh});
   const SPRITES={
     vessels:{
@@ -358,7 +358,7 @@
   if(currentPortCity)state.dockedPort=currentPortCity.name;
 
   // Expedition 13: local saves, title/pause menu, and analytics instrumentation.
-  const GAME_VERSION='expedition-15',SAVE_VERSION=1;
+  const GAME_VERSION='expedition-16',SAVE_VERSION=1;
   const SAVE_KEYS={auto:'arctic-research-save-auto-v1',slot1:'arctic-research-save-slot-1-v1',slot2:'arctic-research-save-slot-2-v1',slot3:'arctic-research-save-slot-3-v1'};
   const AUTO_NEW_KEY='arctic-research-start-new-v1';
   let menuOpen=true,autosaveSuspended=false,autosaveTimer=0,lastResearchAnalytics=null;
