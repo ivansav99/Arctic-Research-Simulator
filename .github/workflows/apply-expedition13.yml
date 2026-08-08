@@ -1,0 +1,32 @@
+name: Apply Expedition 13
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-expedition13.yml'
+      - 'patches/expedition13.part*'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reassemble and validate patch
+        run: |
+          cat patches/expedition13.part* > /tmp/expedition13.patch
+          git apply --check /tmp/expedition13.patch
+      - name: Apply Expedition 13
+        run: |
+          git apply /tmp/expedition13.patch
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md index.html style.css game.js
+          git commit -m "Add local saves, title menu, and gameplay analytics"
+          git push
