@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#082f49">
+  <title>Arctic Research</title>
+  <link rel="stylesheet" href="style.css?v=expedition-7">
+</head>
+<body>
+  <main id="game" aria-label="Arctic Research navigation map">
+    <canvas id="map" aria-label="Arctic Ocean map. Tap or click open water to sail."></canvas>
+    <header class="hud top-hud">
+      <div class="brand"><span class="brand-mark">AR</span><div><strong>ARCTIC RESEARCH</strong><small>RV AURORA &middot; EXPEDITION 01</small></div></div>
+      <div class="status">
+        <span class="ice-status"><small>SEA ICE</small><b id="ice-condition">OPEN WATER</b></span>
+        <span class="weather-status"><small>WEATHER</small><b id="weather-value">CLEAR</b></span>
+        <span class="date-status"><small>DATE</small><b id="calendar-date">01 SEP 2026</b></span>
+        <span class="fuel-status"><small>FUEL</small><b id="fuel-value">100%</b><i><em id="fuel-level"></em></i></span>
+        <span class="food-status"><small>FOOD</small><b id="food-value">100%</b><i><em id="food-level"></em></i></span>
+        <span class="position-status"><small>POSITION</small><b id="position">78.2&deg;N 6.0&deg;E</b></span>
+        <span class="speed-status"><small>SPEED</small><b id="speed">0.0 KN</b></span>
+        <button id="vessel-button" class="vessel-button" type="button" aria-label="Open current vessel information"><img id="vessel-button-image" src="assets/vessels/fishing-vessel.webp" alt=""></button>
+      </div>
+    </header>
+    <div class="season-telemetry" aria-hidden="true"><i id="mission-progress"></i><i id="season-progress"></i><span id="season-note">SEA ICE MINIMUM</span></div>
+    <div class="compass" aria-hidden="true"><span>N</span><i></i></div>
+    <div class="zoom-controls hud" aria-label="Map zoom controls">
+      <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
+      <span id="zoom-level" aria-live="polite">100%</span>
+      <button id="zoom-out" type="button" aria-label="Zoom out">&minus;</button>
+    </div>
+    <div class="time-controls hud" aria-label="Current calendar speed">
+      <label>TIME</label><output id="time-speed">×1</output>
+    </div>
+    <aside class="minimap hud" aria-label="Overview map showing vessel position"><div><small>ARCTIC OVERVIEW</small><b id="mini-location">SVALBARD</b></div><canvas id="minimap" width="300" height="300"></canvas></aside>
+    <div class="scale" aria-hidden="true"><i></i><span id="scale-distance">15 km</span></div>
+    <section id="welcome" class="welcome hud" aria-live="polite">
+      <button id="close-welcome" aria-label="Close instructions">&times;</button><small>WELCOME ABOARD</small>
+      <h1>Lead an Arctic<br>research expedition.</h1>
+      <p>Begin in Longyearbyen. Recruit scientists, choose instruments and accept work suited to the team aboard.</p>
+      <button id="start-button" class="primary" type="button">OPEN LONGYEARBYEN PORT</button>
+    </section>
+    <section id="game-over" class="game-over hud hidden" role="dialog" aria-modal="true" aria-labelledby="game-over-title">
+      <small>EXPEDITION ENDED</small><h2 id="game-over-title">OUT OF FUEL</h2><p id="game-over-message">The vessel is stranded and the expedition cannot continue.</p>
+      <button id="restart-button" class="primary" type="button">RETURN TO LAST PORT</button>
+    </section>
+    <div id="toast" class="toast" role="status"></div>
+    <div id="resource-warning" class="resource-warning" role="alert" aria-live="assertive"></div>
+  </main>
+  <script src="coast-data.js"></script>
+  <script src="river-data.js"></script>
+  <script src="wildlife-data.js?v=expedition-7"></script>
+  <script src="expedition.js?v=expedition-7"></script>
+  <script src="game.js?v=expedition-7"></script>
+</body>
+</html>
