@@ -1,0 +1,39 @@
+name: Apply Expedition 16 Embedded Sprites
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'patches/sprite-data.part00'
+      - 'patches/sprite-data.part01'
+      - 'patches/sprite-data.part02'
+      - 'patches/sprite-data.part03'
+      - 'patches/exp16-embedded-sprites.patch'
+      - '.github/workflows/apply-expedition16-embedded-sprites.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply verified embedded sprite fix
+        run: |
+          git apply --check patches/exp16-embedded-sprites.patch
+          cat patches/sprite-data.part00 patches/sprite-data.part01 patches/sprite-data.part02 patches/sprite-data.part03 > sprite-atlas-data.js
+          echo '69365881dbfa8268270532be6a9aaf433c2a08802042ee8aa0d3c8c4f83c76d0  sprite-atlas-data.js' | sha256sum -c -
+          git apply patches/exp16-embedded-sprites.patch
+          node --check sprite-atlas-data.js
+          node --check game.js
+          echo 'b346dfd76a367c772d771830ed69286d0af192a2bf3e3b3b4ade4aebf230f175  game.js' | sha256sum -c -
+          echo '8ba583ba702479ad706ad536bd2aca27ad74ff1084884f89f12f79b2a70807e5  index.html' | sha256sum -c -
+          git rm patches/sprite-data.part00 patches/sprite-data.part01 patches/sprite-data.part02 patches/sprite-data.part03 patches/exp16-embedded-sprites.patch .github/workflows/apply-expedition16-embedded-sprites.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sprite-atlas-data.js game.js index.html
+          git commit -m "Embed sprite atlas and fix map graphics fallback"
+          git push
