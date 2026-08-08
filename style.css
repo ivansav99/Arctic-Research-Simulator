@@ -178,3 +178,43 @@ body { overscroll-behavior: none; touch-action: none; }
   #arx-root .arx-resupply.compact { grid-template-columns:1fr 1fr; }
   #arx-root .arx-dashboard-ship > img { height:135px; }
 }
+/* Expedition 13: title menu, local saves, and pause menu. */
+.game-menu-button { height: 48px; padding: 0 11px; border: 1px solid rgba(125,211,252,.35); border-radius: 8px; background: rgba(7,31,53,.82); color: #bfeeff; font-size: 8px; font-weight: 900; letter-spacing: .13em; cursor: pointer; }
+.game-menu-button:hover { background: rgba(125,211,252,.14); }
+.title-screen { width: min(640px, calc(100% - 34px)); max-height: min(760px, calc(100vh - 28px)); overflow: auto; padding: 32px; text-align: left; }
+.title-screen .title-pane.hidden { display: none; }
+.title-screen h1 { margin: 12px 0 14px; text-align: left; }
+.title-screen h2 { margin: 10px 0 12px; color: #f4fbfc; font: 800 28px/1.08 Georgia, serif; }
+.title-screen p { max-width: none; margin: 0; text-align: left; }
+.title-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 22px; }
+.title-actions button { width: 100%; margin: 0; min-height: 43px; }
+.title-actions .primary { grid-column: 1 / -1; }
+.secondary, .title-back { padding: 11px 15px; border: 1px solid rgba(166,230,244,.22); border-radius: 8px; background: rgba(24,69,88,.62); color: #d9f5fb; font-size: 9px; font-weight: 900; letter-spacing: .1em; cursor: pointer; }
+.secondary:hover, .title-back:hover { background: rgba(44,101,121,.7); }
+.title-back { margin: 0 0 14px; padding: 7px 10px; }
+.save-summary { min-height: 18px; margin-top: 13px !important; color: #8fc7d4 !important; font-size: 9px !important; }
+.save-slots { display: grid; gap: 8px; margin-top: 17px; }
+.save-slot { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 12px; border: 1px solid rgba(166,230,244,.17); border-radius: 9px; background: rgba(21,63,80,.55); }
+.save-slot.empty { opacity: .72; }
+.save-slot b, .save-slot span, .save-slot small { display: block; }
+.save-slot b { color: #effbff; font-size: 11px; }
+.save-slot span { margin-top: 3px; color: #9ec9d3; font-size: 8px; line-height: 1.45; }
+.save-slot small { margin-top: 4px; color: #6e9daa; font-size: 7px; letter-spacing: .06em; }
+.save-slot button { min-width: 88px; padding: 9px 11px; border: 0; border-radius: 7px; background: #f6d365; color: #17323b; font-size: 8px; font-weight: 900; cursor: pointer; }
+.save-slot button:disabled { background: #315766; color: #7896a0; cursor: default; }
+.how-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 18px 0 6px; }
+.how-grid article { padding: 12px; border: 1px solid rgba(166,230,244,.15); border-radius: 9px; background: rgba(22,65,82,.5); }
+.how-grid article:last-child { grid-column: 1 / -1; }
+.how-grid b, .how-grid span { display: block; }
+.how-grid b { color: #f6d365; font-size: 9px; letter-spacing: .08em; }
+.how-grid span { margin-top: 5px; color: #b8d6df; font-size: 9px; line-height: 1.45; }
+.title-screen .primary { margin-top: 16px; }
+
+@media (max-width: 760px) {
+  .game-menu-button { height: 39px; padding: 0 8px; font-size: 7px; }
+  .title-screen { width: min(560px, calc(100% - 20px)); max-height: calc(100vh - 20px); padding: 24px 18px; }
+  .title-actions, .how-grid { grid-template-columns: 1fr; }
+  .title-actions .primary, .how-grid article:last-child { grid-column: auto; }
+  .save-slot { grid-template-columns: 1fr; }
+  .save-slot button { width: 100%; }
+}

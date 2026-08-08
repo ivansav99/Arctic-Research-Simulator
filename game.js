@@ -333,6 +333,101 @@
   const wildlifeClearOfPorts=(x,y)=>cityWorldPositions.every(city=>Math.hypot(x-city.x,y-city.y)>=WILDLIFE_PORT_CLEARANCE);
   currentPortCity=cityLabels.find(city=>city.name==='LONGYEARBYEN')||cityLabels[0]||null;
   if(currentPortCity)state.dockedPort=currentPortCity.name;
+
+  // Expedition 13: local saves, title/pause menu, and analytics instrumentation.
+  const GAME_VERSION='expedition-13',SAVE_VERSION=1;
+  const SAVE_KEYS={auto:'arctic-research-save-auto-v1',slot1:'arctic-research-save-slot-1-v1',slot2:'arctic-research-save-slot-2-v1',slot3:'arctic-research-save-slot-3-v1'};
+  const AUTO_NEW_KEY='arctic-research-start-new-v1';
+  let menuOpen=true,autosaveSuspended=false,autosaveTimer=0,lastResearchAnalytics=null;
+  const safeJson=value=>{try{return JSON.parse(JSON.stringify(value));}catch(error){return null;}};
+  const readSave=slot=>{try{const raw=localStorage.getItem(SAVE_KEYS[slot]);if(!raw)return null;const parsed=JSON.parse(raw);return parsed?.version===SAVE_VERSION?parsed:null;}catch(error){return null;}};
+  const hasAnySave=()=>Object.keys(SAVE_KEYS).some(slot=>!!readSave(slot));
+  const activeClock={total:0,since:document.visibilityState==='visible'?performance.now():null};
+  const updateActiveClock=()=>{if(activeClock.since!=null){activeClock.total+=performance.now()-activeClock.since;activeClock.since=null;}if(document.visibilityState==='visible')activeClock.since=performance.now();};
+  const activeSeconds=()=>Math.max(0,Math.round((activeClock.total+(activeClock.since==null?0:performance.now()-activeClock.since))/1000));
+
+  function analyticsContext(){
+    const rs=research?.getState?.()||{},ship=research?.getVesselModifiers?.()||{},player=rs.scientists?.find?.(item=>item.isPlayer),pos=unpolar(state.x,state.y);
+    return {
+      game_version:GAME_VERSION,game_started:state.started?1:0,game_year:state.year,season_day:Math.round(state.seasonDay*10)/10,
+      latitude:Math.round(pos.lat*100)/100,longitude:Math.round(pos.lon*100)/100,vessel_id:rs.currentVessel||'',money:Math.round(rs.money||0),
+      citations:Math.floor(rs.citations||0),science_data:Math.round(rs.data||0),fuel_pct:Math.round(state.fuel),food_pct:Math.round(state.food),
+      crew_count:rs.scientists?.length||0,equipment_count:rs.installedEquipment?.length||0,active_grants:rs.targets?.filter?.(item=>item.kind==='grant'||item.kind==='contract').length||0,
+      missions_completed:rs.completed?.length||0,papers:rs.papers?.length||0,wildlife_seen:rs.observed?.length||0,port_visits:rs.portVisits||0,play_seconds:activeSeconds(),
+      player_career:player?.career||'',player_specialty:player?.specialty||'',viewport:`${innerWidth}x${innerHeight}`,returning_player:hasAnySave()?1:0
+    };
+  }
+  const analytics=(()=>{
+    const measurementId=document.querySelector('meta[name="ar-analytics-id"]')?.content?.trim()||'';
+    let enabled=/^G-[A-Z0-9]+$/i.test(measurementId);
+    if(enabled){
+      window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};
+      window.gtag('js',new Date());window.gtag('config',measurementId,{send_page_view:true});
+      const script=document.createElement('script');script.async=true;script.src=`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;document.head.appendChild(script);
+    }
+    const clean=value=>typeof value==='number'?(Number.isFinite(value)?value:0):typeof value==='boolean'?(value?1:0):String(value??'').slice(0,100);
+    const track=(name,extra={})=>{
+      if(!enabled)return false;
+      const raw={...extra,...analyticsContext()},params={};let count=0;
+      for(const [key,value] of Object.entries(raw)){if(value==null||value==='')continue;if(count>=25)break;params[key.slice(0,40)]=clean(value);count++;}
+      window.gtag?.('event',String(name).replace(/[^a-zA-Z0-9_]/g,'_').slice(0,40),params);return true;
+    };
+    return{track,isEnabled:()=>enabled,measurementId};
+  })();
+  window.ARAnalytics=analytics;
+
+  function saveMeta(){
+    const rs=research?.getState?.()||{},ship=research?.getVesselModifiers?.()||{},pos=unpolar(state.x,state.y);
+    return {savedAt:new Date().toISOString(),location:currentPortCity?.name||state.dockedPort||locationName(pos.lat,pos.lon),vessel:ship.name||rs.currentVessel||'Research Vessel',money:Math.round(rs.money||0),missions:rs.completed?.length||0,papers:rs.papers?.length||0,year:state.year,seasonDay:state.seasonDay};
+  }
+  function createGameSave(){return{version:SAVE_VERSION,gameVersion:GAME_VERSION,savedAt:new Date().toISOString(),meta:saveMeta(),navigation:safeJson(state),currentPortName:currentPortCity?.name||null,checkpoint:safeJson(checkpoint),research:safeJson(research?.createCheckpoint?.()||research?.getState?.()||null)};}
+  function saveGame(slot='auto',reason='auto'){
+    if(!state.started||!SAVE_KEYS[slot]||autosaveSuspended)return false;
+    try{const payload=createGameSave();localStorage.setItem(SAVE_KEYS[slot],JSON.stringify(payload));refreshMenu();if(slot!=='auto')analytics.track('game_saved',{save_slot:slot,save_reason:reason});return true;}catch(error){showToast('SAVE FAILED — BROWSER STORAGE IS NOT AVAILABLE',2600);return false;}
+  }
+  function scheduleAutosave(delay=450){if(!state.started||autosaveSuspended)return;clearTimeout(autosaveTimer);autosaveTimer=setTimeout(()=>saveGame('auto','state_change'),delay);}
+  function restoreGameSave(payload,source='auto'){
+    if(!payload?.navigation||!payload?.research)return false;
+    try{
+      const nav=safeJson(payload.navigation)||{};Object.assign(state,nav,{started:true,gameOver:false,moving:false,commandActive:false,ramming:false,ramClock:0});
+      state.tx=Number.isFinite(nav.tx)?nav.tx:state.x;state.ty=Number.isFinite(nav.ty)?nav.ty:state.y;
+      checkpoint=payload.checkpoint||checkpoint;currentPortCity=payload.currentPortName?cityLabels.find(item=>item.name===payload.currentPortName)||null:null;
+      research?.restoreCheckpoint?.(payload.research);pendingResearchTargetId=null;announcedWeatherEvent=null;iceFloes.length=0;wakeFloes.length=0;brokenIceChannels.length=0;brokenIceGrid.clear();
+      ui.gameOver.classList.add('hidden');ui.fuelLevel.style.width=state.fuel+'%';ui.foodLevel.style.width=state.food+'%';updateResourceWarning();
+      updateVesselButton(research?.getVesselModifiers?.()||vesselModifiers());zoomLevel=(research?.getVesselModifiers?.()||vesselModifiers()).minZoom||zoomLevel;setZoom(0,true);
+      if(currentPortCity&&state.dockedPort)research?.enterPort?.(currentPortCity,{resume:true});else research?.leavePort?.();
+      menuOpen=false;ui.welcome.classList.add('hidden');lastResearchAnalytics=research?.getState?.()||null;showToast(`EXPEDITION LOADED — ${payload.meta?.location||'ARCTIC OCEAN'}`,2400);
+      analytics.track(source==='auto'?'continue_game':'load_game',{save_slot:source,save_age_hours:Math.round((Date.now()-Date.parse(payload.savedAt||Date.now()))/360000)/10});scheduleAutosave(900);return true;
+    }catch(error){showToast('COULD NOT LOAD THIS SAVE',2600);return false;}
+  }
+  function saveDescription(save){if(!save?.meta)return'Empty slot';const m=save.meta,date=new Date(m.savedAt||save.savedAt);return`${m.location||'Arctic Ocean'} · ${m.vessel||'Research Vessel'} · ${m.missions||0} missions · ${new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(m.money||0)} · ${date.toLocaleString()}`;}
+  function slotMarkup(slot,mode){const save=readSave(slot),label=slot==='auto'?'AUTOSAVE':`SAVE SLOT ${slot.slice(-1)}`,button=mode==='save'?'SAVE':save?'LOAD':'EMPTY';return`<div class="save-slot ${save?'':'empty'}"><div><b>${label}</b><span>${save?saveDescription(save):'No expedition saved here.'}</span>${save?`<small>Game ${save.gameVersion||'earlier version'}</small>`:''}</div><button type="button" data-${mode}-slot="${slot}" ${(!save&&mode==='load')||slot==='auto'&&mode==='save'?'disabled':''}>${button}</button></div>`;}
+  function showTitlePane(id='title-main'){['title-main','title-load','title-save','title-help'].forEach(name=>document.getElementById(name)?.classList.toggle('hidden',name!==id));}
+  function refreshMenu(){
+    const auto=readSave('auto'),continueButton=document.getElementById('continue-button'),saveButton=document.getElementById('save-button'),resumeButton=document.getElementById('resume-button'),summary=document.getElementById('continue-summary');
+    continueButton?.classList.toggle('hidden',!auto||state.started);saveButton?.classList.toggle('hidden',!state.started);resumeButton?.classList.toggle('hidden',!state.started);
+    if(summary)summary.textContent=auto&&!state.started?`Latest autosave: ${saveDescription(auto)}`:state.started?'Game paused. Autosave is active in this browser.':'';
+    const load=document.getElementById('load-slots'),save=document.getElementById('save-slots');if(load)load.innerHTML=['auto','slot1','slot2','slot3'].map(slot=>slotMarkup(slot,'load')).join('');if(save)save.innerHTML=['auto','slot1','slot2','slot3'].map(slot=>slotMarkup(slot,'save')).join('');
+  }
+  function openGameMenu(){menuOpen=true;ui.welcome.classList.remove('hidden');showTitlePane('title-main');refreshMenu();analytics.track('game_menu_opened',{menu_context:state.started?'in_game':'title'});}
+  function resumeGame(){if(!state.started)return;menuOpen=false;ui.welcome.classList.add('hidden');analytics.track('game_resumed');}
+  function startNewGame(){
+    if(state.started){try{sessionStorage.setItem(AUTO_NEW_KEY,'1');}catch(error){}location.reload();return;}
+    try{localStorage.removeItem(SAVE_KEYS.auto);}catch(error){}menuOpen=false;ui.welcome.classList.add('hidden');analytics.track('new_game');requestExpeditionStart();
+  }
+  function semanticAnalytics(){
+    const next=research?.getState?.();if(!next)return;const prev=lastResearchAnalytics;if(prev){
+      const completedBefore=new Set((prev.completed||[]).map(item=>item.id));for(const item of next.completed||[])if(!completedBefore.has(item.id))analytics.track('mission_completed',{mission_id:item.id||'',mission_kind:item.kind||'',mission_title:item.shortTitle||item.title||'',data_gain:item.dataGain||0,reward:item.reward||0});
+      const papersBefore=new Set((prev.papers||[]).map(item=>item.id)),newPapers=(next.papers||[]).filter(paper=>!papersBefore.has(paper.id));for(const paper of newPapers)analytics.track('publication_accepted',{paper_tier:paper.tier||'',journal:paper.journal||'',data_used:paper.data||0,award:paper.award||0,initial_citations:paper.initialCitations||0});if((next.publishAttempts||0)>(prev.publishAttempts||0)&&!newPapers.length)analytics.track('publication_rejected',{attempt_number:next.publishAttempts||0,science_data:next.data||0});
+      const targetBefore=new Map((prev.targets||[]).map(item=>[item.id,item]));for(const target of next.targets||[]){const before=targetBefore.get(target.id);if(!before&&['grant','contract'].includes(target.kind))analytics.track('grant_accepted',{grant_id:target.id||'',grant_title:target.shortTitle||target.title||'',grant_kind:target.kind||'',reward:target.reward||0});if(before&&target.stations?.length){const was=(before.stations||[]).filter(st=>st.status==='completed').length,now=target.stations.filter(st=>st.status==='completed').length;if(now>was)analytics.track('mission_station_completed',{mission_id:target.id||'',stations_completed:now,stations_total:target.stations.length});}}
+      const peopleBefore=new Map((prev.scientists||[]).map(item=>[item.id,item]));const peopleNow=new Map((next.scientists||[]).map(item=>[item.id,item]));for(const [id,item] of peopleNow)if(!peopleBefore.has(id)&&!item.isPlayer)analytics.track('scientist_hired',{scientist_id:id,career:item.career||'',specialty:item.specialty||''});for(const [id,item] of peopleBefore)if(!peopleNow.has(id)&&!item.isPlayer)analytics.track('scientist_released',{scientist_id:id,career:item.career||'',specialty:item.specialty||''});
+      const eqBefore=new Set(prev.installedEquipment||[]),eqNow=new Set(next.installedEquipment||[]);for(const id of eqNow)if(!eqBefore.has(id))analytics.track('equipment_installed',{equipment_id:id});for(const id of eqBefore)if(!eqNow.has(id))analytics.track('equipment_sold',{equipment_id:id});
+      if(prev.currentVessel!==next.currentVessel)analytics.track('vessel_changed',{from_vessel:prev.currentVessel||'',to_vessel:next.currentVessel||''});
+      const seenBefore=new Set(prev.observed||[]);for(const species of next.observed||[])if(!seenBefore.has(species))analytics.track('wildlife_observed',{species});
+      if((next.promotions||[]).length>(prev.promotions||[]).length){const promo=next.promotions[next.promotions.length-1]||{};analytics.track('career_promotion',{scientist_id:promo.scientistId||promo.id||'',career:promo.career||promo.to||''});}
+    }
+    lastResearchAnalytics=safeJson(next);
+  }
   function researchSnapshot(){return research?.createCheckpoint?.()??research?.getSnapshot?.()??null;}
   function saveCheckpoint(city){checkpoint={x:state.x,y:state.y,seasonDay:state.seasonDay,year:state.year,travelled:state.travelled,angle:state.angle,portName:city.name,fuel:state.fuel,food:state.food,research:researchSnapshot()};}
   function restoreCheckpoint(){const cp=checkpoint,city=cityLabels.find(item=>item.name===cp.portName)||cityLabels[0],restoreResearch=research?.restoreCheckpoint||research?.restoreSnapshot;restoreResearch?.call(research,cp.research);Object.assign(state,{x:cp.x,y:cp.y,tx:cp.x,ty:cp.y,angle:cp.angle??Math.PI,moving:false,commandActive:false,travelled:cp.travelled??0,seasonDay:cp.seasonDay??0,year:cp.year??2026,frozen:false,fuel:Math.max(25,cp.fuel??100),food:Math.max(25,cp.food??100),portDestination:null,dockedPort:cp.portName,gameOver:false,fogClearDays:7,ramming:false,ramClock:0,targetOnLand:false,started:true});currentPortCity=city;pendingResearchTargetId=null;announcedWeatherEvent=null;research?.ensureMinimumSupplies?.(.25);iceFloes.length=0;wakeFloes.length=0;brokenIceChannels.length=0;brokenIceGrid.clear();ui.gameOver.classList.add('hidden');ui.fuelLevel.style.width=state.fuel+'%';ui.foodLevel.style.width=state.food+'%';research?.enterPort?.(city,{resume:true});showToast(`RETURNED TO LAST PORT — ${cp.portName} · STORES RESTORED TO AT LEAST 25%`,3000);}
@@ -344,10 +439,10 @@
     try{forEachWildlifeVisual((entity,species,category,w)=>{if(Math.hypot(w.x-center.x,w.y-center.y)>screenDistance){const id=ensureWildlifeId(entity);if(id){ids.push(id);observedWildlifeFallback.delete(id);}}});}catch(e){}
     if(ids.length)research?.resetWildlifeObservations?.(ids);
   }
-  function enterPort(city){state.portDestination=null;state.dockedPort=city.name;state.moving=false;state.commandActive=false;state.tx=state.x;state.ty=state.y;currentPortCity=city;resetDistantWildlifeFromPort(city);if(state.started)research?.enterPort?.(city,{resources:{fuel:state.fuel,food:state.food}});saveCheckpoint(city);if(state.started)showToast(`PORT CALL — ${city.name} · SERVICES & RESEARCH GRANTS OPEN`,2600);}
+  function enterPort(city){state.portDestination=null;state.dockedPort=city.name;state.moving=false;state.commandActive=false;state.tx=state.x;state.ty=state.y;currentPortCity=city;resetDistantWildlifeFromPort(city);if(state.started)research?.enterPort?.(city,{resources:{fuel:state.fuel,food:state.food}});saveCheckpoint(city);if(state.started){saveGame('auto','port');analytics.track('port_entered',{port_name:city.name||'',port_country:city.countryCode||''});showToast(`PORT CALL — ${city.name} · SERVICES & RESEARCH GRANTS OPEN`,2600);}}
   function refuelAt(city){enterPort(city);}
   function serviceNearbyPort(){if(!currentPortCity)return;const w=polar(currentPortCity.lat,currentPortCity.lon);if(Math.hypot(w.x-state.x,w.y-state.y)<=38)return;research?.leavePort?.();state.dockedPort=null;currentPortCity=null;}
-  function endGame(title,message){if(state.gameOver)return;state.gameOver=true;state.moving=false;state.tx=state.x;state.ty=state.y;clearTimeout(toastTimer);ui.toast.classList.remove('show','frozen');ui.gameOverTitle.textContent=title;ui.gameOverMessage.textContent=message;ui.gameOver.classList.remove('hidden');}
+  function endGame(title,message){if(state.gameOver)return;state.gameOver=true;state.moving=false;state.tx=state.x;state.ty=state.y;clearTimeout(toastTimer);ui.toast.classList.remove('show','frozen');ui.gameOverTitle.textContent=title;ui.gameOverMessage.textContent=message;ui.gameOver.classList.remove('hidden');analytics.track('game_over',{game_over_reason:title||'',game_over_message:message||''});}
   function text(name,lat,lon,size=16,color='#436c6b'){const w=polar(lat,lon),p=worldToScreen(w.x,w.y);ctx.fillStyle=color;ctx.font=`800 ${size}px system-ui`;ctx.textAlign='center';ctx.fillText(name,p.x,p.y);}
   function drawChartLabel(label){const defaultMin=label.kind==='country'?.3:label.kind==='water'?.3:label.kind==='strait'?.45:label.kind==='city'?.55:.4;if(zoomLevel<(label.minZoom??defaultMin))return;const w=polar(label.lat,label.lon);let p=worldToScreen(w.x,w.y);if(label.kind!=='city'&&Math.abs(p.x-width/2)<70&&Math.abs(p.y-height/2)<70)p={x:p.x,y:p.y-62};if(p.x<-150||p.x>width+150||p.y<82||p.y>height+35)return;const extent=label.size??featureSizes[label.name]??(label.kind==='water'?1200:label.kind==='strait'?80:100);const raw=(label.kind==='country'?9:label.kind==='water'?7.5:5.5)+Math.log10(Math.max(3,extent))*1.7;const fontSize=label.kind==='city'?Math.max(8,Math.min(11,8.5*Math.pow(zoomLevel,.2))):Math.max(7,Math.min(label.kind==='country'?20:15,raw*Math.pow(zoomLevel,.32)));ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';if(label.kind==='city'){const nearby=Math.hypot(w.x-state.x,w.y-state.y)<=180;if(nearby){ctx.strokeStyle='rgba(246,211,101,.8)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(p.x,p.y,9,0,Math.PI*2);ctx.stroke();}ctx.fillStyle='#e84f4f';ctx.strokeStyle='rgba(255,244,230,.95)';ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(p.x,p.y,label.capital?5:4.2,0,Math.PI*2);ctx.fill();ctx.stroke();p={x:p.x,y:p.y-12};ctx.fillStyle='#173f4e';ctx.font=`800 ${fontSize}px system-ui`;ctx.lineWidth=3;}else if(label.kind==='country'){ctx.fillStyle='rgba(46,86,81,.88)';ctx.font=`800 ${fontSize}px system-ui`;}else if(label.kind==='land'){ctx.fillStyle='rgba(55,91,86,.9)';ctx.font=`700 ${fontSize}px system-ui`;}else if(label.kind==='strait'){ctx.fillStyle='rgba(228,249,248,.9)';ctx.font=`italic 600 ${fontSize}px Georgia,serif`;}else{ctx.fillStyle='rgba(224,248,251,.8)';ctx.font=`italic 700 ${fontSize}px Georgia,serif`;}if(label.kind!=='city'){ctx.strokeStyle='rgba(50,107,123,.4)';ctx.lineWidth=Math.max(2,fontSize/4);}ctx.strokeText(label.name,p.x,p.y);ctx.fillText(label.name,p.x,p.y);ctx.restore();}
   function drawRivers(minX,maxX,minY,maxY){ctx.save();ctx.lineCap='round';ctx.lineJoin='round';rivers.forEach(river=>{ctx.strokeStyle='rgba(54,139,173,.9)';ctx.lineWidth=Math.max(1.5,scale*1.05);river.paths.forEach(path=>{let started=false;ctx.beginPath();path.forEach(point=>{if(point.x<minX-20||point.x>maxX+20||point.y<minY-20||point.y>maxY+20){started=false;return;}const p=worldToScreen(point.x,point.y);if(started)ctx.lineTo(p.x,p.y);else{ctx.moveTo(p.x,p.y);started=true;}});ctx.stroke();});if(zoomLevel>=.45&&river.labelPoint){const p=worldToScreen(river.labelPoint.x,river.labelPoint.y);if(p.x>30&&p.x<width-30&&p.y>90&&p.y<height-30){const fs=Math.max(8,Math.min(13,(10-river.rank*.35)*Math.pow(zoomLevel,.25)));ctx.font=`italic 700 ${fs}px Georgia,serif`;ctx.textAlign='center';ctx.strokeStyle='rgba(235,252,252,.92)';ctx.lineWidth=3.5;ctx.strokeText(river.name,p.x,p.y-10);ctx.fillStyle='#175d78';ctx.fillText(river.name,p.x,p.y-10);}}});ctx.restore();}
@@ -747,7 +842,7 @@
   function setZoom(change,silent=false){
     const previousZoom=zoomLevel,minZoom=vesselModifiers().minZoom,steps=[.3,.4,.7,1.1,1.45,1.8,2.3,2.8].filter(value=>value>=minZoom-.001),direction=change>0?1:change<0?-1:0;let index=steps.reduce((best,value,i)=>Math.abs(value-zoomLevel)<Math.abs(steps[best]-zoomLevel)?i:best,0);if(direction)index=Math.max(0,Math.min(steps.length-1,index+direction));else index=Math.max(0,steps.findIndex(value=>value>=minZoom-.001));zoomLevel=steps[index]??minZoom;scale=baseScale*zoomLevel;if(zoomLevel!==previousZoom)iceFloes.length=0;ui.zoomLevel.textContent=Math.round(zoomLevel*100)+'%';ui.scaleDistance.textContent=Math.max(2,Math.round(15/zoomLevel))+' km';ui.zoomIn.disabled=index>=steps.length-1;ui.zoomOut.disabled=index<=0;if(!silent)showToast(zoomLevel>1?'CHART DETAIL '+Math.round(zoomLevel*100)+'%':'CHART OVERVIEW '+Math.round(zoomLevel*100)+'%');
   }
-  function frame(now){const dt=Math.min(.04,(now-last)/1000);last=now;sound.update();const paused=state.gameOver||!!research?.isBusy?.();let weather;if(!paused){updateBrokenIceDrift(dt/zoomLevel);serviceNearbyPort();update(dt);weather=updateWeatherAnnouncement();updateIceReadout();updateCompass();if(now-lastResearchNavigation>250){lastResearchNavigation=now;updateResearchNavigation();}}else{updateCalendar(0);weather=currentWeather();ui.weatherValue.textContent=weather.type==='clear'?'CLEAR':`${weather.label} ${weather.rating}/10 · ${weather.visibilityKm} KM`;updateIceReadout();updateCompass();}const margin=60/scale,minX=state.x-width/scale/2-margin,maxX=state.x+width/scale/2+margin,minY=state.y-height/scale/2-margin,maxY=state.y+height/scale/2+margin;if(!paused){updateFloes(dt/zoomLevel,minX,maxX,minY,maxY);updateWakeFloes(dt/zoomLevel);updateWildlifeEncounters(dt);updateFishSchools(dt/zoomLevel);updateWildlife(dt/zoomLevel);updateNpcVessels(dt/zoomLevel);}updateResourceWarning();drawMap();drawResearchTargets();drawNpcVessels();drawSeasonalLighting();drawWeather(weather);drawPortMarkers();drawWildlifeObservationRings();drawFog(weather);drawResearchTargets(true);drawWildlifeLabels();drawResearchGuidance();drawMiniMap();drawVessel();requestAnimationFrame(frame);}
+  function frame(now){const dt=Math.min(.04,(now-last)/1000);last=now;sound.update();const paused=state.gameOver||menuOpen||!!research?.isBusy?.();let weather;if(!paused){updateBrokenIceDrift(dt/zoomLevel);serviceNearbyPort();update(dt);weather=updateWeatherAnnouncement();updateIceReadout();updateCompass();if(now-lastResearchNavigation>250){lastResearchNavigation=now;updateResearchNavigation();}}else{updateCalendar(0);weather=currentWeather();ui.weatherValue.textContent=weather.type==='clear'?'CLEAR':`${weather.label} ${weather.rating}/10 · ${weather.visibilityKm} KM`;updateIceReadout();updateCompass();}const margin=60/scale,minX=state.x-width/scale/2-margin,maxX=state.x+width/scale/2+margin,minY=state.y-height/scale/2-margin,maxY=state.y+height/scale/2+margin;if(!paused){updateFloes(dt/zoomLevel,minX,maxX,minY,maxY);updateWakeFloes(dt/zoomLevel);updateWildlifeEncounters(dt);updateFishSchools(dt/zoomLevel);updateWildlife(dt/zoomLevel);updateNpcVessels(dt/zoomLevel);}updateResourceWarning();drawMap();drawResearchTargets();drawNpcVessels();drawSeasonalLighting();drawWeather(weather);drawPortMarkers();drawWildlifeObservationRings();drawFog(weather);drawResearchTargets(true);drawWildlifeLabels();drawResearchGuidance();drawMiniMap();drawVessel();requestAnimationFrame(frame);}
   research?.initialize?.({
     wildlifeCatalog:window.ARCTIC_WILDLIFE_CATALOG||{},
     isResearchSiteSuitable,
@@ -762,22 +857,42 @@
     onCharacterReady:beginExpedition,
     onToast:showToast,
     onSound:type=>sound.play(type),
-    onStateChange:()=>{if(currentPortCity)saveCheckpoint(currentPortCity);}
+    onStateChange:()=>{if(currentPortCity)saveCheckpoint(currentPortCity);semanticAnalytics();if(!autosaveSuspended)scheduleAutosave();}
   });
   if(research?.maybeSpawnOpportunity){const spawnOpportunity=research.maybeSpawnOpportunity.bind(research);research.maybeSpawnOpportunity=payload=>spawnOpportunity({...researchEnvironment(payload?.weather),...payload});}
   setZoom(0,true);
   function clampResource(value){return Math.max(0,Math.min(100,value));}
-  function beginExpedition(){if(state.started)return;startFlowPending=false;state.started=true;ui.welcome.classList.add('hidden');if(currentPortCity)enterPort(currentPortCity);}
-  function requestExpeditionStart(){ui.welcome.classList.add('hidden');if(research?.openCharacterSetup){startFlowPending=true;const opened=research.openCharacterSetup();if(opened)return;}beginExpedition();}
-  canvas.addEventListener('pointerdown',e=>{sound.unlock();handleMapPointer(e.clientX,e.clientY);});
-  miniCanvas.addEventListener('pointerdown',e=>{sound.unlock();navigateFromMiniMap(e);});
+  function beginExpedition(){if(state.started)return;startFlowPending=false;state.started=true;menuOpen=false;ui.welcome.classList.add('hidden');if(currentPortCity)enterPort(currentPortCity);analytics.track('game_started');scheduleAutosave(800);}
+  function requestExpeditionStart(){menuOpen=false;ui.welcome.classList.add('hidden');if(research?.openCharacterSetup){startFlowPending=true;const opened=research.openCharacterSetup();if(opened)return;}beginExpedition();}
+  canvas.addEventListener('pointerdown',e=>{sound.unlock();analytics.track('map_interaction',{map_area:'main',pointer_x:Math.round(e.clientX),pointer_y:Math.round(e.clientY)});handleMapPointer(e.clientX,e.clientY);});
+  miniCanvas.addEventListener('pointerdown',e=>{sound.unlock();analytics.track('map_interaction',{map_area:'minimap',pointer_x:Math.round(e.clientX),pointer_y:Math.round(e.clientY)});navigateFromMiniMap(e);});
   canvas.addEventListener('pointermove',e=>{canvas.style.cursor=wildlifeAtScreenPoint(e.clientX,e.clientY)||nearbyNpcVesselAt(e.clientX,e.clientY)||nearbyResearchTargetAt(e.clientX,e.clientY)||nearbyCityAt(e.clientX,e.clientY)?'pointer':'crosshair';});
-  document.getElementById('start-button').addEventListener('click',()=>{sound.unlock();requestExpeditionStart();});
-  document.getElementById('close-welcome').addEventListener('click',()=>{sound.unlock();requestExpeditionStart();});
-  ui.zoomIn.addEventListener('click',()=>setZoom(.1));
-  ui.zoomOut.addEventListener('click',()=>setZoom(-.1));
-  document.getElementById('restart-button').addEventListener('click',restoreCheckpoint);
+  document.getElementById('start-button').addEventListener('click',()=>{sound.unlock();startNewGame();});
+  document.getElementById('help-start-button').addEventListener('click',()=>{sound.unlock();state.started?resumeGame():startNewGame();});
+  document.getElementById('continue-button').addEventListener('click',()=>{sound.unlock();const save=readSave('auto');if(save)restoreGameSave(save,'auto');});
+  document.getElementById('load-button').addEventListener('click',()=>{showTitlePane('title-load');refreshMenu();analytics.track('load_menu_opened');});
+  document.getElementById('save-button').addEventListener('click',()=>{showTitlePane('title-save');refreshMenu();analytics.track('save_menu_opened');});
+  document.getElementById('how-button').addEventListener('click',()=>{showTitlePane('title-help');analytics.track('how_to_play_opened');});
+  document.getElementById('resume-button').addEventListener('click',resumeGame);
+  document.getElementById('game-menu-button').addEventListener('click',()=>{sound.unlock();openGameMenu();});
+  ui.welcome.addEventListener('click',event=>{
+    if(event.target.closest('[data-title-back]')){showTitlePane('title-main');refreshMenu();return;}
+    const load=event.target.closest('[data-load-slot]');if(load){const slot=load.dataset.loadSlot,save=readSave(slot);if(save)restoreGameSave(save,slot);return;}
+    const save=event.target.closest('[data-save-slot]');if(save){const slot=save.dataset.saveSlot;if(saveGame(slot,'manual')){showToast(`GAME SAVED — SLOT ${slot.slice(-1)}`,1800);showTitlePane('title-main');refreshMenu();}return;}
+  });
+  document.addEventListener('click',event=>{
+    const action=event.target.closest?.('[data-arx-action]');if(action){const name=action.dataset.arxAction||'',id=action.dataset.id||'',rs=research?.getState?.()||{};analytics.track('research_ui_action',{ui_action:name,item_id:id});if(name==='complete-target'){const target=(rs.targets||[]).find(item=>item.id===id)||{};autosaveSuspended=true;analytics.track('mission_started',{mission_id:id,mission_title:target.shortTitle||target.title||'',mission_kind:target.kind||'',reward:target.reward||0});}if(name==='acknowledge-research'){autosaveSuspended=false;setTimeout(()=>saveGame('auto','mission_complete'),50);}if(name==='accept'){const offer=(rs.offers||[]).find(item=>item.id===id)||{};analytics.track('grant_accept_clicked',{grant_id:id,grant_title:offer.shortTitle||offer.title||'',reward:offer.reward||0});}if(name==='drop-grant')analytics.track('grant_dropped',{grant_id:id});if(name==='hire'){const person=(rs.candidates||[]).find(item=>item.id===id)||{};analytics.track('scientist_hire_clicked',{scientist_id:id,career:person.career||'',specialty:person.specialty||''});}if(name==='release')analytics.track('scientist_release_clicked',{scientist_id:id});if(name==='equipment')analytics.track('equipment_purchase_clicked',{equipment_id:id});if(name==='sell-equipment')analytics.track('equipment_sell_clicked',{equipment_id:id});if(name==='vessel')analytics.track('vessel_purchase_clicked',{vessel_id_clicked:id});if(['fuel','food','supplies','resupply-all'].includes(name))analytics.track('resupply_clicked',{resource_type:name});if(name==='publish')analytics.track('publication_submitted',{science_data:rs.data||0,publish_attempt:(rs.publishAttempts||0)+1});}
+    const tab=event.target.closest?.('[data-arx-tab]');if(tab)analytics.track('port_tab_viewed',{port_tab:tab.dataset.arxTab||''});
+  },true);
+  ui.zoomIn.addEventListener('click',()=>{analytics.track('zoom_changed',{zoom_direction:'in'});setZoom(.1);});
+  ui.zoomOut.addEventListener('click',()=>{analytics.track('zoom_changed',{zoom_direction:'out'});setZoom(-.1);});
+  document.getElementById('restart-button').addEventListener('click',()=>{analytics.track('checkpoint_restore');restoreCheckpoint();});
   ui.vesselButton.addEventListener('click',()=>research?.openVessel?.());
-  addEventListener('keydown',e=>{const d=180/scale;if(e.key==='ArrowUp')setDestination(width/2,height/2-d);if(e.key==='ArrowDown')setDestination(width/2,height/2+d);if(e.key==='ArrowLeft')setDestination(width/2-d,height/2);if(e.key==='ArrowRight')setDestination(width/2+d,height/2);});
-  addEventListener('resize',resize);try{localStorage.removeItem(CHECKPOINT_KEY);}catch(error){/* A fresh session does not depend on storage. */}resize();requestAnimationFrame(frame);
+  addEventListener('keydown',e=>{if(e.key==='Escape'&&state.started&&!menuOpen){openGameMenu();return;}const d=180/scale;if(e.key==='ArrowUp')setDestination(width/2,height/2-d);if(e.key==='ArrowDown')setDestination(width/2,height/2+d);if(e.key==='ArrowLeft')setDestination(width/2-d,height/2);if(e.key==='ArrowRight')setDestination(width/2+d,height/2);});
+  document.addEventListener('visibilitychange',()=>{updateActiveClock();if(document.visibilityState==='hidden'){if(!autosaveSuspended)saveGame('auto','visibility');analytics.track('session_pause',{active_seconds:activeSeconds()});}});
+  addEventListener('pagehide',()=>{updateActiveClock();if(!autosaveSuspended)saveGame('auto','pagehide');analytics.track('session_summary',{active_seconds:activeSeconds()});});
+  setInterval(()=>{if(state.started&&!menuOpen&&!autosaveSuspended)saveGame('auto','interval');},30000);
+  addEventListener('resize',resize);resize();lastResearchAnalytics=research?.getState?.()||null;refreshMenu();analytics.track('game_open',{analytics_enabled:analytics.isEnabled()?1:0});
+  try{if(sessionStorage.getItem(AUTO_NEW_KEY)==='1'){sessionStorage.removeItem(AUTO_NEW_KEY);setTimeout(startNewGame,0);}}catch(error){}
+  requestAnimationFrame(frame);
 })();

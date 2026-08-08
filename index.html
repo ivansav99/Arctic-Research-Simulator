@@ -4,8 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#082f49">
+  <meta name="ar-analytics-id" content="">
   <title>Arctic Research</title>
-  <link rel="stylesheet" href="style.css?v=expedition-12">
+  <link rel="stylesheet" href="style.css?v=expedition-13">
 </head>
 <body>
   <main id="game" aria-label="Arctic Research navigation map">
@@ -20,6 +21,7 @@
         <span class="food-status"><small>FOOD</small><b id="food-value">100%</b><i><em id="food-level"></em></i></span>
         <span class="position-status"><small>POSITION</small><b id="position">78.2&deg;N 6.0&deg;E</b></span>
         <span class="speed-status"><small>SPEED</small><b id="speed">0.0 KN</b></span>
+        <button id="game-menu-button" class="game-menu-button" type="button">MENU</button>
         <button id="vessel-button" class="vessel-button" type="button" aria-label="Open current vessel information"><img id="vessel-button-image" src="assets/vessels/fishing-vessel.webp" alt=""></button>
       </div>
     </header>
@@ -35,11 +37,48 @@
     </div>
     <aside class="minimap hud" aria-label="Overview map showing vessel position"><div><small>ARCTIC OVERVIEW</small><b id="mini-location">SVALBARD</b></div><canvas id="minimap" width="300" height="300"></canvas></aside>
     <div class="scale" aria-hidden="true"><i></i><span id="scale-distance">15 km</span></div>
-    <section id="welcome" class="welcome hud" aria-live="polite">
-      <button id="close-welcome" aria-label="Close instructions">&times;</button><small>WELCOME ABOARD</small>
-      <h1>Lead an Arctic<br>research expedition.</h1>
-      <p>Begin in Longyearbyen. Recruit scientists, choose instruments and accept work suited to the team aboard.</p>
-      <button id="start-button" class="primary" type="button">OPEN LONGYEARBYEN PORT</button>
+    <section id="welcome" class="welcome title-screen hud" aria-live="polite">
+      <div id="title-main" class="title-pane">
+        <small>ARCTIC RESEARCH SIMULATOR</small>
+        <h1>Lead the science.<br>Explore the Arctic.</h1>
+        <p>Build a research career from a small local vessel to major Arctic expeditions. Recruit scientists, equip your ship, win grants, complete field missions and publish the results.</p>
+        <div class="title-actions">
+          <button id="continue-button" class="primary hidden" type="button">CONTINUE EXPEDITION</button>
+          <button id="start-button" class="primary" type="button">NEW GAME</button>
+          <button id="save-button" class="secondary hidden" type="button">SAVE GAME</button>
+          <button id="load-button" class="secondary" type="button">LOAD GAME</button>
+          <button id="how-button" class="secondary" type="button">HOW TO PLAY</button>
+          <button id="resume-button" class="secondary hidden" type="button">RETURN TO EXPEDITION</button>
+        </div>
+        <p id="continue-summary" class="save-summary"></p>
+      </div>
+      <div id="title-load" class="title-pane hidden">
+        <button class="title-back" data-title-back type="button">&larr; BACK</button>
+        <small>LOCAL BROWSER SAVES</small>
+        <h2>Load an expedition</h2>
+        <p>Saves are stored only in this browser on this device.</p>
+        <div id="load-slots" class="save-slots"></div>
+      </div>
+      <div id="title-save" class="title-pane hidden">
+        <button class="title-back" data-title-back type="button">&larr; BACK</button>
+        <small>LOCAL BROWSER SAVES</small>
+        <h2>Save expedition</h2>
+        <p>Choose one of three manual save slots. The game also keeps a separate automatic save.</p>
+        <div id="save-slots" class="save-slots"></div>
+      </div>
+      <div id="title-help" class="title-pane hidden">
+        <button class="title-back" data-title-back type="button">&larr; BACK</button>
+        <small>HOW TO PLAY</small>
+        <h2>Build an Arctic research program</h2>
+        <div class="how-grid">
+          <article><b>1. PREPARE</b><span>Recruit scientists, buy instruments and accept grants that match your team's capabilities.</span></article>
+          <article><b>2. SAIL</b><span>Navigate between Arctic ports and research sites while managing fuel, food, weather and sea ice.</span></article>
+          <article><b>3. RESEARCH</b><span>Complete field stations and missions to collect scientific data and sponsor payments.</span></article>
+          <article><b>4. PUBLISH</b><span>Turn your data into papers, citations, promotions and stronger research funding.</span></article>
+          <article><b>5. GROW</b><span>Upgrade vessels, expand your team and tackle increasingly ambitious Arctic science.</span></article>
+        </div>
+        <button id="help-start-button" class="primary" type="button">BEGIN EXPEDITION</button>
+      </div>
     </section>
     <section id="game-over" class="game-over hud hidden" role="dialog" aria-modal="true" aria-labelledby="game-over-title">
       <small>EXPEDITION ENDED</small><h2 id="game-over-title">OUT OF FUEL</h2><p id="game-over-message">The vessel is stranded and the expedition cannot continue.</p>
@@ -50,8 +89,8 @@
   </main>
   <script src="coast-data.js"></script>
   <script src="river-data.js"></script>
-  <script src="wildlife-data.js?v=expedition-12"></script>
-  <script src="expedition.js?v=expedition-12"></script>
-  <script src="game.js?v=expedition-12"></script>
+  <script src="wildlife-data.js?v=expedition-13"></script>
+  <script src="expedition.js?v=expedition-13"></script>
+  <script src="game.js?v=expedition-13"></script>
 </body>
 </html>
