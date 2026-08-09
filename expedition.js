@@ -117,7 +117,7 @@
     },
     coastal: {
       id:'coastal', name:'Coastal-Class Research Vessel', shipName:'R/V Kongsfjord', className:'COASTAL CLASS', price:750000, berths:10,
-      slots:{light:8, medium:5, heavy:0}, helidecks:0, minZoom:.4,
+      slots:{light:8, medium:5, heavy:0}, helidecks:0, minZoom:.7,
       supplyCapacity:250, fuelCapacity:50000, foodCapacity:4000, fuelEnduranceDays:15, foodEnduranceDays:15,
       cruiseKnots:11, maxKnots:13, fuelUnitCost:1.12, foodUnitCost:3.8,
       standardEquipment:['hull-echosounder'], upgradeGate:{career:'postdoc', count:1, label:'Chief Scientist must be a postdoc'},
@@ -133,7 +133,7 @@
     },
     icebreaker: {
       id:'icebreaker', name:'Basic Icebreaker', shipName:'R/V Borealis', className:'ICEBREAKER', price:60000000, berths:30,
-      slots:{light:16, medium:14, heavy:10}, helidecks:1, minZoom:.4,
+      slots:{light:16, medium:14, heavy:10}, helidecks:1, minZoom:.7,
       supplyCapacity:950, fuelCapacity:5000000, foodCapacity:400000, fuelEnduranceDays:60, foodEnduranceDays:60,
       cruiseKnots:12, maxKnots:15, fuelUnitCost:1.04, foodUnitCost:3.2, crackedIceFactor:.2,
       standardEquipment:['hull-echosounder'], upgradeGate:{career:'professor', count:1, label:'Chief Scientist must be a professor'},
@@ -141,7 +141,7 @@
     },
     nuclear: {
       id:'nuclear', name:'Nuclear Icebreaker', shipName:'NS Polarnaya Zvezda', className:'NUCLEAR ICEBREAKER', price:650000000, berths:40,
-      slots:{light:20, medium:18, heavy:16}, helidecks:2, minZoom:.3,
+      slots:{light:20, medium:18, heavy:16}, helidecks:2, minZoom:.7,
       supplyCapacity:1500, fuelCapacity:null, foodCapacity:4000000, fuelEnduranceDays:Infinity, foodEnduranceDays:180,
       nuclearFuel:true, cruiseKnots:18, maxKnots:21, foodUnitCost:3, crackedIceFactor:.36,
       standardEquipment:['hull-echosounder'], upgradeGate:{career:'professor', count:1, label:'Chief Scientist must be a professor'},
@@ -584,7 +584,8 @@
     const h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
     return 6371*2*Math.atan2(Math.sqrt(h),Math.sqrt(Math.max(0,1-h)));
   }
-  function researchDistanceWindow(template,kind) {
+  function researchDistanceWindow(template,kind,options={}) {
+    if(options.nearby){const max=options.iceThickness>=2?70:90;return{min:10,max};}
     const ranges={fishing:[5,48],trawler:[8,110],coastal:[18,260],global:[35,520],icebreaker:[55,880],nuclear:[70,1200]}, range=ranges[state.currentVessel]||ranges.fishing;
     const progress=clamp(state.completed.length/12,0,1),localMax=state.currentVessel==='fishing'?28+progress*34:state.currentVessel==='trawler'?55+progress*55:range[1];
     const min=template.minDistance??(kind==='opportunity'?Math.min(45,range[0]+15):range[0]);
@@ -592,7 +593,7 @@
     return {min:Math.min(min,localMax-2),max:Math.max(min+2,Math.min(requestedMax,localMax))};
   }
   function targetSpacingKm() { return state.currentVessel==='fishing'?12:state.currentVessel==='trawler'?18:32; }
-  function pointIsSpaced(point,avoidPoints) { return avoidPoints.every(item => !Number.isFinite(item.lat)||geoDistance(point,item)>=targetSpacingKm()); }
+  function pointIsSpaced(point,avoidPoints,minimum=targetSpacingKm()) { return avoidPoints.every(item => !Number.isFinite(item.lat)||geoDistance(point,item)>=minimum); }
   function stationCountFor(template) { return template.stationCounts?.[state.currentVessel]||template.stationCount||0; }
   function buildStations(template,firstPoint,rng,validator,baseContext) {
     const count=stationCountFor(template); if (!template.transect||count<2) return null;
@@ -615,35 +616,35 @@
     }
     return null;
   }
-  function buildTarget(template, origin, rng, kind='grant') {
+  function buildTarget(template, origin, rng, kind='grant', options={}) {
     const scale=.88+rng()*.26, vesselScale=DATA_SCALE_BY_VESSEL[state.currentVessel]||3, crewScale=1+Math.min(.5,Math.max(0,state.scientists.length-1)*.03);
-    const window=researchDistanceWindow(template,kind);
+    const window=researchDistanceWindow(template,kind,options);
     const validator=callbacks.isResearchSiteSuitable;
     const avoidPoints=[...state.targets,...state.offers,...(state.recentGrantSites||[])].filter(item=>item.status!=='completed');
     let point=template.anywhere ? {...origin} : template.fixedDestination ? {...template.fixedDestination} : null;
     let distance=0, bearing=0;
-    const context=()=>({template,origin,kind,distanceKm:distance,bearingDeg:bearing,avoidPoints,minimumSpacingKm:targetSpacingKm(),preferred:template.fixedDestination||null});
+    const spacing=options.nearby?18:targetSpacingKm(),context=()=>({template,origin,kind,distanceKm:distance,bearingDeg:bearing,avoidPoints,minimumSpacingKm:spacing,preferred:template.fixedDestination||null,...options});
     if (point) {
       distance=geoDistance(origin,point);
-      if ((!template.anywhere&&!pointIsSpaced(point,avoidPoints)) || (validator&&!validator(point,context()))) point=null;
+      if ((!template.anywhere&&!pointIsSpaced(point,avoidPoints,spacing)) || (validator&&!validator(point,context()))) point=null;
     }
     if (!point && template.fixedDestination) {
       for (let radius=3; radius<=30&&!point; radius+=3) for (let angle=0; angle<360; angle+=20) {
         const candidate=destination(template.fixedDestination.lat,template.fixedDestination.lon,radius,angle);
         distance=geoDistance(origin,candidate); bearing=angle;
-        if (pointIsSpaced(candidate,avoidPoints) && (!validator||validator(candidate,context()))) { point=candidate; break; }
+        if (pointIsSpaced(candidate,avoidPoints,spacing) && (!validator||validator(candidate,context()))) { point=candidate; break; }
       }
     }
     if (!point && !template.fixedDestination) {
       for (let attempt=0; attempt<96; attempt++) {
         distance=window.min+rng()*(window.max-window.min); bearing=rng()*360;
         const candidate=destination(origin.lat,origin.lon,distance,bearing);
-        if (pointIsSpaced(candidate,avoidPoints) && (!validator || validator(candidate,context()))) { point=candidate; break; }
+        if (pointIsSpaced(candidate,avoidPoints,spacing) && (!validator || validator(candidate,context()))) { point=candidate; break; }
       }
     }
     if (!point) {
       const fallback=callbacks.findResearchSite?.(context());
-      if (fallback&&Number.isFinite(fallback.lat)&&Number.isFinite(fallback.lon)&&(!template.fixedDestination||geoDistance(fallback,template.fixedDestination)<=35)&&pointIsSpaced(fallback,avoidPoints)&&(!validator||validator(fallback,context()))) point=fallback;
+      if (fallback&&Number.isFinite(fallback.lat)&&Number.isFinite(fallback.lon)&&(!template.fixedDestination||geoDistance(fallback,template.fixedDestination)<=35)&&pointIsSpaced(fallback,avoidPoints,spacing)&&(!validator||validator(fallback,context()))) point=fallback;
     }
     if (!point) return null;
     const iceValueMultiplier=Math.max(1,Number(callbacks.researchSiteValueMultiplier?.(point,template)||1));
@@ -849,12 +850,12 @@
     const ports=relocationPorts();
     if (playerCareerLevel()<2) return '<div class="arx-empty"><b>POSTDOCTORAL CAREER REQUIRED</b><p>Relocating the expedition home port unlocks when the Chief Scientist reaches postdoctoral status.</p></div>';
     const currentId=normalizedPortId(state.port),homeId=state.homePortId||'longyearbyen';
-    return `<p class="arx-help">Move the entire expedition and vessel to another Arctic home port for ${cash(RELOCATION_COST)}. Ports currently frozen in are unavailable until the ice clears.</p><div class="arx-relocation-list">${ports.map(port=>{const current=port.id===currentId,home=port.id===homeId,frozen=!!port.frozen,poor=state.money<RELOCATION_COST;return `<article class="arx-relocation-row ${frozen?'frozen':''}"><div><b>${escapeHtml(port.name)}</b><small>${escapeHtml(port.country||'Arctic')} ${home?'· CURRENT HOME PORT':''}</small></div><span>${frozen?`FROZEN IN · ${escapeHtml(port.iceLabel||'SEA ICE')}`:escapeHtml(port.iceLabel||'OPEN')}</span><button data-arx-action="relocate-port" data-id="${escapeHtml(port.id)}" ${current||frozen||poor?'disabled':''}>${current?'CURRENT PORT':frozen?'UNAVAILABLE':poor?'INSUFFICIENT CASH':`RELOCATE · ${cash(RELOCATION_COST)}`}</button></article>`;}).join('')}</div>`;
+    return `<p class="arx-help">Move the entire expedition and vessel to another Arctic home port for ${cash(RELOCATION_COST)}. Frozen ports remain selectable aboard an icebreaker; other vessels must wait for the ice to clear.</p><div class="arx-relocation-list">${ports.map(port=>{const current=port.id===currentId,home=port.id===homeId,frozen=!!port.frozen,available=port.relocationAvailable!==false,poor=state.money<RELOCATION_COST,blocked=frozen&&!available;return `<article class="arx-relocation-row ${blocked?'frozen':''}"><div><b>${escapeHtml(port.name)}</b><small>${escapeHtml(port.country||'Arctic')} ${home?'· CURRENT HOME PORT':''}</small></div><span>${frozen?`FROZEN IN · ${escapeHtml(port.iceLabel||'SEA ICE')}${available?' · ICEBREAKER ACCESS':''}`:escapeHtml(port.iceLabel||'OPEN')}</span><button data-arx-action="relocate-port" data-id="${escapeHtml(port.id)}" ${current||blocked||poor?'disabled':''}>${current?'CURRENT PORT':blocked?'UNAVAILABLE':poor?'INSUFFICIENT CASH':`RELOCATE · ${cash(RELOCATION_COST)}`}</button></article>`;}).join('')}</div>`;
   }
   function relocateHomePort(id) {
     if (playerCareerLevel()<2) { toast('POSTDOCTORAL CAREER REQUIRED'); return; }
     const port=relocationPorts().find(item=>item.id===id); if(!port) return;
-    if (port.frozen) { toast(`${port.name.toUpperCase()} · PORT CURRENTLY FROZEN IN`); return; }
+    if (port.frozen&&port.relocationAvailable===false) { toast(`${port.name.toUpperCase()} · PORT CURRENTLY FROZEN IN`); return; }
     if (state.money<RELOCATION_COST) { toast(`RELOCATION REQUIRES ${cash(RELOCATION_COST)}`); return; }
     const oldMoney=state.money; adjustMoney(-RELOCATION_COST); state.homePortId=id;
     const moved=callbacks.relocateToPort?.(id);
@@ -1123,8 +1124,8 @@
     return hasSpecialty(template)&&templateSupportedByVessel(template)&&!eligible(template)&&(template.equipment||[]).some(id=>!equipmentOperational(id));
   }
   function maybeOfferProfessorGrant(environment={}) {
-    const professorCount=state.scientists.filter(item=>item.career==='professor').length; if(!professorCount||state.port||state.remoteOffer||state.elapsedDays-(state.lastProfessorGrantDay||-999)<Math.max(3,9/professorCount)||Math.random()>.28+Math.min(.32,professorCount*.08))return false;
-    const candidates=TEMPLATES.filter(item=>!item.weather&&templateCareerLevel(item)>=2&&eligible(item)&&!(item.onlyPorts?.length)); if(!candidates.length)return false; const rng=seeded(`professor-${Math.floor(state.elapsedDays)}-${professorCount}`),template=candidates[Math.floor(rng()*candidates.length)],origin=environment.position||{lat:78,lon:15},target=buildTarget(template,origin,rng,'grant'); if(!target)return false;
+    const professorCount=state.scientists.filter(item=>item.career==='professor').length,cooldown=Math.max(1.5,6/professorCount);if(!professorCount||state.port||state.remoteOffer||grantLoad()>=grantCapacity()||state.elapsedDays-(state.lastProfessorGrantDay||-999)<cooldown)return false;
+    const candidates=TEMPLATES.filter(item=>!item.weather&&templateCareerLevel(item)>=2&&eligible(item)&&!(item.onlyPorts?.length)); if(!candidates.length)return false; const rng=seeded(`professor-${Math.floor(state.elapsedDays*10)}-${professorCount}`),weighted=candidates.flatMap(item=>Array(templateCareerLevel(item)>=3?1+professorCount*8:1+professorCount*3).fill(item)),template=weighted[Math.floor(rng()*weighted.length)],origin=environment.position||{lat:78,lon:15},target=buildTarget(template,origin,rng,'grant',{nearby:!!(environment.iceEdge||environment.iceThickness),iceThickness:Number(environment.iceThickness)||0}); if(!target)return false;
     state.remoteOffer=target;state.lastProfessorGrantDay=state.elapsedDays;const modal=root.querySelector('#arx-target-modal');modal.innerHTML=`<div class="arx-modal-card arx-target-card"><small>PROFESSOR-ORIGINATED PROPOSAL</small><h2>${escapeHtml(target.title)}</h2><p>A professor aboard has developed a fundable research idea from conditions observed at sea. Accept it and the site will receive normal grant navigation guidance.</p>${mediaMarkup(target,'hero')}<div class="arx-operation-actions"><button class="ghost" data-arx-action="decline-professor-grant">DECLINE</button><button data-arx-action="accept-professor-grant">ACCEPT GRANT</button></div></div>`;modal.classList.add('open');return true;
   }
   function maybeSpawnOpportunity(payload={}) {
@@ -1142,16 +1143,16 @@
       if (spawned.length) { toast(`WEATHER RESEARCH AVAILABLE · ${spawned.map(item=>item.shortTitle).join(' + ')}`); changed(); return spawned[0]; }
       return null;
     }
-    if (state.targets.filter(item=>item.kind==='opportunity'||item.kind==='weather-opportunity').length>=8) return null;
-    const rng=seeded(`${payload.position.lat.toFixed(2)}-${payload.position.lon.toFixed(2)}-${state.portVisits}-${state.completed.length}-${Math.floor(state.elapsedDays)}`);
-    const recent=new Set(state.recentGrantTemplates||[]), possible=TEMPLATES.filter(item=>!item.weather&&templateSupportedByVessel(item)&&(item.unlockAfter||0)<=state.completed.length&&!recent.has(item.id));
-    if (!possible.length) return null;
-    const coastal=payload.fjord||payload.fjordScore>.38||payload.coastal||payload.coastDistanceKm<30, iceEdge=!!payload.iceEdge||payload.ice==='marginal',iceThickness=Math.max(0,Number(payload.iceThickness)||0),deepIce=payload.ice==='packed'||payload.ice==='cracked';
-    const teamLevel=Math.max(1,...state.scientists.map(item=>careerLevel(item.career))),postdocCount=state.scientists.filter(item=>item.career==='postdoc').length,professorCount=state.scientists.filter(item=>item.career==='professor').length; const weighted=possible.flatMap(template=>{let weight=1,level=templateCareerLevel(template);if(coastal&&(template.coastal||template.fjordPreferred||template.tier==='local'))weight+=payload.fjord?14:7;if(iceEdge&&template.iceAllowed)weight+=10;if(deepIce&&template.iceAllowed)weight+=18+iceThickness*10;if(deepIce&&!template.iceAllowed)weight=Math.max(1,Math.floor(weight*.25));if(teamLevel===2)weight+=level===2?10:level===1?3:0;if(teamLevel>=3)weight+=level===3?12:level===2?5:1;if(level===2)weight+=postdocCount*3+professorCount*2;if(level===3)weight+=professorCount*4;if(!coastal&&template.tier!=='local')weight+=2;return Array(Math.max(1,Math.round(weight))).fill(template);});
+    const coastal=payload.fjord||payload.fjordScore>.38||payload.coastal||payload.coastDistanceKm<30,iceEdge=!!payload.iceEdge||payload.ice==='marginal'||payload.ice==='fast',iceThickness=Math.max(0,Number(payload.iceThickness)||0),deepIce=payload.ice==='packed'||payload.ice==='cracked'||payload.ice==='fast',inIce=iceEdge||deepIce,teamLevel=Math.max(1,...state.scientists.map(item=>careerLevel(item.career))),postdocCount=state.scientists.filter(item=>item.career==='postdoc').length,professorCount=state.scientists.filter(item=>item.career==='professor').length;
+    const opportunityCap=inIce?12:8;if(state.targets.filter(item=>item.kind==='opportunity'||item.kind==='weather-opportunity').length>=opportunityCap)return null;
+    const rng=seeded(`${payload.position.lat.toFixed(2)}-${payload.position.lon.toFixed(2)}-${state.portVisits}-${state.completed.length}-${Math.floor(state.elapsedDays*4)}`),recent=new Set(state.recentGrantTemplates||[]),unlockCredit=teamLevel>=3?8:teamLevel>=2?3:0;
+    let possible=TEMPLATES.filter(item=>!item.weather&&templateSupportedByVessel(item)&&(item.unlockAfter||0)<=state.completed.length+unlockCredit&&!recent.has(item.id));
+    if(inIce){const icePossible=possible.filter(item=>item.iceAllowed);if(icePossible.length)possible=icePossible;}if(!possible.length)return null;
+    const weighted=possible.flatMap(template=>{let weight=1,level=templateCareerLevel(template);if(coastal&&(template.coastal||template.fjordPreferred||template.tier==='local'))weight+=payload.fjord?14:7;if(iceEdge&&template.iceAllowed)weight+=18;if(deepIce&&template.iceAllowed)weight+=30+iceThickness*18;if(inIce&&!template.iceAllowed)weight=1;if(teamLevel===2)weight+=level===2?18:level===1?2:0;if(teamLevel>=3)weight+=level===3?42:level===2?12:1;if(level===2)weight+=postdocCount*4+professorCount*3;if(level===3)weight+=professorCount*12;if(payload.ramming&&template.iceAllowed)weight+=25;if(!coastal&&template.tier!=='local')weight+=2;return Array(Math.max(1,Math.round(weight))).fill(template);});
     const ready=weighted.filter(item=>eligible(item)), aspirational=weighted.filter(teamCouldDoWithEquipment), otherMissing=weighted.filter(item=>!eligible(item));
     let pool;
     if (aspirational.length&&rng()<.48) pool=aspirational; else if (ready.length) pool=ready; else pool=aspirational.length?aspirational:otherMissing;
-    const template=pool[Math.floor(rng()*pool.length)], target=buildTarget(template,payload.position,rng,'opportunity'); if (!target) return null;
+    const template=pool[Math.floor(rng()*pool.length)],target=buildTarget(template,payload.position,rng,'opportunity',{nearby:inIce,iceThickness}); if (!target) return null;
     state.targets.push(target); toast(`NEW RESEARCH OPPORTUNITY · ${target.shortTitle}`); changed(); return target;
   }
 
@@ -1221,7 +1222,7 @@
     else remainder=0;
     paper.ageDays=age; paper.citationRemainder=remainder; state.citations+=gain;
   }
-  function tickDays(days) {
+  function tickDays(days,environment={}) {
     if (!Number.isFinite(days)||days<=0) return;
     state.elapsedDays=(Number(state.elapsedDays)||0)+days;
     state.recentGrantSites=(state.recentGrantSites||[]).filter(site=>state.elapsedDays-(site.day||0)<90).slice(0,18);
@@ -1247,6 +1248,7 @@
     if (cooldownBefore!==Math.ceil(state.publicationCooldown)||citationsBefore!==Math.floor(state.citations)||moneyBefore!==Math.round(state.money)||deploymentChanged) {
       renderSidebar(); animateCashReadouts(); callbacks.onStateChange?.();
     }
+    if(environment?.source==='sailing')maybeOfferProfessorGrant(environment);
     if (state.data>=DATA_GAUGE_MAX) setTimeout(maybeAutoPublish,0);
   }
 
