@@ -343,11 +343,21 @@
   const brokenIceKey=(gx,gy)=>`${gx},${gy}`;
   function indexBrokenIce(point){const r=point.radius,gx0=Math.floor((point.x-r)/BROKEN_ICE_CELL),gx1=Math.floor((point.x+r)/BROKEN_ICE_CELL),gy0=Math.floor((point.y-r)/BROKEN_ICE_CELL),gy1=Math.floor((point.y+r)/BROKEN_ICE_CELL);for(let gx=gx0;gx<=gx1;gx++)for(let gy=gy0;gy<=gy1;gy++){const key=brokenIceKey(gx,gy);if(!brokenIceGrid.has(key))brokenIceGrid.set(key,[]);brokenIceGrid.get(key).push(point);}}
   function rebuildBrokenIceGrid(){brokenIceGrid.clear();for(const point of brokenIceChannels)indexBrokenIce(point);}
-  function addBrokenIce(x,y){const last=brokenIceChannels[brokenIceChannels.length-1];if(last&&Math.hypot(x-last.x,y-last.y)<2.8)return;const flow=currentAt(x,y,false),point={x,y,radius:7,life:4+Math.random()*2,vx:flow.vx,vy:flow.vy,flowAge:.2+Math.random()*.2};brokenIceChannels.push(point);indexBrokenIce(point);if(brokenIceChannels.length>450){brokenIceChannels.splice(0,60);rebuildBrokenIceGrid();}}
-  function updateBrokenIceDrift(dt){if(!brokenIceChannels.length)return;let changed=false;for(let i=brokenIceChannels.length-1;i>=0;i--){const point=brokenIceChannels[i];point.life-=dt*.2;if(point.life<=0){brokenIceChannels.splice(i,1);changed=true;continue;}point.flowAge-=dt;if(point.flowAge<=0){const flow=currentAt(point.x,point.y,false);point.vx=flow.vx;point.vy=flow.vy;point.flowAge=.2+Math.random()*.2;}const nx=point.x+point.vx*dt,ny=point.y+point.vy*dt;if(!isLand(nx,ny)&&iceTypeAt(nx,ny)!=='fast'){point.x=nx;point.y=ny;changed=true;}}if(changed)rebuildBrokenIceGrid();}
+  function addBrokenIce(x,y,radius=8,anchored=false){if(isBrokenIceAt(x,y))return;const natural=naturalIceTypeAt(x,y),fixed=anchored||natural==='fast',flow=fixed?{vx:0,vy:0}:currentAt(x,y,false),point={x,y,radius,life:fixed?34:18+Math.random()*8,anchored:fixed,vx:flow.vx,vy:flow.vy,flowAge:.35+Math.random()*.3};brokenIceChannels.push(point);indexBrokenIce(point);if(brokenIceChannels.length>700){brokenIceChannels.splice(0,80);rebuildBrokenIceGrid();}}
+  function updateBrokenIceDrift(dt){if(!brokenIceChannels.length)return;let changed=false;for(let i=brokenIceChannels.length-1;i>=0;i--){const point=brokenIceChannels[i];point.life-=dt*(point.anchored?.035:.07);if(point.life<=0){brokenIceChannels.splice(i,1);changed=true;continue;}if(point.anchored)continue;point.flowAge-=dt;if(point.flowAge<=0){const flow=currentAt(point.x,point.y,false);point.vx=flow.vx*.72;point.vy=flow.vy*.72;point.flowAge=.35+Math.random()*.35;}const nx=point.x+point.vx*dt,ny=point.y+point.vy*dt;if(!isLand(nx,ny)&&naturalIceTypeAt(nx,ny)!=='fast'){point.x=nx;point.y=ny;changed=true;}}if(changed)rebuildBrokenIceGrid();}
   function isBrokenIceAt(x,y){const points=brokenIceGrid.get(brokenIceKey(Math.floor(x/BROKEN_ICE_CELL),Math.floor(y/BROKEN_ICE_CELL)))||[];for(const point of points)if(Math.hypot(x-point.x,y-point.y)<=point.radius)return true;return false;}
-  function iceTypeAt(x,y){if(isLand(x,y))return'open';const pos=unpolar(x,y),growth=iceGrowth(),packEdge=packIceEdge(pos.lon),marginalEdge=packEdge-(2.1+1.5*growth);if(pos.lat>=packEdge){if(isBrokenIceAt(x,y))return'marginal';return isCrackedIceAt(x,y)?'cracked':'packed';}const fastGrowth=fastIceGrowth(),fastWidth=23.5*fastGrowth,d=coastDistance(x,y,fastWidth+3);if(fastWidth>0&&d<=fastWidth)return'fast';if(pos.lat>=marginalEdge)return'marginal';return'open';}
+  function iceTypeAt(x,y){if(isLand(x,y))return'open';const pos=unpolar(x,y),growth=iceGrowth(),packEdge=packIceEdge(pos.lon),marginalEdge=packEdge-(2.1+1.5*growth),broken=isBrokenIceAt(x,y);if(pos.lat>=packEdge){if(broken)return'marginal';return isCrackedIceAt(x,y)?'cracked':'packed';}const fastGrowth=fastIceGrowth(),fastWidth=23.5*fastGrowth,d=coastDistance(x,y,fastWidth+3);if(fastWidth>0&&d<=fastWidth)return broken?'marginal':'fast';if(pos.lat>=marginalEdge)return'marginal';return'open';}
   function naturalIceTypeAt(x,y){if(isLand(x,y))return'open';const pos=unpolar(x,y),growth=iceGrowth(),packEdge=packIceEdge(pos.lon),marginalEdge=packEdge-(2.1+1.5*growth);if(pos.lat>=packEdge)return isCrackedIceAt(x,y)?'cracked':'packed';const fastGrowth=fastIceGrowth(),fastWidth=23.5*fastGrowth,d=coastDistance(x,y,fastWidth+3);if(pos.lat>=71.5&&fastWidth>0&&d<=fastWidth)return'fast';if(pos.lat>=marginalEdge)return'marginal';return'open';}
+  function vesselCanBreakNaturalIceAt(x,y,vessel=vesselModifiers()){
+    const id=vesselIceId(vessel),type=naturalIceTypeAt(x,y);if(type!=='fast'&&type!=='packed'&&type!=='cracked')return false;const thickness=type==='fast'?1:iceThicknessAt(x,y);
+    if(id==='icebreaker')return type==='fast'||thickness===1;
+    if(id==='nuclear')return type==='fast'||thickness<=2||(thickness===3&&type==='cracked');
+    return false;
+  }
+  function carveIcebreakerTrack(x,y,heading,vessel=vesselModifiers()){
+    const id=vesselIceId(vessel);if(id!=='icebreaker'&&id!=='nuclear')return;const radius=id==='nuclear'?12:9.5,reach=id==='nuclear'?25:19,step=id==='nuclear'?3:2.6;
+    for(let d=2;d<=reach;d+=step){const cx=x+Math.cos(heading)*d,cy=y+Math.sin(heading)*d;if(isLand(cx,cy)||!vesselCanBreakNaturalIceAt(cx,cy,vessel))continue;const fixed=naturalIceTypeAt(cx,cy)==='fast';addBrokenIce(cx,cy,radius,fixed);}
+  }
   function riverAt(x,y,limit=3.5){for(const segment of riverSegments){if(x<segment.minX||x>segment.maxX||y<segment.minY||y>segment.maxY)continue;if(segmentDistance(x,y,segment.a,segment.b)<=limit)return segment.river;}return null;}
   const isBlocked=(x,y)=>isLand(x,y)&&!riverAt(x,y);
   const cityLabels=chartLabels.filter(label=>label.kind==='city');
@@ -366,7 +376,7 @@
   if(currentPortCity)state.dockedPort=currentPortCity.name;
 
   // Expedition 13: local saves, title/pause menu, and analytics instrumentation.
-  const GAME_VERSION='expedition-20',SAVE_VERSION=1;
+  const GAME_VERSION='expedition-21',SAVE_VERSION=1;
   const SAVE_KEYS={auto:'arctic-research-save-auto-v1',slot1:'arctic-research-save-slot-1-v1',slot2:'arctic-research-save-slot-2-v1',slot3:'arctic-research-save-slot-3-v1'};
   const AUTO_NEW_KEY='arctic-research-start-new-v1';
   let menuOpen=true,autosaveSuspended=false,autosaveTimer=0,lastResearchAnalytics=null;
@@ -820,10 +830,34 @@
   }
   function vesselSpriteMetrics(item=vesselModifiers()){
     const key=String(item.id||item.classId||item.image||item.name||'').toLowerCase();
-    if(key.includes('icebreaker')||key.includes('nuclear'))return{w:44,h:68,r:29};
-    if(key.includes('global'))return{w:40,h:66,r:28};
+    if(key.includes('nuclear'))return{w:52,h:80,r:34};
+    if(key.includes('icebreaker'))return{w:47,h:73,r:32};
+    if(key.includes('global'))return{w:43,h:69,r:30};
     if(key.includes('coastal'))return{w:36,h:62,r:27};
-    return{w:32,h:58,r:25};
+    if(key.includes('trawler'))return{w:39,h:65,r:28};
+    return{w:29,h:54,r:24};
+  }
+  function drawVesselClassDetails(item,size){
+    const id=vesselIceId(item),halfH=size.h/2;
+    ctx.save();ctx.shadowColor='transparent';ctx.lineCap='round';ctx.lineJoin='round';
+    if(id==='trawler'){
+      ctx.strokeStyle='rgba(25,57,67,.95)';ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(-size.w*.34,halfH*.15);ctx.lineTo(-size.w*.36,halfH*.58);ctx.lineTo(size.w*.36,halfH*.58);ctx.lineTo(size.w*.34,halfH*.15);ctx.stroke();
+      ctx.fillStyle='#d9b65a';ctx.fillRect(-size.w*.24,halfH*.25,size.w*.48,3.2);
+    }else if(id==='global'){
+      ctx.strokeStyle='rgba(20,58,73,.95)';ctx.lineWidth=1.7;ctx.beginPath();ctx.moveTo(-size.w*.35,halfH*.42);ctx.lineTo(-size.w*.34,halfH*.66);ctx.lineTo(size.w*.34,halfH*.66);ctx.lineTo(size.w*.35,halfH*.42);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(size.w*.13,-halfH*.36);ctx.lineTo(size.w*.35,-halfH*.07);ctx.stroke();
+      ctx.fillStyle='#eef7f5';ctx.beginPath();ctx.arc(-size.w*.16,-halfH*.28,2.8,0,Math.PI*2);ctx.fill();
+    }else if(id==='icebreaker'||id==='nuclear'){
+      const deckY=halfH*.43;ctx.strokeStyle='rgba(18,56,70,.96)';ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(-size.w*.37,deckY-.5);ctx.lineTo(-size.w*.34,halfH*.7);ctx.lineTo(size.w*.34,halfH*.7);ctx.lineTo(size.w*.37,deckY-.5);ctx.stroke();
+      ctx.strokeStyle='#79d2ba';ctx.lineWidth=1.4;ctx.beginPath();ctx.arc(0,halfH*.48,id==='nuclear'?7.5:6.2,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.moveTo(-5,halfH*.48);ctx.lineTo(5,halfH*.48);ctx.moveTo(0,halfH*.39);ctx.lineTo(0,halfH*.57);ctx.stroke();
+      ctx.strokeStyle='rgba(229,246,248,.95)';ctx.lineWidth=1.7;ctx.beginPath();ctx.moveTo(size.w*.12,-halfH*.25);ctx.lineTo(size.w*.34,-halfH*.03);ctx.stroke();
+      ctx.fillStyle='#f3f8f7';ctx.beginPath();ctx.arc(-size.w*.14,-halfH*.29,3.2,0,Math.PI*2);ctx.fill();
+      if(id==='nuclear'){
+        ctx.strokeStyle='#79d2ba';ctx.beginPath();ctx.arc(0,halfH*.16,5.4,0,Math.PI*2);ctx.stroke();
+        ctx.fillStyle='#f3f8f7';ctx.beginPath();ctx.arc(size.w*.13,-halfH*.19,2.7,0,Math.PI*2);ctx.fill();
+      }
+    }
+    ctx.restore();
   }
   function drawWildlifeIcons(){
     const weather=currentWeather();
@@ -870,7 +904,29 @@
   function safeNpcPosition(npc,x=npc.x,y=npc.y){if(npcAllowedAt(npc,x,y))return{x,y};for(let radius=8;radius<=180;radius+=8)for(let index=0;index<20;index++){const angle=npc.angle+index*Math.PI/10,cx=x+Math.cos(angle)*radius,cy=y+Math.sin(angle)*radius;if(npcAllowedAt(npc,cx,cy))return{x:cx,y:cy};}return null;}
   function npcCourseAllowed(npc,x,y){for(const fraction of[.25,.5,.75,1])if(!npcAllowedAt(npc,npc.x+(x-npc.x)*fraction,npc.y+(y-npc.y)*fraction))return false;return true;}
   function updateNpcVessels(dt){npcUpdateAccumulator+=dt;if(npcUpdateAccumulator<.045)return;const stepTime=Math.min(.12,npcUpdateAccumulator);npcUpdateAccumulator=0;for(const npc of npcVessels){if(!npcActive(npc))continue;if(!npc.ready){const safe=safeNpcPosition(npc);if(safe){npc.x=safe.x;npc.y=safe.y;}npc.ready=true;}const goal=npc.route[npc.routeIndex%npc.route.length],dx=goal.x-npc.x,dy=goal.y-npc.y,distance=Math.hypot(dx,dy);if(distance<16){npc.routeIndex=(npc.routeIndex+1)%npc.route.length;continue;}const desired=Math.atan2(dy,dx),turn=((desired-npc.angle+Math.PI*3)%(Math.PI*2))-Math.PI;npc.angle+=Math.max(-.028,Math.min(.028,turn));const distanceStep=Math.min(distance,npc.speed*KNOT_TO_WORLD_SPEED*stepTime*.24),nx=npc.x+Math.cos(npc.angle)*distanceStep,ny=npc.y+Math.sin(npc.angle)*distanceStep;if(npcCourseAllowed(npc,nx,ny)){npc.x=nx;npc.y=ny;}else{npc.routeIndex=(npc.routeIndex+1)%npc.route.length;npc.angle+=Math.PI*.45;const safe=safeNpcPosition(npc);if(safe){npc.x=safe.x;npc.y=safe.y;}}}}
-  function drawNpcIcon(npc){ctx.strokeStyle='rgba(236,251,252,.95)';ctx.lineWidth=1.2;if(npc.kind==='canoe'){ctx.fillStyle='#7b432b';ctx.beginPath();ctx.moveTo(0,-10);ctx.quadraticCurveTo(7,1,0,11);ctx.quadraticCurveTo(-7,1,0,-10);ctx.fill();ctx.stroke();ctx.strokeStyle='#e7d39f';ctx.beginPath();ctx.moveTo(-8,-7);ctx.lineTo(8,8);ctx.stroke();return;}if(npc.kind==='sailing'){ctx.fillStyle='#f7f1da';ctx.beginPath();ctx.moveTo(0,-15);ctx.lineTo(0,7);ctx.lineTo(12,5);ctx.closePath();ctx.fill();ctx.stroke();ctx.fillStyle='#745641';ctx.fillRect(-2,-10,3,22);return;}ctx.fillStyle=npc.kind==='research'?'#f5cf55':npc.kind==='cruise'?'#f5f1df':'#d8684f';ctx.beginPath();ctx.moveTo(0,-13);ctx.quadraticCurveTo(8,-4,7,11);ctx.quadraticCurveTo(0,15,-7,11);ctx.quadraticCurveTo(-8,-4,0,-13);ctx.fill();ctx.stroke();if(npc.kind==='cruise'){ctx.fillStyle='#eef7f5';ctx.fillRect(-6,-5,12,9);ctx.fillStyle='#24536b';for(const x of[-4,0,4])ctx.fillRect(x,-3,2,2);}else if(npc.kind==='research'){ctx.fillStyle='#edf7f3';ctx.fillRect(-5,-3,10,7);ctx.strokeStyle='#153e52';ctx.beginPath();ctx.moveTo(-7,4);ctx.lineTo(7,4);ctx.moveTo(0,-10);ctx.lineTo(0,-17);ctx.stroke();}else{ctx.fillStyle='#173f50';ctx.fillRect(-4,-2,8,5);}}
+  function drawNpcHull(length,width,fill,accent='#eaf8fa'){
+    ctx.fillStyle=fill;ctx.strokeStyle='rgba(233,251,252,.96)';ctx.lineWidth=1.25;ctx.beginPath();ctx.moveTo(0,-length*.52);ctx.quadraticCurveTo(width*.56,-length*.3,width*.5,length*.36);ctx.quadraticCurveTo(0,length*.55,-width*.5,length*.36);ctx.quadraticCurveTo(-width*.56,-length*.3,0,-length*.52);ctx.closePath();ctx.fill();ctx.stroke();ctx.strokeStyle=accent;ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(-width*.34,length*.28);ctx.lineTo(width*.34,length*.28);ctx.stroke();
+  }
+  function drawNpcIcon(npc){
+    const cls=String(npc.classId||'').toLowerCase();
+    ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
+    if(npc.kind==='canoe'){ctx.fillStyle='#78442d';ctx.strokeStyle='#f3e6c8';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(0,-12);ctx.quadraticCurveTo(7,0,0,13);ctx.quadraticCurveTo(-7,0,0,-12);ctx.fill();ctx.stroke();ctx.beginPath();ctx.moveTo(-8,-7);ctx.lineTo(8,8);ctx.stroke();ctx.restore();return;}
+    if(npc.kind==='sailing'){ctx.strokeStyle='#f6fbfb';ctx.lineWidth=1.3;ctx.fillStyle='#784f38';ctx.beginPath();ctx.ellipse(0,4,5.5,13,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle='#f5f0d8';ctx.beginPath();ctx.moveTo(0,-17);ctx.lineTo(0,6);ctx.lineTo(13,4);ctx.closePath();ctx.fill();ctx.stroke();ctx.fillStyle='#f0d86c';ctx.fillRect(-1.1,-18,2.2,27);ctx.restore();return;}
+    if(npc.kind==='fishing'){
+      const trawler=cls==='trawler';drawNpcHull(trawler?38:30,trawler?16:12,trawler?'#b94d40':'#d96851','#f2c35f');
+      ctx.fillStyle='#eef7f5';ctx.fillRect(-(trawler?5.5:4.5),-10,trawler?11:9,trawler?10:8);ctx.fillStyle='#24566b';ctx.fillRect(-3.5,-8,7,3.3);
+      if(trawler){ctx.strokeStyle='#e8c15d';ctx.lineWidth=1.7;ctx.beginPath();ctx.moveTo(-6,7);ctx.lineTo(-7,15);ctx.lineTo(7,15);ctx.lineTo(6,7);ctx.stroke();ctx.fillStyle='#344d57';ctx.fillRect(-5,9,10,3);}
+      ctx.restore();return;
+    }
+    if(npc.kind==='research'){
+      const global=cls==='global';drawNpcHull(global?42:35,global?17:14,'#f0f6f5','#6cc1d0');ctx.fillStyle='#dcecee';ctx.fillRect(-(global?7:6),-12,global?14:12,13);ctx.fillStyle='#2d6f8b';ctx.fillRect(-(global?5:4),-10,global?10:8,4);
+      ctx.strokeStyle='#f0c059';ctx.lineWidth=1.7;ctx.beginPath();ctx.moveTo(-6,7);ctx.lineTo(-7,global?17:14);ctx.lineTo(7,global?17:14);ctx.lineTo(6,7);ctx.stroke();ctx.strokeStyle='#dff4f6';ctx.beginPath();ctx.moveTo(4,-14);ctx.lineTo(10,-6);ctx.stroke();ctx.fillStyle='#f6fbfb';ctx.beginPath();ctx.arc(-4,-15,2.7,0,Math.PI*2);ctx.fill();ctx.restore();return;
+    }
+    if(npc.kind==='cruise'){
+      drawNpcHull(cls==='global'?46:39,cls==='global'?19:16,'#f5f2df','#8ad1dd');ctx.fillStyle='#eef7f5';ctx.fillRect(-9,-13,18,19);ctx.fillStyle='#2a6077';for(const x of[-6,-2,2,6])ctx.fillRect(x,-10,2.2,8);ctx.fillStyle='#f3fbfb';ctx.beginPath();ctx.arc(0,-17,3,0,Math.PI*2);ctx.fill();ctx.restore();return;
+    }
+    drawNpcHull(31,13,'#d76a52');ctx.fillStyle='#173f50';ctx.fillRect(-4,-5,8,7);ctx.restore();
+  }
   function drawNpcVessels(){ctx.save();ctx.textAlign='center';ctx.textBaseline='bottom';for(const npc of npcVessels){if(!npcActive(npc)||!npc.ready)continue;const p=worldToScreen(npc.x,npc.y);if(p.x<-45||p.x>width+45||p.y<70||p.y>height+45)continue;ctx.save();ctx.translate(p.x,p.y);ctx.rotate(npc.angle+Math.PI/2);drawNpcIcon(npc);ctx.restore();if(zoomLevel>=.75||Math.hypot(npc.x-state.x,npc.y-state.y)<90){ctx.font='800 8px system-ui';ctx.lineWidth=3;ctx.strokeStyle='rgba(4,28,42,.9)';ctx.strokeText(npc.name,p.x,p.y-18);ctx.fillStyle='#f4fdff';ctx.fillText(npc.name,p.x,p.y-18);}}ctx.restore();}
   function nearbyNpcVesselAt(clientX,clientY){let match=null,best=27;for(const npc of npcVessels){if(!npcActive(npc)||!npc.ready)continue;const p=worldToScreen(npc.x,npc.y),hit=Math.hypot(p.x-clientX,p.y-clientY);if(hit<best){best=hit;match={npc,p,distance:Math.hypot(npc.x-state.x,npc.y-state.y)};}}return match;}
   function openNpcVessel(encounter){if(!encounter?.npc)return false;const npc=encounter.npc;return!!research?.openNpcVessel?.({id:npc.id,name:npc.name,classId:npc.classId,type:npc.kind,typeLabel:npc.typeLabel,mission:npc.mission,description:`${npc.name} is working independently in Arctic waters.`,captainName:npc.captainName,captainRole:npc.captainRole,captainPortrait:npc.captainPortrait,image:npc.image,distanceKm:encounter.distance,canAssist:npc.kind==='research'});}
@@ -894,7 +950,7 @@
     ctx.shadowBlur=10;
     ctx.shadowOffsetY=3;
     if(spriteReady(sprite)){
-      ctx.save();ctx.rotate(Math.PI);drawSpriteCentered(sprite,size.w,size.h);ctx.restore();
+      ctx.save();ctx.rotate(Math.PI);drawSpriteCentered(sprite,size.w,size.h);drawVesselClassDetails(item,size);ctx.restore();
     }else{
       ctx.fillStyle='#f7f1dc';
       ctx.beginPath();
@@ -1017,12 +1073,12 @@
       if(commanded&&!state.ramming){const currentTowardTarget=(flow.vx*dx+flow.vy*dy)/dist;if(cruise+currentTowardTarget<=.5){commanded=false;cruise=0;state.commandActive=false;state.moving=false;state.tx=state.x;state.ty=state.y;state.portDestination=null;}}
       let throughX=commanded?dx/dist*cruise:0,throughY=commanded?dy/dist*cruise:0;const through=Math.abs(cruise);
       if(commanded&&!state.ramming&&cruise>0){const steerX=throughX-flow.vx,steerY=throughY-flow.vy,steerLength=Math.hypot(steerX,steerY)||1;throughX=steerX/steerLength*cruise;throughY=steerY/steerLength*cruise;}
-      const motionDt=dt/zoomLevel;let groundX=throughX+flow.vx,groundY=throughY+flow.vy,nx=state.x+groundX*motionDt,ny=state.y+groundY*motionDt,nextPos=unpolar(nx,ny),nextProfile=iceNavigationProfileAt(nx,ny,vessel),groundStep=Math.hypot(groundX,groundY)*motionDt;
+      const motionDt=dt/zoomLevel;if(commanded&&state.ramming&&cruise>0)carveIcebreakerTrack(state.x,state.y,Math.atan2(dy,dx),vessel);let groundX=throughX+flow.vx,groundY=throughY+flow.vy,nx=state.x+groundX*motionDt,ny=state.y+groundY*motionDt,nextPos=unpolar(nx,ny),nextProfile=iceNavigationProfileAt(nx,ny,vessel),groundStep=Math.hypot(groundX,groundY)*motionDt;
       if(!commanded&&!nextProfile.allowed){groundX=0;groundY=0;nx=state.x;ny=state.y;nextPos=unpolar(nx,ny);nextProfile=iceNavigationProfileAt(nx,ny,vessel);groundStep=0;}
       const obstructionDistance=commanded?Math.min(38,dist):30,directAngle=Math.atan2(groundY,groundX);
       if(!state.targetOnLand&&(isBlocked(nx,ny)||(commanded&&coastBlockedAhead(state.x,state.y,directAngle,obstructionDistance)))&&nextPos.lat>=MIN_LAT&&nextProfile.type!=='fast'){const slip=shorelineSlide(state.x,state.y,groundX,groundY,motionDt,state.tx,state.ty);if(slip){nx=slip.x;ny=slip.y;groundX=slip.vx;groundY=slip.vy;nextPos=unpolar(nx,ny);nextProfile=iceNavigationProfileAt(nx,ny,vessel);groundStep=Math.hypot(nx-state.x,ny-state.y);}}
       if(nextPos.lat<MIN_LAT||isBlocked(nx,ny)||!nextProfile.allowed){if(commanded){state.tx=state.x;state.ty=state.y;state.portDestination=null;if(!nextProfile.allowed)showToast(nextProfile.reason||'SEA ICE · IMPASSABLE',2000);}state.moving=false;state.commandActive=false;state.ramming=false;state.targetOnLand=false;ui.speed.textContent='0.0 KN';}
-      else{state.x=nx;state.y=ny;if(commanded){if(state.ramming&&cruise>0)addBrokenIce(state.x,state.y);state.travelled+=groundStep;const headingX=state.ramming?dx/dist:groundX,headingY=state.ramming?dy/dist:groundY,target=Math.atan2(headingY,headingX)+Math.PI/2;let da=((target-state.angle+Math.PI*3)%(Math.PI*2))-Math.PI;state.angle+=da*Math.min(1,dt*5);state.moving=through>.02;ui.speed.textContent=through<.02?'0.0 KN':(through/KNOT_TO_WORLD_SPEED).toFixed(1)+(cruise<0?' KN ASTERN':state.ramming?' KN RAM':' KN');}else{const driftKnots=Math.hypot(groundX,groundY)/KNOT_TO_WORLD_SPEED;state.moving=false;state.commandActive=false;state.ramming=false;ui.speed.textContent=driftKnots<.05?'0.0 KN':driftKnots.toFixed(1)+' KN DRIFT';if(state.portDestination)enterPort(state.portDestination);}}
+      else{state.x=nx;state.y=ny;if(commanded){if(state.ramming&&cruise>0)addBrokenIce(state.x,state.y,vesselIceId(vessel)==='nuclear'?12:9.5,naturalIceTypeAt(state.x,state.y)==='fast');state.travelled+=groundStep;const target=Math.atan2(dy,dx)+Math.PI/2;let da=((target-state.angle+Math.PI*3)%(Math.PI*2))-Math.PI;if(dist<Math.max(14,arrivalRadius*4)&&Math.abs(da)>Math.PI*.55){state.commandActive=false;state.moving=false;state.ramming=false;state.tx=state.x;state.ty=state.y;ui.speed.textContent=(Math.hypot(flow.vx,flow.vy)/KNOT_TO_WORLD_SPEED).toFixed(1)+' KN DRIFT';if(state.portDestination)enterPort(state.portDestination);}else{state.angle+=da*Math.min(1,dt*4.2);state.moving=through>.02;ui.speed.textContent=through<.02?'0.0 KN':(through/KNOT_TO_WORLD_SPEED).toFixed(1)+(cruise<0?' KN ASTERN':state.ramming?' KN RAM':' KN');}}else{const driftKnots=Math.hypot(groundX,groundY)/KNOT_TO_WORLD_SPEED;state.moving=false;state.commandActive=false;state.ramming=false;ui.speed.textContent=driftKnots<.05?'0.0 KN':driftKnots.toFixed(1)+' KN DRIFT';if(state.portDestination)enterPort(state.portDestination);}}
     }
     const pos=unpolar(state.x,state.y),ew=pos.lon<0?'W':'E';ui.position.textContent=`${pos.lat.toFixed(2)}°N ${Math.abs(pos.lon).toFixed(2)}°${ew}`;ui.miniLocation.textContent=locationName(pos.lat,pos.lon);ui.progress.style.width=Math.min(100,8+state.travelled/18)+'%';
   }
