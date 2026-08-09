@@ -1,0 +1,39 @@
+name: Apply Expedition 19
+on:
+  push:
+    paths:
+      - '.stage/exp19-trigger.txt'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reconstruct and verify Expedition 19 patch
+        shell: bash
+        run: |
+          cat .stage/exp19-b64-* | base64 -d | gunzip > /tmp/exp19.patch
+          echo "900d79dc53cf880d40a5dbd0ac64ce61e97708fc82b125748ef95c6e612bbf8a  /tmp/exp19.patch" | sha256sum -c -
+          grep -q "GAME_VERSION='expedition-18'" game.js
+          git apply --check /tmp/exp19.patch
+          git apply /tmp/exp19.patch
+          node --check game.js
+          node --check expedition.js
+          grep -q "GAME_VERSION='expedition-19'" game.js
+          grep -q "data-arx-dev-month" expedition.js
+          grep -q "minZoom:.4" expedition.js
+          grep -q "game.js?v=expedition-19" index.html
+          grep -q "style.css?v=expedition-19" index.html
+      - name: Commit Expedition 19
+        shell: bash
+        run: |
+          rm -rf .stage
+          rm -f .github/workflows/apply-expedition19.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Polish test controls, coastal vessel view, compass, and port layout"
+          git push
