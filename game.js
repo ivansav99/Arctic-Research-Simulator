@@ -367,7 +367,7 @@
   if(currentPortCity)state.dockedPort=currentPortCity.name;
 
   // Expedition 13: local saves, title/pause menu, and analytics instrumentation.
-  const GAME_VERSION='expedition-18',SAVE_VERSION=1;
+  const GAME_VERSION='expedition-19',SAVE_VERSION=1;
   const SAVE_KEYS={auto:'arctic-research-save-auto-v1',slot1:'arctic-research-save-slot-1-v1',slot2:'arctic-research-save-slot-2-v1',slot3:'arctic-research-save-slot-3-v1'};
   const AUTO_NEW_KEY='arctic-research-start-new-v1';
   let menuOpen=true,autosaveSuspended=false,autosaveTimer=0,lastResearchAnalytics=null;
@@ -894,7 +894,8 @@
     ctx.shadowBlur=10;
     ctx.shadowOffsetY=3;
     if(spriteReady(sprite)){
-      drawSpriteCentered(sprite,size.w,size.h);
+      if(vesselIceId(item)==='coastal'){ctx.save();ctx.rotate(Math.PI);drawSpriteCentered(sprite,size.w,size.h);ctx.restore();}
+      else drawSpriteCentered(sprite,size.w,size.h);
     }else{
       ctx.fillStyle='#f7f1dc';
       ctx.beginPath();
@@ -987,6 +988,8 @@
   function updateVesselButton(item=vesselModifiers()){if(ui.vesselButtonImage&&ui.vesselButtonImage.getAttribute('src')!==item.image)ui.vesselButtonImage.setAttribute('src',item.image);ui.vesselButton?.setAttribute('aria-label',`Open ${item.name} information`);}
   function advanceGameDays(days){if(!Number.isFinite(days)||days<=0)return;state.seasonDay+=days;state.fogClearDays=Math.max(0,state.fogClearDays-days);while(state.seasonDay>=365){state.seasonDay-=365;state.year++;}const vessel=vesselModifiers();state.food=Math.max(0,state.food-days*100/vessel.foodEnduranceDays);research?.tickDays?.(days,{position:unpolar(state.x,state.y),source:'station'});}
   function updateCalendar(dt){const effectiveTimeScale=1/zoomLevel,stationBusy=!!research?.isBusy?.(),elapsedDays=state.started&&!stationBusy?dt*.2*(state.frozen?100:effectiveTimeScale):0;state.seasonDay+=elapsedDays;state.fogClearDays=Math.max(0,state.fogClearDays-elapsedDays);if(state.seasonDay>=365){state.seasonDay-=365;state.year++;}const date=new Date(Date.UTC(state.year,8,1+Math.floor(state.seasonDay))),months=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];ui.calendarDate.textContent=String(date.getUTCDate()).padStart(2,'0')+' '+months[date.getUTCMonth()]+' '+date.getUTCFullYear();ui.seasonProgress.style.left=(state.seasonDay/365*100)+'%';const growth=iceGrowth();ui.seasonNote.textContent=state.frozen?'FROZEN IN · TIME ×100':growth<.08?'SEA ICE MINIMUM':growth>.92?'SEA ICE MAXIMUM':state.seasonDay<182.5?'ICE ADVANCING':'ICE RETREATING';ui.timeSpeed.textContent=stationBusy?'PAUSED':state.frozen?'×100':'×'+Number(effectiveTimeScale.toFixed(1));return elapsedDays;}
+  function getCalendarState(){const date=new Date(Date.UTC(state.year,8,1+Math.floor(state.seasonDay)));return{month:date.getUTCMonth(),calendarYear:date.getUTCFullYear(),seasonDay:state.seasonDay};}
+  function setTestMonth(monthIndex){const month=Math.max(0,Math.min(11,Math.floor(Number(monthIndex))));if(!Number.isFinite(month))return false;const base=Date.UTC(state.year,8,1),calendarYear=month>=8?state.year:state.year+1,target=Date.UTC(calendarYear,month,15);state.seasonDay=(target-base)/86400000;state.tx=state.x;state.ty=state.y;state.moving=false;state.commandActive=false;state.ramming=false;state.ramClock=0;state.frozen=false;state.portDestination=null;state.targetOnLand=false;iceFloes.length=0;wakeFloes.length=0;brokenIceChannels.length=0;brokenIceGrid.clear();crackZoneCacheKey=-1;updateCalendar(0);updateIceReadout();return true;}
   function update(dt){
     if(state.gameOver)return;
     const elapsedDays=updateCalendar(dt),vessel=vesselModifiers(),weather=currentWeather();
@@ -1040,6 +1043,8 @@
     onNavigate:navigateToResearchTarget,
     onResearchStart:()=>{state.tx=state.x;state.ty=state.y;state.commandActive=false;state.moving=false;state.ramming=false;state.portDestination=null;},
     onAdvanceTime:advanceGameDays,
+    getCalendarState,
+    setTestMonth,
     onVesselChanged:item=>{zoomLevel=(item||vesselModifiers()).minZoom;setZoom(0,true);updateVesselButton(item||vesselModifiers());},
     onCharacterReady:beginExpedition,
     onToast:showToast,
