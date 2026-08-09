@@ -1,0 +1,38 @@
+name: Apply Expedition 23 Final 2
+on: [push]
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: ${{ github.event.head_commit.message == 'Run Expedition 23 final deploy' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reconstruct verify apply
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .stage/exp23-final-00 .stage/exp23-final-01 .stage/exp23-final-02 .stage/exp23-final-03 | base64 -d | gzip -d > /tmp/exp23-final.patch
+          echo '9bbfe09c625d06be5a6f9ac1f5821bcea9abbb51161010586e465e32fd30c63c  /tmp/exp23-final.patch' | sha256sum -c -
+          echo 'eb04e98d1a9cd13036e9617eecaa21e9a09b596ef12b3eaa5d6b858e591d2d55  game.js' | sha256sum -c -
+          echo 'bf544ee368c2cfacfc88609f9b81f8df1d7730b6e873751f5448c1a8c2add290  index.html' | sha256sum -c -
+          git apply --check /tmp/exp23-final.patch
+          git apply /tmp/exp23-final.patch
+          node --check game.js
+          node --check ice-texture-data.js
+          echo '8ce4eac44538684a4256629951dc851f5df21b52e8ce6e589d09e8acce6e9a3f  game.js' | sha256sum -c -
+          echo 'fe475a4231498d2da558227eee9f869cfc826bf52861ff47cf76fdcb14dcdb5d  index.html' | sha256sum -c -
+          echo '7452abfcd3c2cbba21c59fba824763a9b065ad135895b6fc431814d8d17d666b  ice-texture-data.js' | sha256sum -c -
+      - name: Commit production
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .stage
+          rm -f .github/workflows/apply-exp23-final.yml .github/workflows/apply-exp23-final2.yml
+          git config user.name 'ARS Sync Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git commit -m 'Deploy Expedition 23 polished sea ice'
+          git push origin HEAD:main
