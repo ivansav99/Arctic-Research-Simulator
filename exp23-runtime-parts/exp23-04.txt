@@ -1,0 +1,15 @@
+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';
+const b64text=s=>decodeURIComponent(escape(atob(s)));
+const sha256=async text=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))).map(b=>b.toString(16).padStart(2,'0')).join('');
+(async()=>{
+  const response=await fetch('game.js?v=expedition-21-base',{cache:'no-store'});
+  const base=await response.text();
+  const hash=await sha256(base);
+  if(hash!==BASE_SHA){console.error('[ARS] Expedition 23 base mismatch',hash);(0,eval)(base);return;}
+  const lines=base.split('\n');
+  for(let k=OPS.length-1;k>=0;k--){const op=OPS[k],replacement=op.n?b64text(op.n).split('\n'):[];lines.splice(op.i1,op.i2-op.i1,...replacement);}
+  const code=lines.join('\n');
+  (0,eval)(code);
+  console.info('[ARS] Expedition 23 runtime patch applied');
+})().catch(error=>{console.error('[ARS] Expedition 23 load failed',error);fetch('game.js?v=expedition-21-fallback',{cache:'no-store'}).then(r=>r.text()).then(code=>(0,eval)(code));});
+})();
