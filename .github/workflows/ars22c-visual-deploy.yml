@@ -1,0 +1,63 @@
+name: ARS 22c visual deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.stage/ars22c-trigger.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify working baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sha256sum game.js | cut -d' ' -f1)" = "e2c76ce5753c296e35adc440a8ae401bb7ae3e542fe0b2bbda11ee422e768a8d"
+          test "$(sha256sum expedition.js | cut -d' ' -f1)" = "9c66db149364c4e0c05295861ded29e7ef90d62bf49b6565b0111bcc13b6a016"
+          test "$(sha256sum index.html | cut -d' ' -f1)" = "cf0db26a34a91f9a748962237251843c2b356f912c1cb3c3e98ae51ea28a15e7"
+          grep -q 'ICE_NAVIGATION_LADDER' game.js
+          ! grep -q 'function ramCycleSpeed' game.js
+      - name: Reconstruct visual assets and corrected patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .stage/ars22b-ultra-0*.part | base64 -d | gzip -d > visual-assets-data.js
+          test "$(sha256sum visual-assets-data.js | cut -d' ' -f1)" = "baba5187fcf4386006951ded55b14475fb867f9ccb20f0e79a3bc89810f75672"
+          cat .stage/ars22c-patch-0*.part | base64 -d | gzip -d > /tmp/source.patch
+          test "$(sha256sum /tmp/source.patch | cut -d' ' -f1)" = "ed15b01583743bc1bd49b867ccc8e02b69cfbf3a27be17b6a18e52f6ff8ae7be"
+      - name: Apply and verify production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --check /tmp/source.patch
+          git apply /tmp/source.patch
+          node --check game.js
+          node --check expedition.js
+          test "$(sha256sum game.js | cut -d' ' -f1)" = "2a3b576f974a2b019e2df0597bef627ff5594ffb881ccec2696da04737787db6"
+          test "$(sha256sum expedition.js | cut -d' ' -f1)" = "ad49a08679ed46f47c33d22ad357c73e99543b6d2ad5c5217595a99c6d9144df"
+          test "$(sha256sum index.html | cut -d' ' -f1)" = "7e9f039c0db3ddf46d5394d9a7b16e7d94dc7203edab7b1fe2eba0e45ea0cbb8"
+          grep -q "GAME_VERSION='expedition-22c-visuals'" game.js
+          grep -q 'ICE_NAVIGATION_LADDER' game.js
+          grep -q 'carveIcebreakerTrack(fromX,fromY,toX,toY' game.js
+          ! grep -q 'function ramCycleSpeed' game.js
+          grep -q 'AR_VISUAL_ASSETS' expedition.js
+          grep -q 'visual-assets-data.js?v=expedition-22c-visuals' index.html
+      - name: Commit production build and clean staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .stage/ars22b-* .stage/ars22c-*
+          rm -f .github/workflows/ars22c-visual-deploy.yml
+          git config user.name 'ARS Build Bot'
+          git config user.email 'ars-build@users.noreply.github.com'
+          git add -A
+          git commit -m 'Add realistic vessel art and textured sea ice'
+          git push origin main
