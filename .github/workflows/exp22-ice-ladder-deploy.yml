@@ -1,0 +1,45 @@
+name: Deploy Expedition 22 Ice Ladder
+
+on:
+  push:
+    paths:
+      - '.stage/exp22-ice-ladder-trigger.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify and apply ice ladder patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object game.js)" = "81b3193443aa563f0902037ccfa43964f5cb9748"
+          test "$(git hash-object index.html)" = "10a6d9fc685ffce359d9e38eac404e536398d056"
+
+          cat .stage/exp22-ice-ladder-00.b64 .stage/exp22-ice-ladder-01.b64 .stage/exp22-ice-ladder-02.b64 | tr -d '\n\r ' | base64 -d > /tmp/exp22.patch.gz
+          gzip -dc /tmp/exp22.patch.gz > /tmp/exp22.patch
+          echo "ea678c8ffcf88257d14afd466b1132462a80f7f5961e95ed1edc30b22f4a4e7b  /tmp/exp22.patch" | sha256sum -c -
+
+          git apply --check /tmp/exp22.patch
+          git apply /tmp/exp22.patch
+          node --check game.js
+
+          test "$(git hash-object game.js)" = "414724cb6123054eae3cfced15bbf3f7d049b999"
+          test "$(git hash-object index.html)" = "1f0f9ee7f83f733c9520416ccad9f3fb2d339fd5"
+          grep -q "const GAME_VERSION='expedition-22-ice-ladder'" game.js
+          grep -q "ICE_NAVIGATION_LADDER" game.js
+          ! grep -q "function ramCycleSpeed" game.js
+
+          rm -rf .stage
+          rm -f .github/workflows/exp22-ice-ladder-deploy.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Simplify icebreaking and centralize ice capability ladder"
+          git push
