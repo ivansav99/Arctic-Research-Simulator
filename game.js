@@ -346,17 +346,50 @@
   function addBrokenIce(x,y,radius=8,anchored=false){if(isBrokenIceAt(x,y))return;const natural=naturalIceTypeAt(x,y),fixed=anchored||natural==='fast',flow=fixed?{vx:0,vy:0}:currentAt(x,y,false),point={x,y,radius,life:fixed?34:18+Math.random()*8,anchored:fixed,vx:flow.vx,vy:flow.vy,flowAge:.35+Math.random()*.3};brokenIceChannels.push(point);indexBrokenIce(point);if(brokenIceChannels.length>700){brokenIceChannels.splice(0,80);rebuildBrokenIceGrid();}}
   function updateBrokenIceDrift(dt){if(!brokenIceChannels.length)return;let changed=false;for(let i=brokenIceChannels.length-1;i>=0;i--){const point=brokenIceChannels[i];point.life-=dt*(point.anchored?.035:.07);if(point.life<=0){brokenIceChannels.splice(i,1);changed=true;continue;}if(point.anchored)continue;point.flowAge-=dt;if(point.flowAge<=0){const flow=currentAt(point.x,point.y,false);point.vx=flow.vx*.72;point.vy=flow.vy*.72;point.flowAge=.35+Math.random()*.35;}const nx=point.x+point.vx*dt,ny=point.y+point.vy*dt;if(!isLand(nx,ny)&&naturalIceTypeAt(nx,ny)!=='fast'){point.x=nx;point.y=ny;changed=true;}}if(changed)rebuildBrokenIceGrid();}
   function isBrokenIceAt(x,y){const points=brokenIceGrid.get(brokenIceKey(Math.floor(x/BROKEN_ICE_CELL),Math.floor(y/BROKEN_ICE_CELL)))||[];for(const point of points)if(Math.hypot(x-point.x,y-point.y)<=point.radius)return true;return false;}
-  function iceTypeAt(x,y){if(isLand(x,y))return'open';const pos=unpolar(x,y),growth=iceGrowth(),packEdge=packIceEdge(pos.lon),marginalEdge=packEdge-(2.1+1.5*growth),broken=isBrokenIceAt(x,y);if(pos.lat>=packEdge){if(broken)return'marginal';return isCrackedIceAt(x,y)?'cracked':'packed';}const fastGrowth=fastIceGrowth(),fastWidth=23.5*fastGrowth,d=coastDistance(x,y,fastWidth+3);if(fastWidth>0&&d<=fastWidth)return broken?'marginal':'fast';if(pos.lat>=marginalEdge)return'marginal';return'open';}
+  function iceTypeAt(x,y){if(isLand(x,y))return'open';const pos=unpolar(x,y),growth=iceGrowth(),packEdge=packIceEdge(pos.lon),marginalEdge=packEdge-(2.1+1.5*growth),broken=isBrokenIceAt(x,y);if(pos.lat>=packEdge){if(broken)return'open';return isCrackedIceAt(x,y)?'cracked':'packed';}const fastGrowth=fastIceGrowth(),fastWidth=23.5*fastGrowth,d=coastDistance(x,y,fastWidth+3);if(fastWidth>0&&d<=fastWidth)return broken?'open':'fast';if(pos.lat>=marginalEdge)return'marginal';return'open';}
   function naturalIceTypeAt(x,y){if(isLand(x,y))return'open';const pos=unpolar(x,y),growth=iceGrowth(),packEdge=packIceEdge(pos.lon),marginalEdge=packEdge-(2.1+1.5*growth);if(pos.lat>=packEdge)return isCrackedIceAt(x,y)?'cracked':'packed';const fastGrowth=fastIceGrowth(),fastWidth=23.5*fastGrowth,d=coastDistance(x,y,fastWidth+3);if(pos.lat>=71.5&&fastWidth>0&&d<=fastWidth)return'fast';if(pos.lat>=marginalEdge)return'marginal';return'open';}
-  function vesselCanBreakNaturalIceAt(x,y,vessel=vesselModifiers()){
-    const id=vesselIceId(vessel),type=naturalIceTypeAt(x,y);if(type!=='fast'&&type!=='packed'&&type!=='cracked')return false;const thickness=type==='fast'?1:iceThicknessAt(x,y);
-    if(id==='icebreaker')return type==='fast'||thickness===1;
-    if(id==='nuclear')return type==='fast'||thickness<=2||(thickness===3&&type==='cracked');
-    return false;
+
+  // Single source of truth for player-vessel ice capability.
+  // Missing entries are deliberately impassable.
+  const ICE_NAVIGATION_LADDER=Object.freeze({
+    fishing:Object.freeze({}),
+    trawler:Object.freeze({}),
+    coastal:Object.freeze({}),
+    global:Object.freeze({
+      marginal:Object.freeze({speedFactor:1/3,breaking:false})
+    }),
+    icebreaker:Object.freeze({
+      marginal:Object.freeze({speedFactor:.6,breaking:false}),
+      fast:Object.freeze({speedFactor:.1,breaking:true}),
+      cracked1:Object.freeze({speedFactor:.3,breaking:true}),
+      packed1:Object.freeze({speedFactor:.1,breaking:true})
+    }),
+    nuclear:Object.freeze({
+      marginal:Object.freeze({speedFactor:1,breaking:false}),
+      fast:Object.freeze({speedFactor:.6,breaking:true}),
+      cracked1:Object.freeze({speedFactor:.6,breaking:true}),
+      packed1:Object.freeze({speedFactor:.6,breaking:true}),
+      cracked2:Object.freeze({speedFactor:.6,breaking:true}),
+      packed2:Object.freeze({speedFactor:.3,breaking:true}),
+      cracked3:Object.freeze({speedFactor:.3,breaking:true})
+    })
+  });
+  function iceRuleKey(type,thickness=0){if(type==='marginal'||type==='fast')return type;if(type==='packed'||type==='cracked')return`${type}${thickness}`;return'open';}
+  function iceNavigationRule(type,thickness,vessel=vesselModifiers()){
+    if(type==='open')return{speedFactor:1,breaking:false};
+    return ICE_NAVIGATION_LADDER[vesselIceId(vessel)]?.[iceRuleKey(type,thickness)]||null;
   }
-  function carveIcebreakerTrack(x,y,heading,vessel=vesselModifiers()){
-    const id=vesselIceId(vessel);if(id!=='icebreaker'&&id!=='nuclear')return;const radius=id==='nuclear'?12:9.5,reach=id==='nuclear'?25:19,step=id==='nuclear'?3:2.6;
-    for(let d=2;d<=reach;d+=step){const cx=x+Math.cos(heading)*d,cy=y+Math.sin(heading)*d;if(isLand(cx,cy)||!vesselCanBreakNaturalIceAt(cx,cy,vessel))continue;const fixed=naturalIceTypeAt(cx,cy)==='fast';addBrokenIce(cx,cy,radius,fixed);}
+  function vesselCanBreakNaturalIceAt(x,y,vessel=vesselModifiers()){
+    const type=naturalIceTypeAt(x,y),thickness=type==='fast'?1:(type==='packed'||type==='cracked')?iceThicknessAt(x,y):0;
+    return!!iceNavigationRule(type,thickness,vessel)?.breaking;
+  }
+  function carveIcebreakerTrack(fromX,fromY,toX,toY,vessel=vesselModifiers()){
+    const id=vesselIceId(vessel);if(id!=='icebreaker'&&id!=='nuclear')return;
+    const dx=toX-fromX,dy=toY-fromY,distance=Math.hypot(dx,dy),radius=id==='nuclear'?12:9.5,spacing=id==='nuclear'?5:4,steps=Math.max(1,Math.ceil(distance/spacing));
+    for(let i=0;i<=steps;i++){
+      const t=i/steps,cx=fromX+dx*t,cy=fromY+dy*t;if(isLand(cx,cy)||!vesselCanBreakNaturalIceAt(cx,cy,vessel))continue;
+      addBrokenIce(cx,cy,radius,naturalIceTypeAt(cx,cy)==='fast');
+    }
   }
   function riverAt(x,y,limit=3.5){for(const segment of riverSegments){if(x<segment.minX||x>segment.maxX||y<segment.minY||y>segment.maxY)continue;if(segmentDistance(x,y,segment.a,segment.b)<=limit)return segment.river;}return null;}
   const isBlocked=(x,y)=>isLand(x,y)&&!riverAt(x,y);
@@ -376,7 +409,7 @@
   if(currentPortCity)state.dockedPort=currentPortCity.name;
 
   // Expedition 13: local saves, title/pause menu, and analytics instrumentation.
-  const GAME_VERSION='expedition-21',SAVE_VERSION=1;
+  const GAME_VERSION='expedition-22-ice-ladder',SAVE_VERSION=1;
   const SAVE_KEYS={auto:'arctic-research-save-auto-v1',slot1:'arctic-research-save-slot-1-v1',slot2:'arctic-research-save-slot-2-v1',slot3:'arctic-research-save-slot-3-v1'};
   const AUTO_NEW_KEY='arctic-research-start-new-v1';
   let menuOpen=true,autosaveSuspended=false,autosaveTimer=0,lastResearchAnalytics=null;
@@ -623,7 +656,7 @@
     const target=Math.min(280,Math.max(110,Math.round(width*height/7200)));let attempts=0;while(iceFloes.length<target&&attempts++<24)seedFloe(minX,maxX,minY,maxY);
   }
   function drawMarginalFloes(){ctx.save();for(const f of iceFloes){const p=worldToScreen(f.x,f.y);if(p.x<-30||p.x>width+30||p.y<60||p.y>height+30)continue;const rr=f.size,s=f.shape;ctx.save();ctx.translate(p.x,p.y);ctx.rotate(f.angle);ctx.beginPath();for(let k=0;k<8;k++){const radius=rr*(.72+.3*Math.abs(Math.sin(s*11+k*2.7))),px=Math.cos(k*Math.PI/4)*radius,py=Math.sin(k*Math.PI/4)*radius*(.58+s*.24);k?ctx.lineTo(px,py):ctx.moveTo(px,py);}ctx.closePath();ctx.fillStyle=`rgba(239,251,249,${.92+s*.08})`;ctx.fill();ctx.strokeStyle='rgba(255,255,255,.96)';ctx.lineWidth=1.2;ctx.stroke();if(rr>12){ctx.strokeStyle='rgba(130,192,205,.45)';ctx.lineWidth=.7;ctx.beginPath();ctx.moveTo(-rr*.35,0);ctx.lineTo(rr*.15,-rr*.18);ctx.lineTo(rr*.42,rr*.08);ctx.stroke();}ctx.restore();}ctx.restore();}
-  function updateWakeFloes(dt){for(let i=wakeFloes.length-1;i>=0;i--){const f=wakeFloes[i];f.flowAge-=dt;if(f.flowAge<=0){const flow=currentAt(f.x,f.y,false);f.vx=flow.vx;f.vy=flow.vy;f.flowAge=.2+Math.random()*.25;}const nx=f.x+f.vx*dt,ny=f.y+f.vy*dt;if(!isLand(nx,ny)&&iceTypeAt(nx,ny)!=='fast'){f.x=nx;f.y=ny;}f.life-=dt*.2;if(f.life<=0)wakeFloes.splice(i,1);}if(!state.ramming||!state.moving||state.ramClock<.4||state.ramClock>=2)return;wakeFloeClock+=dt;while(wakeFloeClock>.075&&wakeFloes.length<150){wakeFloeClock-=.075;const headingX=Math.sin(state.angle),headingY=-Math.cos(state.angle),sideX=Math.cos(state.angle),sideY=Math.sin(state.angle),spread=(Math.random()-.5)*15,flow=currentAt(state.x,state.y,false);wakeFloes.push({x:state.x-headingX*9+sideX*spread,y:state.y-headingY*9+sideY*spread,size:4+Math.random()*8,angle:Math.random()*Math.PI,life:3+Math.random()*2.5,vx:flow.vx,vy:flow.vy,flowAge:.2+Math.random()*.25});}}
+  function updateWakeFloes(dt){for(let i=wakeFloes.length-1;i>=0;i--){const f=wakeFloes[i];f.flowAge-=dt;if(f.flowAge<=0){const flow=currentAt(f.x,f.y,false);f.vx=flow.vx;f.vy=flow.vy;f.flowAge=.2+Math.random()*.25;}const nx=f.x+f.vx*dt,ny=f.y+f.vy*dt;if(!isLand(nx,ny)&&iceTypeAt(nx,ny)!=='fast'){f.x=nx;f.y=ny;}f.life-=dt*.2;if(f.life<=0)wakeFloes.splice(i,1);}if(!state.ramming||!state.moving)return;wakeFloeClock+=dt;while(wakeFloeClock>.12&&wakeFloes.length<150){wakeFloeClock-=.12;const headingX=Math.sin(state.angle),headingY=-Math.cos(state.angle),sideX=Math.cos(state.angle),sideY=Math.sin(state.angle),spread=(Math.random()-.5)*15,flow=currentAt(state.x,state.y,false);wakeFloes.push({x:state.x-headingX*9+sideX*spread,y:state.y-headingY*9+sideY*spread,size:4+Math.random()*8,angle:Math.random()*Math.PI,life:3+Math.random()*2.5,vx:flow.vx,vy:flow.vy,flowAge:.2+Math.random()*.25});}}
   function drawBrokenIceChannels(){
     if(!brokenIceChannels.length||!oceanPattern)return;
     ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();
@@ -989,7 +1022,7 @@
   function freezeIn(){if(state.frozen)return;if(pushOutOfAdvancingPack(.025))return;clearTimeout(toastTimer);state.frozen=true;state.tx=state.x;state.ty=state.y;state.moving=false;state.commandActive=false;state.ramming=false;ui.speed.textContent='0.0 KN';ui.toast.textContent=`FROZEN IN — ${iceNavigationProfileAt(state.x,state.y).iceLabel} EXCEEDS VESSEL CAPABILITY · TIME ×100`;ui.toast.classList.add('show','frozen');}
   function releaseFromIce(){state.frozen=false;ui.toast.classList.remove('frozen');showToast('SPRING THAW — VESSEL FREE TO MOVE',2800);}
   function departWithCheck(proceed){const depart=()=>{if(currentPortCity){research?.leavePort?.();state.dockedPort=null;currentPortCity=null;}proceed();};const warned=!!currentPortCity&&!!research?.confirmDeparture?.({fuel:state.fuel,food:state.food},depart);if(!warned)depart();}
-  function setWorldDestination(tx,ty){if(state.frozen){freezeIn();return;}const targetPos=unpolar(tx,ty);if(targetPos.lat<MIN_LAT){showToast('MAP BOUNDARY - TURN NORTH');return;}const targetOnLand=isLand(tx,ty),profile=targetOnLand?null:iceNavigationProfileAt(tx,ty);if(profile&&!profile.allowed){showToast(profile.reason||'SEA ICE · IMPASSABLE',2200);return;}departWithCheck(()=>{state.portDestination=null;state.tx=tx;state.ty=ty;state.moving=true;state.commandActive=true;state.targetOnLand=targetOnLand;state.ramming=!!profile?.ramming;state.ramClock=0;ui.welcome.classList.add('hidden');if(profile?.type==='marginal'&&profile.speedFactor<1)showToast(`MARGINAL ICE · ${Math.round(profile.speedFactor*100)}% SPEED`);});}
+  function setWorldDestination(tx,ty){if(state.frozen){freezeIn();return;}const targetPos=unpolar(tx,ty);if(targetPos.lat<MIN_LAT){showToast('MAP BOUNDARY - TURN NORTH');return;}const targetOnLand=isLand(tx,ty),profile=targetOnLand?null:iceNavigationProfileAt(tx,ty);if(profile&&!profile.allowed){showToast(profile.reason||'SEA ICE · IMPASSABLE',2200);return;}departWithCheck(()=>{state.portDestination=null;state.tx=tx;state.ty=ty;state.moving=true;state.commandActive=true;state.targetOnLand=targetOnLand;state.ramming=!!profile?.breaking;state.ramClock=0;ui.welcome.classList.add('hidden');if(profile?.type==='marginal'&&profile.speedFactor<1)showToast(`MARGINAL ICE · ${Math.round(profile.speedFactor*100)}% SPEED`);});}
   function setDestination(clientX,clientY){pendingResearchTargetId=null;setWorldDestination(state.x+(clientX-width/2)/scale,state.y+(clientY-height/2)/scale);}
   function navigateFromMiniMap(event){const rect=miniCanvas.getBoundingClientRect(),size=miniCanvas.clientWidth,c=size/2,dx=event.clientX-rect.left-c,dy=event.clientY-rect.top-c,radius=size*.45;if(Math.hypot(dx,dy)>radius)return;const geometry=miniMapGeometry();pendingResearchTargetId=null;setWorldDestination(geometry.centerX+dx/radius*geometry.worldRadius,geometry.centerY+dy/radius*geometry.worldRadius);}
   function startPortApproach(portItem){const approach=findPortApproach(portItem.city);if(!approach){showToast('PORT APPROACH BLOCKED BY LAND OR ICE');return;}if(Math.hypot(approach.x-state.x,approach.y-state.y)<=5){enterPort(portItem.city);return;}departWithCheck(()=>{pendingResearchTargetId=null;state.portDestination=portItem.city;state.tx=approach.x;state.ty=approach.y;state.moving=true;state.commandActive=true;state.targetOnLand=false;state.ramming=false;ui.welcome.classList.add('hidden');showToast(`PORT APPROACH — ${portItem.city.name}`,1800);});}
@@ -999,43 +1032,23 @@
   function coastBlockedAhead(x,y,angle,distance){for(let d=6;d<=distance;d+=6){const cx=x+Math.cos(angle)*d,cy=y+Math.sin(angle)*d,pos=unpolar(cx,cy);if(pos.lat<MIN_LAT||isBlocked(cx,cy))return true;}return false;}
   function fracturedIceAhead(x,y,angle,distance=60){for(let d=4;d<=distance;d+=4){const cx=x+Math.cos(angle)*d,cy=y+Math.sin(angle)*d;if(isCrackedIceAt(cx,cy))return true;const ice=iceTypeAt(cx,cy);if(isBlocked(cx,cy)||ice==='fast'||ice==='packed')return false;}return false;}
   function shorelineSlide(x,y,vx,vy,motionDt,targetX,targetY){const speed=Math.hypot(vx,vy);if(speed<.01)return null;const base=Math.atan2(vy,vx),tdx=targetX-x,tdy=targetY-y,tlen=Math.hypot(tdx,tdy)||1,lookAhead=Math.max(30,speed*motionDt*10);let best=null,bestScore=-Infinity;for(const clearance of[lookAhead,18,9,0]){for(const fraction of[1,.78,.56,.36]){for(let step=1;step<=35;step++){for(const sign of[-1,1]){const offset=sign*step*Math.PI/36,a=base+offset;if(clearance&&courseBlockedAhead(x,y,a,clearance*fraction))continue;const cx=x+Math.cos(a)*speed*motionDt*fraction,cy=y+Math.sin(a)*speed*motionDt*fraction,pos=unpolar(cx,cy),ice=iceTypeAt(cx,cy);if(pos.lat<MIN_LAT||isBlocked(cx,cy)||!iceNavigationProfileAt(cx,cy).allowed)continue;const probeX=x+Math.cos(a)*Math.max(5,speed*motionDt*2),probeY=y+Math.sin(a)*Math.max(5,speed*motionDt*2);if(isBlocked(probeX,probeY))continue;const progress=((cx-x)*tdx+(cy-y)*tdy)/tlen,score=progress-Math.abs(offset)*.18+fraction*.3+clearance*.025;if(score>bestScore){bestScore=score;best={x:cx,y:cy,vx:(cx-x)/motionDt,vy:(cy-y)/motionDt};}}}}if(best)return best;}return null;}
-  function ramCycleSpeed(dt,normalCruise){
-    // 3.2 seconds: snap astern briefly, pause, accelerate rapidly to full
-    // power, then lose speed progressively while crushing the fractured pack.
-    // The backing stroke is one-fifth its former duration and distance.
-    state.ramClock=(state.ramClock+dt)%3.2;const p=state.ramClock;
-    if(p<.2)return-normalCruise*(.4*Math.PI/2)*Math.sin(Math.PI*p/.2);
-    if(p<.4)return 0;
-    if(p<.55)return normalCruise*(p-.4)/.15;
-    if(p<2)return normalCruise*(1-(p-.55)/1.45);
-    return 0;
-  }
   const packedBoundaryValue=(x,y)=>{const p=unpolar(x,y);return p.lat-packIceEdge(p.lon);};
   function slideAlongPackedEdge(x,y,vx,vy){const e=2,gx=(packedBoundaryValue(x+e,y)-packedBoundaryValue(x-e,y))/(2*e),gy=(packedBoundaryValue(x,y+e)-packedBoundaryValue(x,y-e))/(2*e),g2=gx*gx+gy*gy;if(g2<1e-8)return{vx:0,vy:0};const inward=(vx*gx+vy*gy)/g2;if(inward>0){vx-=gx*inward;vy-=gy*inward;}const gl=Math.sqrt(g2);vx-=gx/gl*.12;vy-=gy/gl*.12;return{vx,vy};}
   function vesselModifiers(){const item=research?.getVesselModifiers?.()||{};return{id:item.id??item.classId??null,classId:item.classId??item.id??null,cruiseKnots:item.cruiseKnots??item.speedKnots??8,maxKnots:item.maxKnots??item.cruiseKnots??item.speedKnots??8,fuelEnduranceDays:item.fuelEnduranceDays??5,foodEnduranceDays:item.foodEnduranceDays??5,nuclearFuel:!!item.nuclearFuel,crackedIceFactor:item.crackedIceFactor??.1,minZoom:item.minZoom??.3,visibilityBonusKm:item.visibilityBonusKm??0,name:item.name??'RV AURORA',image:item.image??'assets/vessels/base-vessel.png'};}
   function vesselIceId(vessel=vesselModifiers()){return String(vessel.id||vessel.classId||'fishing').toLowerCase();}
   function iceNavigationProfileAt(x,y,vessel=vesselModifiers()){
-    const type=iceTypeAt(x,y),thickness=type==='fast'?1:(type==='packed'||type==='cracked')?iceThicknessAt(x,y):0,id=vesselIceId(vessel),cracked=type==='cracked';
-    const result=(allowed,speedFactor=0,ramming=false,reason='')=>({allowed,speedFactor,ramming,reason,type,thickness,id,iceLabel:type==='open'?'OPEN WATER':type==='marginal'?'MARGINAL ICE':type==='fast'?'FAST ICE · 1 M EQUIVALENT':`${thickness} M ${cracked?'FRACTURED':'PACK'} ICE`});
-    if(type==='open')return result(true,1,false);
-    if(type==='fast'){if(id==='icebreaker')return result(true,.1,true);if(id==='nuclear')return result(true,.6,true);return result(false,0,false,'FAST ICE · ICEBREAKER REQUIRED');}
-    if(['fishing','trawler','coastal'].includes(id))return result(false,0,false,'MARGINAL ICE · GLOBAL-CLASS R/V OR ICEBREAKER REQUIRED');
-    if(id==='global')return type==='marginal'?result(true,1/3,false):result(false,0,false,'PACK ICE · ICEBREAKER REQUIRED');
-    if(id==='icebreaker'){
-      if(type==='marginal')return result(true,.6,false);
-      if(thickness===1)return cracked?result(true,.3,true):result(true,.1,true);
-      return result(false,0,false,`${thickness} M ICE · EXCEEDS BASIC ICEBREAKER CAPABILITY`);
-    }
-    if(id==='nuclear'){
-      if(type==='marginal')return result(true,1,false);
-      if(thickness===1)return result(true,.6,true);
-      if(thickness===2)return result(true,cracked?.6:.3,true);
-      if(thickness===3&&cracked)return result(true,.3,true);
-      return result(false,0,false,thickness>=4?'4 M ICE · IMPASSABLE':'3 M UNFRACTURED PACK · IMPASSABLE');
-    }
-    return result(false,0,false,'SEA ICE · VESSEL NOT ICE-CAPABLE');
+    const type=iceTypeAt(x,y),thickness=type==='fast'?1:(type==='packed'||type==='cracked')?iceThicknessAt(x,y):0,id=vesselIceId(vessel),cracked=type==='cracked',rule=iceNavigationRule(type,thickness,vessel);
+    const iceLabel=type==='open'?'OPEN WATER':type==='marginal'?'MARGINAL ICE':type==='fast'?'FAST ICE · 1 M EQUIVALENT':`${thickness} M ${cracked?'FRACTURED':'PACK'} ICE`;
+    if(rule)return{allowed:true,speedFactor:rule.speedFactor,breaking:!!rule.breaking,ramming:!!rule.breaking,reason:'',type,thickness,id,iceLabel};
+    let reason='SEA ICE · VESSEL NOT ICE-CAPABLE';
+    if(type==='fast')reason='FAST ICE · ICEBREAKER REQUIRED';
+    else if(['fishing','trawler','coastal'].includes(id))reason='MARGINAL ICE · GLOBAL-CLASS R/V OR ICEBREAKER REQUIRED';
+    else if(id==='global')reason='PACK ICE · ICEBREAKER REQUIRED';
+    else if(id==='icebreaker')reason=`${thickness} M ICE · EXCEEDS BASIC ICEBREAKER CAPABILITY`;
+    else if(id==='nuclear')reason=thickness>=4?'4 M ICE · IMPASSABLE':'3 M UNFRACTURED PACK · IMPASSABLE';
+    return{allowed:false,speedFactor:0,breaking:false,ramming:false,reason,type,thickness,id,iceLabel};
   }
-  function iceStatusText(profile=iceNavigationProfileAt(state.x,state.y),ramming=state.ramming){if(state.frozen)return`FROZEN IN · ${profile.iceLabel}`;if(ramming)return`RAMMING · ${profile.iceLabel}`;return profile.iceLabel;}
+  function iceStatusText(profile=iceNavigationProfileAt(state.x,state.y),breaking=state.ramming){if(state.frozen)return`FROZEN IN · ${profile.iceLabel}`;if(breaking)return`ICEBREAKING · ${profile.iceLabel}`;return profile.iceLabel;}
   function researchSiteValueMultiplier(point,template={}){if(!template.iceAllowed)return 1;const w=polar(point.lat,point.lon),type=iceTypeAt(w.x,w.y),thickness=type==='fast'?1:iceThicknessAt(w.x,w.y);if(type==='marginal')return 1.25;if(type==='fast')return 1.75;if(type!=='packed'&&type!=='cracked')return 1;return thickness>=3?4:thickness===2?2.75:1.75;}
   function portIceInfo(city){const center=polar(city.lat,city.lon);let sample=null;for(let radius=3;radius<=64&&!sample;radius+=3)for(let i=0;i<48;i++){const a=i*Math.PI/24,x=center.x+Math.cos(a)*radius,y=center.y+Math.sin(a)*radius,pos=unpolar(x,y);if(pos.lat<MIN_LAT||isBlocked(x,y))continue;sample={x,y};break;}if(!sample)return{frozen:true,iceLabel:'NO SEA APPROACH',type:'blocked',thickness:0,navigationAllowed:false};const type=naturalIceTypeAt(sample.x,sample.y),thickness=type==='fast'?1:(type==='packed'||type==='cracked')?iceThicknessAt(sample.x,sample.y):0,frozen=type==='fast'||type==='packed'||type==='cracked',navigationAllowed=iceNavigationProfileAt(sample.x,sample.y).allowed;return{frozen,type,thickness,navigationAllowed,iceLabel:type==='open'?'OPEN WATER':type==='marginal'?'MARGINAL ICE':type==='fast'?'FAST ICE':`${thickness} M ${type==='cracked'?'FRACTURED':'PACK'} ICE`};}
   function relocationIcebreaker(){return['icebreaker','nuclear'].includes(vesselIceId());}
@@ -1065,20 +1078,19 @@
     else if(!vessel.nuclearFuel&&state.fuel<=0){ui.fuelValue.textContent='0%';ui.fuelLevel.style.width='0%';endGame('OUT OF FUEL','The vessel is stranded and the expedition cannot continue. Plan a shorter route between ports.');return;}
     else{
       const arrivalRadius=Math.max(2,3/zoomLevel),heading=dist>0?Math.atan2(dy,dx):state.angle-Math.PI/2,aheadDistance=Math.min(10,Math.max(4,dist)),aheadProfile=dist>0?iceNavigationProfileAt(state.x+Math.cos(heading)*aheadDistance,state.y+Math.sin(heading)*aheadDistance,vessel):currentProfile;
-      let commanded=state.commandActive&&dist>arrivalRadius;const shouldRam=commanded&&(currentProfile.ramming||aheadProfile.ramming);if(shouldRam&&!state.ramming)state.ramClock=0;state.ramming=shouldRam;
-      const driveProfile=state.ramming?(currentProfile.ramming?currentProfile:aheadProfile):currentProfile,normalCruise=Math.max(vessel.cruiseKnots*KNOT_TO_WORLD_SPEED,Math.min(vessel.maxKnots*KNOT_TO_WORLD_SPEED,dist*1.1+30));
+      let commanded=state.commandActive&&dist>arrivalRadius;const shouldBreak=commanded&&(currentProfile.breaking||aheadProfile.breaking);state.ramming=shouldBreak;
+      const driveProfile=state.ramming?(currentProfile.breaking?currentProfile:aheadProfile):currentProfile,normalCruise=Math.max(vessel.cruiseKnots*KNOT_TO_WORLD_SPEED,Math.min(vessel.maxKnots*KNOT_TO_WORLD_SPEED,dist*1.1+30));
       let cruise=commanded?normalCruise*driveProfile.speedFactor:0;
       if(commanded&&!vessel.nuclearFuel)state.fuel=Math.max(0,state.fuel-elapsedDays*(200/vessel.fuelEnduranceDays)*(state.ramming?3.5:1));
-      if(commanded&&state.ramming)cruise=ramCycleSpeed(dt,normalCruise*driveProfile.speedFactor);
       if(commanded&&!state.ramming){const currentTowardTarget=(flow.vx*dx+flow.vy*dy)/dist;if(cruise+currentTowardTarget<=.5){commanded=false;cruise=0;state.commandActive=false;state.moving=false;state.tx=state.x;state.ty=state.y;state.portDestination=null;}}
       let throughX=commanded?dx/dist*cruise:0,throughY=commanded?dy/dist*cruise:0;const through=Math.abs(cruise);
-      if(commanded&&!state.ramming&&cruise>0){const steerX=throughX-flow.vx,steerY=throughY-flow.vy,steerLength=Math.hypot(steerX,steerY)||1;throughX=steerX/steerLength*cruise;throughY=steerY/steerLength*cruise;}
-      const motionDt=dt/zoomLevel;if(commanded&&state.ramming&&cruise>0)carveIcebreakerTrack(state.x,state.y,Math.atan2(dy,dx),vessel);let groundX=throughX+flow.vx,groundY=throughY+flow.vy,nx=state.x+groundX*motionDt,ny=state.y+groundY*motionDt,nextPos=unpolar(nx,ny),nextProfile=iceNavigationProfileAt(nx,ny,vessel),groundStep=Math.hypot(groundX,groundY)*motionDt;
+      if(commanded&&cruise>0){const steerX=throughX-flow.vx,steerY=throughY-flow.vy,steerLength=Math.hypot(steerX,steerY)||1;throughX=steerX/steerLength*cruise;throughY=steerY/steerLength*cruise;}
+      const motionDt=dt/zoomLevel,fromX=state.x,fromY=state.y;let groundX=throughX+flow.vx,groundY=throughY+flow.vy,nx=state.x+groundX*motionDt,ny=state.y+groundY*motionDt,nextPos=unpolar(nx,ny),nextProfile=iceNavigationProfileAt(nx,ny,vessel),groundStep=Math.hypot(groundX,groundY)*motionDt;
       if(!commanded&&!nextProfile.allowed){groundX=0;groundY=0;nx=state.x;ny=state.y;nextPos=unpolar(nx,ny);nextProfile=iceNavigationProfileAt(nx,ny,vessel);groundStep=0;}
       const obstructionDistance=commanded?Math.min(38,dist):30,directAngle=Math.atan2(groundY,groundX);
       if(!state.targetOnLand&&(isBlocked(nx,ny)||(commanded&&coastBlockedAhead(state.x,state.y,directAngle,obstructionDistance)))&&nextPos.lat>=MIN_LAT&&nextProfile.type!=='fast'){const slip=shorelineSlide(state.x,state.y,groundX,groundY,motionDt,state.tx,state.ty);if(slip){nx=slip.x;ny=slip.y;groundX=slip.vx;groundY=slip.vy;nextPos=unpolar(nx,ny);nextProfile=iceNavigationProfileAt(nx,ny,vessel);groundStep=Math.hypot(nx-state.x,ny-state.y);}}
       if(nextPos.lat<MIN_LAT||isBlocked(nx,ny)||!nextProfile.allowed){if(commanded){state.tx=state.x;state.ty=state.y;state.portDestination=null;if(!nextProfile.allowed)showToast(nextProfile.reason||'SEA ICE · IMPASSABLE',2000);}state.moving=false;state.commandActive=false;state.ramming=false;state.targetOnLand=false;ui.speed.textContent='0.0 KN';}
-      else{state.x=nx;state.y=ny;if(commanded){if(state.ramming&&cruise>0)addBrokenIce(state.x,state.y,vesselIceId(vessel)==='nuclear'?12:9.5,naturalIceTypeAt(state.x,state.y)==='fast');state.travelled+=groundStep;const target=Math.atan2(dy,dx)+Math.PI/2;let da=((target-state.angle+Math.PI*3)%(Math.PI*2))-Math.PI;if(dist<Math.max(14,arrivalRadius*4)&&Math.abs(da)>Math.PI*.55){state.commandActive=false;state.moving=false;state.ramming=false;state.tx=state.x;state.ty=state.y;ui.speed.textContent=(Math.hypot(flow.vx,flow.vy)/KNOT_TO_WORLD_SPEED).toFixed(1)+' KN DRIFT';if(state.portDestination)enterPort(state.portDestination);}else{state.angle+=da*Math.min(1,dt*4.2);state.moving=through>.02;ui.speed.textContent=through<.02?'0.0 KN':(through/KNOT_TO_WORLD_SPEED).toFixed(1)+(cruise<0?' KN ASTERN':state.ramming?' KN RAM':' KN');}}else{const driftKnots=Math.hypot(groundX,groundY)/KNOT_TO_WORLD_SPEED;state.moving=false;state.commandActive=false;state.ramming=false;ui.speed.textContent=driftKnots<.05?'0.0 KN':driftKnots.toFixed(1)+' KN DRIFT';if(state.portDestination)enterPort(state.portDestination);}}
+      else{state.x=nx;state.y=ny;const breakingPass=vesselCanBreakNaturalIceAt(state.x,state.y,vessel)||vesselCanBreakNaturalIceAt(fromX,fromY,vessel);if(breakingPass)carveIcebreakerTrack(fromX,fromY,state.x,state.y,vessel);if(commanded){state.travelled+=groundStep;const target=Math.atan2(dy,dx)+Math.PI/2;let da=((target-state.angle+Math.PI*3)%(Math.PI*2))-Math.PI;if(dist<Math.max(14,arrivalRadius*4)&&Math.abs(da)>Math.PI*.55){state.commandActive=false;state.moving=false;state.ramming=false;state.tx=state.x;state.ty=state.y;ui.speed.textContent=(Math.hypot(flow.vx,flow.vy)/KNOT_TO_WORLD_SPEED).toFixed(1)+' KN DRIFT';if(state.portDestination)enterPort(state.portDestination);}else{state.angle+=da*Math.min(1,dt*4.2);state.moving=through>.02;ui.speed.textContent=through<.02?'0.0 KN':(through/KNOT_TO_WORLD_SPEED).toFixed(1)+(state.ramming?' KN ICE':' KN');}}else{const driftKnots=Math.hypot(groundX,groundY)/KNOT_TO_WORLD_SPEED;state.moving=false;state.commandActive=false;state.ramming=false;ui.speed.textContent=driftKnots<.05?'0.0 KN':driftKnots.toFixed(1)+' KN DRIFT';if(state.portDestination)enterPort(state.portDestination);}}
     }
     const pos=unpolar(state.x,state.y),ew=pos.lon<0?'W':'E';ui.position.textContent=`${pos.lat.toFixed(2)}°N ${Math.abs(pos.lon).toFixed(2)}°${ew}`;ui.miniLocation.textContent=locationName(pos.lat,pos.lon);ui.progress.style.width=Math.min(100,8+state.travelled/18)+'%';
   }
