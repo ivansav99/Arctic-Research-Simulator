@@ -5,9 +5,13 @@ on:
     branches: [main]
     paths:
       - '.stage/ars22c-trigger.txt'
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
+  pull-requests: read
 
 jobs:
   deploy:
@@ -15,6 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
       - name: Verify working baseline
         shell: bash
@@ -60,4 +65,4 @@ jobs:
           git config user.email 'ars-build@users.noreply.github.com'
           git add -A
           git commit -m 'Add realistic vessel art and textured sea ice'
-          git push origin main
+          git push origin HEAD:main
