@@ -1,1 +1,0 @@
-deploy expedition-22c-visuals via git-data push

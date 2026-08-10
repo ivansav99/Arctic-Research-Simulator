@@ -55,6 +55,12 @@
   terrainTexture.onload=()=>{terrainTextureReady=true;};
   terrainTexture.onerror=()=>{terrainTextureReady=false;if(!terrainTextureFallbackTried){terrainTextureFallbackTried=true;terrainTexture.src=TERRAIN_FALLBACK_URL;}};
   terrainTexture.src=TERRAIN_PRIMARY_URL;
+  const iceTextures={
+    pack:loadSprite(window.AR_VISUAL_ASSETS?.ice?.pack||''),
+    dense:loadSprite(window.AR_VISUAL_ASSETS?.ice?.dense||''),
+    dark:loadSprite(window.AR_VISUAL_ASSETS?.ice?.dark||''),
+    fast:loadSprite(window.AR_VISUAL_ASSETS?.ice?.fast||'')
+  };
 
 
 
@@ -409,7 +415,7 @@
   if(currentPortCity)state.dockedPort=currentPortCity.name;
 
   // Expedition 13: local saves, title/pause menu, and analytics instrumentation.
-  const GAME_VERSION='expedition-22-ice-ladder',SAVE_VERSION=1;
+  const GAME_VERSION='expedition-22c-visuals',SAVE_VERSION=1;
   const SAVE_KEYS={auto:'arctic-research-save-auto-v1',slot1:'arctic-research-save-slot-1-v1',slot2:'arctic-research-save-slot-2-v1',slot3:'arctic-research-save-slot-3-v1'};
   const AUTO_NEW_KEY='arctic-research-start-new-v1';
   let menuOpen=true,autosaveSuspended=false,autosaveTimer=0,lastResearchAnalytics=null;
@@ -610,6 +616,15 @@
     ctx.restore();
   }
   function makeSeafloorPattern(){const tile=document.createElement('canvas'),c=tile.getContext('2d'),size=384;tile.width=tile.height=size;c.clearRect(0,0,size,size);const rnd=n=>{const v=Math.sin(n*91.733+17.31)*43758.5453;return v-Math.floor(v);};for(let i=0;i<190;i++){const x=rnd(i*5.1)*size,y=rnd(i*5.1+1)*size,len=12+rnd(i*5.1+2)*55,a=rnd(i*5.1+3)*Math.PI*2,bend=(rnd(i*5.1+4)-.5)*18;c.lineCap='round';c.lineWidth=.6+rnd(i+70)*2.2;c.strokeStyle=`rgba(${rnd(i)>.5?'15,61,105':'126,181,196'},${.025+rnd(i+9)*.08})`;c.beginPath();c.moveTo(x,y);c.quadraticCurveTo(x+Math.cos(a)*len*.5-Math.sin(a)*bend,y+Math.sin(a)*len*.5+Math.cos(a)*bend,x+Math.cos(a)*len,y+Math.sin(a)*len);c.stroke();}seafloorPattern=ctx.createPattern(tile,'repeat');}
+  const iceTextureReady=image=>!!(image&&image.complete&&image.naturalWidth>0);
+  function drawIceTexture(image,alpha=.92,tilePx=360){
+    if(!iceTextureReady(image))return false;
+    const w=tilePx,h=tilePx,ax=((state.x*scale*.32)%w+w)%w,ay=((state.y*scale*.32)%h+h)%h,old=ctx.globalAlpha;
+    ctx.globalAlpha*=alpha;
+    for(let x=-ax-w;x<width+w;x+=w)for(let y=-ay-h;y<height+h;y+=h)ctx.drawImage(image,x,y,w,h);
+    ctx.globalAlpha=old;return true;
+  }
+  function fillIceClip(texture,overlay,alpha=.9,tilePx=360){const used=drawIceTexture(texture,alpha,tilePx);if(overlay){ctx.fillStyle=overlay;ctx.fillRect(0,0,width,height);}return used;}
   function visibleWorldBounds(margin=0){return{minX:state.x-width/scale/2-margin,maxX:state.x+width/scale/2+margin,minY:state.y-height/scale/2-margin,maxY:state.y+height/scale/2+margin};}
   function shapeVisible(shape,bounds){return !(shape.maxX<bounds.minX||shape.minX>bounds.maxX||shape.maxY<bounds.minY||shape.minY>bounds.maxY);}
   function strokeWorldLine(points){ctx.beginPath();points.forEach((point,index)=>{const p=worldToScreen(point.x,point.y);index?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});}
@@ -641,12 +656,29 @@
   }
   function captureOceanLayer(){ocean.clearRect(0,0,oceanCanvas.width,oceanCanvas.height);ocean.drawImage(canvas,0,0,canvas.width,canvas.height,0,0,oceanCanvas.width,oceanCanvas.height);oceanPattern=ctx.createPattern(oceanCanvas,'no-repeat');}
   function iceEdgePoint(lon,kind){const growth=iceGrowth(),pack=packIceEdge(lon);return polar(kind==='pack'?pack:pack-(2.1+1.5*growth),lon);}
-  function drawSeasonalIce(minX,maxX,minY,maxY){ctx.save();const ring=kind=>{ctx.beginPath();for(let lon=-180;lon<=180;lon+=4){const w=iceEdgePoint(lon,kind),p=worldToScreen(w.x,w.y);lon===-180?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y);}ctx.closePath();};ring('margin');ctx.strokeStyle='rgba(225,249,251,.5)';ctx.lineWidth=1.5;ctx.stroke();ring('pack');ctx.fillStyle='rgba(239,250,247,.9)';ctx.fill();ctx.strokeStyle='rgba(255,255,255,.92)';ctx.lineWidth=2;ctx.stroke();const fastGrowth=fastIceGrowth(),fastWidth=23.5*fastGrowth,marginalWidth=fastWidth+10+15*fastGrowth;if(fastWidth>0){light.clearRect(0,0,width,height);light.save();light.globalCompositeOperation='source-over';light.strokeStyle='rgba(239,249,246,.88)';light.lineWidth=Math.max(3,fastWidth*2*scale);for(const shape of land){if(shape.maxX<minX-marginalWidth||shape.minX>maxX+marginalWidth||shape.maxY<minY-marginalWidth||shape.minY>maxY+marginalWidth)continue;pathPolygon(light,shape.pts,worldToScreen);light.stroke();}light.globalCompositeOperation='destination-out';light.fillStyle='#000';for(const shape of land){if(shape.maxX<minX-marginalWidth||shape.minX>maxX+marginalWidth||shape.maxY<minY-marginalWidth||shape.minY>maxY+marginalWidth)continue;pathPolygon(light,shape.pts,worldToScreen);light.fill();}light.restore();ctx.drawImage(lightCanvas,0,0,width,height);light.clearRect(0,0,width,height);}ctx.restore();}
+  function drawSeasonalIce(minX,maxX,minY,maxY){
+    ctx.save();
+    const ring=kind=>{ctx.beginPath();for(let lon=-180;lon<=180;lon+=4){const w=iceEdgePoint(lon,kind),p=worldToScreen(w.x,w.y);lon===-180?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y);}ctx.closePath();};
+    ring('margin');ctx.strokeStyle='rgba(225,249,251,.5)';ctx.lineWidth=1.5;ctx.stroke();
+    ctx.save();ring('pack');ctx.clip();if(!fillIceClip(iceTextures.pack,'rgba(230,244,248,.10)',.94,340)){ctx.fillStyle='rgba(239,250,247,.9)';ctx.fillRect(0,0,width,height);}ctx.restore();
+    ring('pack');ctx.strokeStyle='rgba(255,255,255,.88)';ctx.lineWidth=2;ctx.stroke();
+    const fastGrowth=fastIceGrowth(),fastWidth=23.5*fastGrowth,marginalWidth=fastWidth+10+15*fastGrowth;
+    if(fastWidth>0){
+      light.clearRect(0,0,width,height);light.save();light.globalCompositeOperation='source-over';light.strokeStyle='#fff';light.lineWidth=Math.max(3,fastWidth*2*scale);
+      for(const shape of land){if(shape.maxX<minX-marginalWidth||shape.minX>maxX+marginalWidth||shape.maxY<minY-marginalWidth||shape.minY>maxY+marginalWidth)continue;pathPolygon(light,shape.pts,worldToScreen);light.stroke();}
+      light.globalCompositeOperation='destination-out';light.fillStyle='#000';for(const shape of land){if(shape.maxX<minX-marginalWidth||shape.minX>maxX+marginalWidth||shape.maxY<minY-marginalWidth||shape.minY>maxY+marginalWidth)continue;pathPolygon(light,shape.pts,worldToScreen);light.fill();}light.restore();
+      ctx.save();ctx.drawImage(lightCanvas,0,0,width,height);ctx.globalCompositeOperation='source-in';if(!drawIceTexture(iceTextures.fast,.96,380)){ctx.fillStyle='rgba(239,249,246,.88)';ctx.fillRect(0,0,width,height);}ctx.fillStyle='rgba(242,250,250,.10)';ctx.fillRect(0,0,width,height);ctx.restore();light.clearRect(0,0,width,height);
+    }
+    ctx.restore();
+  }
   function drawIceThicknessAndCracks(){
     const thicknessRing=level=>{ctx.beginPath();for(let lon=-180;lon<=180;lon+=3){const edge=packIceEdge(lon),lat=edge+(90-edge)*thicknessThreshold(level),w=polar(lat,lon),p=worldToScreen(w.x,w.y);lon===-180?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y);}ctx.closePath();};
-    ctx.save();thicknessRing(1);ctx.fillStyle=ICE_COLORS[1];ctx.fill();
-    for(const level of [2,3,4]){if(thicknessThreshold(level)>1)continue;thicknessRing(level);ctx.fillStyle=ICE_COLORS[level];ctx.fill();ctx.strokeStyle='rgba(229,248,252,.34)';ctx.lineWidth=1;ctx.stroke();}
-    thicknessRing(1);ctx.clip();for(const zone of getCrackZones()){const p=worldToScreen(zone.x,zone.y),rx=zone.rx*scale,ry=zone.ry*scale;if(p.x+rx<0||p.x-rx>width||p.y+ry<70||p.y-ry>height)continue;const rnd=n=>Math.abs(Math.sin((n+zone.seed*97.13)*12.9898)*43758.5453)%1;ctx.save();ctx.translate(p.x,p.y);ctx.rotate(zone.angle);ctx.beginPath();ctx.ellipse(0,0,rx,ry,0,0,Math.PI*2);ctx.fillStyle='rgba(91,169,194,.16)';ctx.fill();ctx.strokeStyle='rgba(67,139,165,.32)';ctx.lineWidth=1.2;ctx.stroke();ctx.clip();ctx.strokeStyle='rgba(28,82,109,.58)';ctx.lineWidth=Math.max(.6,scale*.2);for(let n=0;n<28;n++){const x=(rnd(n*7.1)-.5)*rx*2,y=(rnd(n*7.1+1.7)-.5)*ry*2;if(x*x/(rx*rx)+y*y/(ry*ry)>.94)continue;const a=rnd(n*7.1+3.2)*Math.PI*2,len=(.07+rnd(n*7.1+4.6)*.2)*Math.min(rx,ry),bend=(rnd(n*7.1+5.9)-.5)*len*.7,ex=x+Math.cos(a)*len,ey=y+Math.sin(a)*len;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(a)*len*.48-Math.sin(a)*bend,y+Math.sin(a)*len*.48+Math.cos(a)*bend);ctx.lineTo(ex,ey);ctx.stroke();}ctx.restore();}ctx.restore();
+    ctx.save();
+    ctx.save();thicknessRing(1);ctx.clip();if(!fillIceClip(iceTextures.pack,'rgba(227,243,248,.08)',.88,340)){ctx.fillStyle=ICE_COLORS[1];ctx.fillRect(0,0,width,height);}ctx.restore();
+    for(const[level,texture,overlay,alpha,tilePx]of[[2,iceTextures.dense,'rgba(177,211,224,.13)',.9,350],[3,iceTextures.dark,'rgba(100,153,180,.17)',.86,360],[4,iceTextures.dark,'rgba(37,83,122,.25)',.82,380]]){
+      if(thicknessThreshold(level)>1)continue;ctx.save();thicknessRing(level);ctx.clip();if(!fillIceClip(texture,overlay,alpha,tilePx)){ctx.fillStyle=ICE_COLORS[level];ctx.fillRect(0,0,width,height);}ctx.restore();thicknessRing(level);ctx.strokeStyle='rgba(229,248,252,.28)';ctx.lineWidth=1;ctx.stroke();
+    }
+    thicknessRing(1);ctx.clip();for(const zone of getCrackZones()){const p=worldToScreen(zone.x,zone.y),rx=zone.rx*scale,ry=zone.ry*scale;if(p.x+rx<0||p.x-rx>width||p.y+ry<70||p.y-ry>height)continue;const rnd=n=>Math.abs(Math.sin((n+zone.seed*97.13)*12.9898)*43758.5453)%1;ctx.save();ctx.translate(p.x,p.y);ctx.rotate(zone.angle);ctx.beginPath();ctx.ellipse(0,0,rx,ry,0,0,Math.PI*2);ctx.fillStyle='rgba(91,169,194,.10)';ctx.fill();ctx.strokeStyle='rgba(67,139,165,.28)';ctx.lineWidth=1.2;ctx.stroke();ctx.clip();ctx.strokeStyle='rgba(28,82,109,.48)';ctx.lineWidth=Math.max(.6,scale*.2);for(let n=0;n<28;n++){const x=(rnd(n*7.1)-.5)*rx*2,y=(rnd(n*7.1+1.7)-.5)*ry*2;if(x*x/(rx*rx)+y*y/(ry*ry)>.94)continue;const a=rnd(n*7.1+3.2)*Math.PI*2,len=(.07+rnd(n*7.1+4.6)*.2)*Math.min(rx,ry),bend=(rnd(n*7.1+5.9)-.5)*len*.7,ex=x+Math.cos(a)*len,ey=y+Math.sin(a)*len;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(a)*len*.48-Math.sin(a)*bend,y+Math.sin(a)*len*.48+Math.cos(a)*bend);ctx.lineTo(ex,ey);ctx.stroke();}ctx.restore();}ctx.restore();
   }
   const iceVisualCache=new Map();
   function cachedVisualIce(x,y,grid){const key=`${Math.round(x/grid)},${Math.round(y/grid)},${Math.floor(state.seasonDay/5)},${grid.toFixed(1)}`;if(iceVisualCache.has(key))return iceVisualCache.get(key);if(iceVisualCache.size>12000)iceVisualCache.clear();const type=iceTypeAt(x,y);iceVisualCache.set(key,type);return type;}
