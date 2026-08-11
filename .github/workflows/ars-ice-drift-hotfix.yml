@@ -1,0 +1,88 @@
+name: ARS ice drift hotfix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ars-ice-drift-hotfix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch ice motion and fast-ice texture
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('game.js')
+          text = path.read_text()
+
+          def replace_once(old, new, label):
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly one match, found {count}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+              "let width=0,height=0,dpr=1,baseScale=4.6,zoomLevel=1,scale=4.6,last=performance.now(),toastTimer,announcedWeatherEvent=null,oceanPattern=null,brokenIceDriftClock=0;",
+              "let width=0,height=0,dpr=1,baseScale=4.6,zoomLevel=1,scale=4.6,last=performance.now(),toastTimer,announcedWeatherEvent=null,oceanPattern=null,brokenIceDriftClock=0,packIceDriftX=0,packIceDriftY=0;",
+              'ice drift state'
+          )
+
+          current_end = "    return{knots:Math.hypot(east,north),vx:(east*localEastX+north*localNorthX)*KNOT_TO_WORLD_SPEED,vy:(east*localEastY+north*localNorthY)*KNOT_TO_WORLD_SPEED};\n  }\n  const iceGrowth=()=>.5-.5*Math.cos(Math.PI*2*state.seasonDay/365);"
+          current_new = "    return{knots:Math.hypot(east,north),vx:(east*localEastX+north*localNorthX)*KNOT_TO_WORLD_SPEED,vy:(east*localEastY+north*localNorthY)*KNOT_TO_WORLD_SPEED};\n  }\n  const PACK_ICE_DRIFT_FACTOR=.35;\n  function updatePackIceTextureDrift(dt){const flow=currentAt(state.x,state.y,false);packIceDriftX+=flow.vx*dt*PACK_ICE_DRIFT_FACTOR;packIceDriftY+=flow.vy*dt*PACK_ICE_DRIFT_FACTOR;}\n  const iceGrowth=()=>.5-.5*Math.cos(Math.PI*2*state.seasonDay/365);"
+          replace_once(current_end, current_new, 'independent pack drift update')
+
+          old_draw = "  function drawIceTexture(image,alpha=.92,tilePx=360){\n    if(!iceTextureReady(image))return false;\n    const w=tilePx,h=tilePx,ax=((state.x*scale*.32)%w+w)%w,ay=((state.y*scale*.32)%h+h)%h,old=ctx.globalAlpha;\n    ctx.globalAlpha*=alpha;\n    for(let x=-ax-w;x<width+w;x+=w)for(let y=-ay-h;y<height+h;y+=h)ctx.drawImage(image,x,y,w,h);\n    ctx.globalAlpha=old;return true;\n  }"
+          new_draw = "  function drawIceTextureTo(target,image,alpha=.92,tilePx=360,driftX=packIceDriftX,driftY=packIceDriftY){\n    if(!iceTextureReady(image))return false;\n    const w=tilePx,h=tilePx,ax=((((state.x-driftX)*scale)%w)+w)%w,ay=((((state.y-driftY)*scale)%h)+h)%h,old=target.globalAlpha;\n    target.globalAlpha*=alpha;\n    for(let x=-ax-w;x<width+w;x+=w)for(let y=-ay-h;y<height+h;y+=h)target.drawImage(image,x,y,w,h);\n    target.globalAlpha=old;return true;\n  }\n  function drawIceTexture(image,alpha=.92,tilePx=360){return drawIceTextureTo(ctx,image,alpha,tilePx);}"
+          replace_once(old_draw, new_draw, 'world-anchored drifting texture renderer')
+
+          old_fast = "light.save();light.globalCompositeOperation='source-in';light.fillStyle='rgba(239,249,246,.92)';light.fillRect(0,0,width,height);light.globalCompositeOperation='source-atop';if(iceTextureReady(iceTextures.dense)){const w=380,h=380,ax=((state.x*scale*.32)%w+w)%w,ay=((state.y*scale*.32)%h+h)%h,old=light.globalAlpha;light.globalAlpha*=.72;for(let x=-ax-w;x<width+w;x+=w)for(let y=-ay-h;y<height+h;y+=h)light.drawImage(iceTextures.dense,x,y,w,h);light.globalAlpha=old;}light.fillStyle='rgba(247,252,250,.16)';light.fillRect(0,0,width,height);light.restore();ctx.drawImage(lightCanvas,0,0,width,height);light.clearRect(0,0,width,height);"
+          new_fast = "light.save();light.globalCompositeOperation='source-in';light.fillStyle='rgba(239,249,246,.94)';light.fillRect(0,0,width,height);light.globalCompositeOperation='source-atop';drawIceTextureTo(light,iceTextures.pack,.9,300,0,0);light.fillStyle='rgba(248,252,250,.14)';light.fillRect(0,0,width,height);light.restore();ctx.drawImage(lightCanvas,0,0,width,height);light.clearRect(0,0,width,height);"
+          replace_once(old_fast, new_fast, 'fixed dense fast ice')
+
+          frame_old = "if(!paused){updateBrokenIceDrift(dt/zoomLevel);serviceNearbyPort();update(dt);weather=updateWeatherAnnouncement();"
+          frame_new = "if(!paused){updateBrokenIceDrift(dt/zoomLevel);updatePackIceTextureDrift(dt/zoomLevel);serviceNearbyPort();update(dt);weather=updateWeatherAnnouncement();"
+          replace_once(frame_old, frame_new, 'frame drift update')
+
+          path.write_text(text)
+
+          index = Path('index.html')
+          html = index.read_text()
+          old = 'game.js?v=expedition-22e-icevisuals'
+          new = 'game.js?v=expedition-22f-icedrift'
+          if html.count(old) != 1:
+              raise SystemExit(f'cache bust: expected exactly one match, found {html.count(old)}')
+          index.write_text(html.replace(old, new, 1))
+
+      - name: Validate patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check game.js
+          grep -q "PACK_ICE_DRIFT_FACTOR=.35" game.js
+          grep -q "state.x-driftX" game.js
+          grep -q "drawIceTextureTo(light,iceTextures.pack,.9,300,0,0)" game.js
+          grep -q "updatePackIceTextureDrift(dt/zoomLevel)" game.js
+          grep -q "game.js?v=expedition-22f-icedrift" index.html
+
+      - name: Publish hotfix
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/ars-ice-drift-hotfix.yml
+          git config user.name 'ARS Build Bot'
+          git config user.email 'ars-build@users.noreply.github.com'
+          git add game.js index.html .github/workflows/ars-ice-drift-hotfix.yml
+          git commit -m 'Decouple pack ice drift and anchor fast ice'
+          git push origin HEAD:main
