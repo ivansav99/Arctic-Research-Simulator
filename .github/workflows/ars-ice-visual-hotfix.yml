@@ -1,0 +1,75 @@
+name: ARS ice visual hotfix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ars-ice-visual-hotfix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch fast ice and 3m texture
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('game.js')
+          text = path.read_text()
+
+          def replace_once(old, new, label):
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly one match, found {count}')
+              text = text.replace(old, new, 1)
+
+          old_fast = "light.save();light.globalCompositeOperation='source-in';if(iceTextureReady(iceTextures.fast)){const w=380,h=380,ax=((state.x*scale*.32)%w+w)%w,ay=((state.y*scale*.32)%h+h)%h,old=light.globalAlpha;light.globalAlpha*=.96;for(let x=-ax-w;x<width+w;x+=w)for(let y=-ay-h;y<height+h;y+=h)light.drawImage(iceTextures.fast,x,y,w,h);light.globalAlpha=old;}else{light.fillStyle='rgba(239,249,246,.88)';light.fillRect(0,0,width,height);}light.globalCompositeOperation='source-atop';light.fillStyle='rgba(242,250,250,.10)';light.fillRect(0,0,width,height);light.restore();ctx.drawImage(lightCanvas,0,0,width,height);light.clearRect(0,0,width,height);"
+          new_fast = "light.save();light.globalCompositeOperation='source-in';light.fillStyle='rgba(239,249,246,.92)';light.fillRect(0,0,width,height);light.globalCompositeOperation='source-atop';if(iceTextureReady(iceTextures.dense)){const w=380,h=380,ax=((state.x*scale*.32)%w+w)%w,ay=((state.y*scale*.32)%h+h)%h,old=light.globalAlpha;light.globalAlpha*=.72;for(let x=-ax-w;x<width+w;x+=w)for(let y=-ay-h;y<height+h;y+=h)light.drawImage(iceTextures.dense,x,y,w,h);light.globalAlpha=old;}light.fillStyle='rgba(247,252,250,.16)';light.fillRect(0,0,width,height);light.restore();ctx.drawImage(lightCanvas,0,0,width,height);light.clearRect(0,0,width,height);"
+          replace_once(old_fast, new_fast, 'fast ice visibility')
+
+          replace_once(
+              "[3,iceTextures.dark,'rgba(100,153,180,.17)',.86,360]",
+              "[3,iceTextures.fast,'rgba(238,247,247,.28)',.92,360]",
+              '3m ice texture'
+          )
+
+          path.write_text(text)
+
+          index = Path('index.html')
+          html = index.read_text()
+          old = 'game.js?v=expedition-22d-mapfix'
+          new = 'game.js?v=expedition-22e-icevisuals'
+          if html.count(old) != 1:
+              raise SystemExit(f'cache bust: expected exactly one match, found {html.count(old)}')
+          index.write_text(html.replace(old, new, 1))
+
+      - name: Validate patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check game.js
+          grep -q "light.fillStyle='rgba(239,249,246,.92)'" game.js
+          grep -q "light.drawImage(iceTextures.dense" game.js
+          grep -q "\[3,iceTextures.fast,'rgba(238,247,247,.28)',.92,360\]" game.js
+          grep -q "game.js?v=expedition-22e-icevisuals" index.html
+
+      - name: Publish hotfix
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/ars-ice-visual-hotfix.yml
+          git config user.name 'ARS Build Bot'
+          git config user.email 'ars-build@users.noreply.github.com'
+          git add game.js index.html .github/workflows/ars-ice-visual-hotfix.yml
+          git commit -m 'Restore fast ice visibility and whiten 3m ice'
+          git push origin HEAD:main
