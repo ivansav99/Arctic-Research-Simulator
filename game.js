@@ -77,7 +77,7 @@
   const ll=points=>points.map(([lat,lon])=>polar(lat,lon));
   const home=polar(78.23,14.5),port=polar(78.23,15.65);
   const state={x:home.x,y:home.y,tx:home.x,ty:home.y,angle:Math.PI,moving:false,commandActive:false,travelled:0,seasonDay:0,year:2026,frozen:false,fuel:100,food:100,portDestination:null,dockedPort:null,gameOver:false,fogClearDays:7,ramming:false,ramClock:0,targetOnLand:false,started:false};
-  let width=0,height=0,dpr=1,baseScale=4.6,zoomLevel=1,scale=4.6,last=performance.now(),toastTimer,announcedWeatherEvent=null,oceanPattern=null,brokenIceDriftClock=0;
+  let width=0,height=0,dpr=1,baseScale=4.6,zoomLevel=1,scale=4.6,last=performance.now(),toastTimer,announcedWeatherEvent=null,oceanPattern=null,brokenIceDriftClock=0,packIceDriftX=0,packIceDriftY=0;
   const KNOT_TO_WORLD_SPEED=14,iceFloes=[],wakeFloes=[],brokenIceChannels=[],brokenIceGrid=new Map(),BROKEN_ICE_CELL=32;
   let wakeFloeClock=0,packPushToastDay=-1,wildlifeEncounterClock=0,wildlifeEncounterSerial=0;
   const CHECKPOINT_KEY='arctic-research-last-port';
@@ -337,6 +337,8 @@
     const east=sum.e*offshore*cap,north=sum.n*offshore*cap;
     return{knots:Math.hypot(east,north),vx:(east*localEastX+north*localNorthX)*KNOT_TO_WORLD_SPEED,vy:(east*localEastY+north*localNorthY)*KNOT_TO_WORLD_SPEED};
   }
+  const PACK_ICE_DRIFT_FACTOR=.35;
+  function updatePackIceTextureDrift(dt){const flow=currentAt(state.x,state.y,false);packIceDriftX+=flow.vx*dt*PACK_ICE_DRIFT_FACTOR;packIceDriftY+=flow.vy*dt*PACK_ICE_DRIFT_FACTOR;}
   const iceGrowth=()=>.5-.5*Math.cos(Math.PI*2*state.seasonDay/365);
   function fastIceGrowth(){const d=state.seasonDay;if(d<91||d>=274)return 0;if(d<=182)return.5-.5*Math.cos(Math.PI*(d-91)/91);return.5+.5*Math.cos(Math.PI*(d-182)/92);}
   function packIceEdge(lon){const growth=iceGrowth(),wave=(Math.sin(lon*Math.PI/33)+Math.sin(lon*Math.PI/71))*.2;return 85.4-4.2*growth+wave;}
@@ -617,13 +619,14 @@
   }
   function makeSeafloorPattern(){const tile=document.createElement('canvas'),c=tile.getContext('2d'),size=384;tile.width=tile.height=size;c.clearRect(0,0,size,size);const rnd=n=>{const v=Math.sin(n*91.733+17.31)*43758.5453;return v-Math.floor(v);};for(let i=0;i<190;i++){const x=rnd(i*5.1)*size,y=rnd(i*5.1+1)*size,len=12+rnd(i*5.1+2)*55,a=rnd(i*5.1+3)*Math.PI*2,bend=(rnd(i*5.1+4)-.5)*18;c.lineCap='round';c.lineWidth=.6+rnd(i+70)*2.2;c.strokeStyle=`rgba(${rnd(i)>.5?'15,61,105':'126,181,196'},${.025+rnd(i+9)*.08})`;c.beginPath();c.moveTo(x,y);c.quadraticCurveTo(x+Math.cos(a)*len*.5-Math.sin(a)*bend,y+Math.sin(a)*len*.5+Math.cos(a)*bend,x+Math.cos(a)*len,y+Math.sin(a)*len);c.stroke();}seafloorPattern=ctx.createPattern(tile,'repeat');}
   const iceTextureReady=image=>!!(image&&image.complete&&image.naturalWidth>0);
-  function drawIceTexture(image,alpha=.92,tilePx=360){
+  function drawIceTextureTo(target,image,alpha=.92,tilePx=360,driftX=packIceDriftX,driftY=packIceDriftY){
     if(!iceTextureReady(image))return false;
-    const w=tilePx,h=tilePx,ax=((state.x*scale*.32)%w+w)%w,ay=((state.y*scale*.32)%h+h)%h,old=ctx.globalAlpha;
-    ctx.globalAlpha*=alpha;
-    for(let x=-ax-w;x<width+w;x+=w)for(let y=-ay-h;y<height+h;y+=h)ctx.drawImage(image,x,y,w,h);
-    ctx.globalAlpha=old;return true;
+    const w=tilePx,h=tilePx,ax=((((state.x-driftX)*scale)%w)+w)%w,ay=((((state.y-driftY)*scale)%h)+h)%h,old=target.globalAlpha;
+    target.globalAlpha*=alpha;
+    for(let x=-ax-w;x<width+w;x+=w)for(let y=-ay-h;y<height+h;y+=h)target.drawImage(image,x,y,w,h);
+    target.globalAlpha=old;return true;
   }
+  function drawIceTexture(image,alpha=.92,tilePx=360){return drawIceTextureTo(ctx,image,alpha,tilePx);}
   function fillIceClip(texture,overlay,alpha=.9,tilePx=360){const used=drawIceTexture(texture,alpha,tilePx);if(overlay){ctx.fillStyle=overlay;ctx.fillRect(0,0,width,height);}return used;}
   function visibleWorldBounds(margin=0){return{minX:state.x-width/scale/2-margin,maxX:state.x+width/scale/2+margin,minY:state.y-height/scale/2-margin,maxY:state.y+height/scale/2+margin};}
   function shapeVisible(shape,bounds){return !(shape.maxX<bounds.minX||shape.minX>bounds.maxX||shape.maxY<bounds.minY||shape.minY>bounds.maxY);}
@@ -667,7 +670,7 @@
       light.clearRect(0,0,width,height);light.save();light.globalCompositeOperation='source-over';light.strokeStyle='#fff';light.lineWidth=Math.max(3,fastWidth*2*scale);
       for(const shape of land){if(shape.maxX<minX-marginalWidth||shape.minX>maxX+marginalWidth||shape.maxY<minY-marginalWidth||shape.minY>maxY+marginalWidth)continue;pathPolygon(light,shape.pts,worldToScreen);light.stroke();}
       light.globalCompositeOperation='destination-out';light.fillStyle='#000';for(const shape of land){if(shape.maxX<minX-marginalWidth||shape.minX>maxX+marginalWidth||shape.maxY<minY-marginalWidth||shape.minY>maxY+marginalWidth)continue;pathPolygon(light,shape.pts,worldToScreen);light.fill();}light.restore();
-      light.save();light.globalCompositeOperation='source-in';light.fillStyle='rgba(239,249,246,.92)';light.fillRect(0,0,width,height);light.globalCompositeOperation='source-atop';if(iceTextureReady(iceTextures.dense)){const w=380,h=380,ax=((state.x*scale*.32)%w+w)%w,ay=((state.y*scale*.32)%h+h)%h,old=light.globalAlpha;light.globalAlpha*=.72;for(let x=-ax-w;x<width+w;x+=w)for(let y=-ay-h;y<height+h;y+=h)light.drawImage(iceTextures.dense,x,y,w,h);light.globalAlpha=old;}light.fillStyle='rgba(247,252,250,.16)';light.fillRect(0,0,width,height);light.restore();ctx.drawImage(lightCanvas,0,0,width,height);light.clearRect(0,0,width,height);
+      light.save();light.globalCompositeOperation='source-in';light.fillStyle='rgba(239,249,246,.94)';light.fillRect(0,0,width,height);light.globalCompositeOperation='source-atop';drawIceTextureTo(light,iceTextures.pack,.9,300,0,0);light.fillStyle='rgba(248,252,250,.14)';light.fillRect(0,0,width,height);light.restore();ctx.drawImage(lightCanvas,0,0,width,height);light.clearRect(0,0,width,height);
     }
     ctx.restore();
   }
@@ -1130,7 +1133,7 @@
   function setZoom(change,silent=false){
     const previousZoom=zoomLevel,minZoom=Math.max(.7,vesselModifiers().minZoom),steps=[.7,1.1,1.45,1.8,2.3,2.8].filter(value=>value>=minZoom-.001),direction=change>0?1:change<0?-1:0;let index=steps.reduce((best,value,i)=>Math.abs(value-zoomLevel)<Math.abs(steps[best]-zoomLevel)?i:best,0);if(direction)index=Math.max(0,Math.min(steps.length-1,index+direction));else index=Math.max(0,steps.findIndex(value=>value>=minZoom-.001));zoomLevel=steps[index]??minZoom;scale=baseScale*zoomLevel;if(zoomLevel!==previousZoom)iceFloes.length=0;ui.zoomLevel.textContent=Math.round(zoomLevel*100)+'%';ui.scaleDistance.textContent=Math.max(2,Math.round(15/zoomLevel))+' km';ui.zoomIn.disabled=index>=steps.length-1;ui.zoomOut.disabled=index<=0;if(!silent)showToast(zoomLevel>1?'CHART DETAIL '+Math.round(zoomLevel*100)+'%':'CHART OVERVIEW '+Math.round(zoomLevel*100)+'%');
   }
-  function frame(now){const dt=Math.min(.04,(now-last)/1000);last=now;sound.update();const paused=state.gameOver||menuOpen||!!research?.isBusy?.();let weather;if(!paused){updateBrokenIceDrift(dt/zoomLevel);serviceNearbyPort();update(dt);weather=updateWeatherAnnouncement();updateIceReadout();updateCompass();if(now-lastResearchNavigation>250){lastResearchNavigation=now;updateResearchNavigation();}}else{updateCalendar(0);weather=currentWeather();ui.weatherValue.textContent=weather.type==='clear'?'CLEAR':`${weather.label} ${weather.rating}/10 · ${weather.visibilityKm} KM`;updateIceReadout();updateCompass();}const margin=60/scale,minX=state.x-width/scale/2-margin,maxX=state.x+width/scale/2+margin,minY=state.y-height/scale/2-margin,maxY=state.y+height/scale/2+margin;if(!paused){updateFloes(dt/zoomLevel,minX,maxX,minY,maxY);updateWakeFloes(dt/zoomLevel);updateWildlifeEncounters(dt);updateFishSchools(dt/zoomLevel);updateWildlife(dt/zoomLevel);updateNpcVessels(dt/zoomLevel);}updateResourceWarning();drawMap();drawResearchTargets();drawNpcVessels();drawSeasonalLighting();drawWeather(weather);drawPortMarkers();drawWildlifeObservationRings();drawFog(weather);drawResearchTargets(true);/* wildlife labels intentionally hidden; species is revealed on interaction */drawResearchGuidance();drawMiniMap();drawVessel();requestAnimationFrame(frame);}
+  function frame(now){const dt=Math.min(.04,(now-last)/1000);last=now;sound.update();const paused=state.gameOver||menuOpen||!!research?.isBusy?.();let weather;if(!paused){updateBrokenIceDrift(dt/zoomLevel);updatePackIceTextureDrift(dt/zoomLevel);serviceNearbyPort();update(dt);weather=updateWeatherAnnouncement();updateIceReadout();updateCompass();if(now-lastResearchNavigation>250){lastResearchNavigation=now;updateResearchNavigation();}}else{updateCalendar(0);weather=currentWeather();ui.weatherValue.textContent=weather.type==='clear'?'CLEAR':`${weather.label} ${weather.rating}/10 · ${weather.visibilityKm} KM`;updateIceReadout();updateCompass();}const margin=60/scale,minX=state.x-width/scale/2-margin,maxX=state.x+width/scale/2+margin,minY=state.y-height/scale/2-margin,maxY=state.y+height/scale/2+margin;if(!paused){updateFloes(dt/zoomLevel,minX,maxX,minY,maxY);updateWakeFloes(dt/zoomLevel);updateWildlifeEncounters(dt);updateFishSchools(dt/zoomLevel);updateWildlife(dt/zoomLevel);updateNpcVessels(dt/zoomLevel);}updateResourceWarning();drawMap();drawResearchTargets();drawNpcVessels();drawSeasonalLighting();drawWeather(weather);drawPortMarkers();drawWildlifeObservationRings();drawFog(weather);drawResearchTargets(true);/* wildlife labels intentionally hidden; species is revealed on interaction */drawResearchGuidance();drawMiniMap();drawVessel();requestAnimationFrame(frame);}
   research?.initialize?.({
     wildlifeCatalog:window.ARCTIC_WILDLIFE_CATALOG||{},
     isResearchSiteSuitable,
