@@ -1,0 +1,41 @@
+name: ARS render hotfix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ars-render-hotfix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  hotfix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Restore stable map renderer
+        run: |
+          set -euo pipefail
+          git checkout 998dee455e9aacef91720ea02e62e4795a10d351 -- game.js
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          s=s.replace('game.js?v=expedition-22g-gameplay','game.js?v=expedition-22h-renderhotfix')
+          p.write_text(s)
+          PY
+          node --check game.js
+          grep -q 'expedition-22h-renderhotfix' index.html
+      - name: Publish hotfix
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/ars-render-hotfix.yml
+          git config user.name 'ARS Build Bot'
+          git config user.email 'ars-build@users.noreply.github.com'
+          git add game.js index.html .github/workflows/ars-render-hotfix.yml
+          git commit -m 'Restore stable map renderer after gameplay regression'
+          git push origin HEAD:main
