@@ -17,7 +17,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-      - name: Correct guarded participant matcher
+      - name: Correct guarded matchers
         run: python tools/fix_aug12_polish2.py
       - name: Apply targeted gameplay polish
         run: python tools/ars_aug12_polish2.py
