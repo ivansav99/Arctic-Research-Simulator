@@ -1,0 +1,11 @@
+{
+  "name": "Arctic Research Simulator",
+  "short_name": "Arctic Research",
+  "description": "Lead an Arctic research expedition, build a scientific career, and operate increasingly capable research vessels.",
+  "start_url": "./?standalone=1",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#082f49",
+  "theme_color": "#082f49"
+}
