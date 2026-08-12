@@ -1,0 +1,31 @@
+name: Package iOS Test App
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/ArcticResearch/**'
+      - '.github/workflows/package-ios-test-app.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate project contents
+        run: |
+          set -euo pipefail
+          test -f ios/ArcticResearch/ArcticResearch.xcodeproj/project.pbxproj
+          test -f ios/ArcticResearch/ArcticResearch/ArcticResearchApp.swift
+          test -f ios/ArcticResearch/ArcticResearch/ContentView.swift
+          grep -q 'PBXNativeTarget' ios/ArcticResearch/ArcticResearch.xcodeproj/project.pbxproj
+      - name: Upload Xcode project
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArcticResearch-iOS-TestApp
+          path: ios/ArcticResearch
+          if-no-files-found: error
