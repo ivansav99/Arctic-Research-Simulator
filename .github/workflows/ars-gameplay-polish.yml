@@ -18,7 +18,7 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Correct guarded matcher
+      - name: Correct guarded matchers
         run: python tools/fix_gameplay_polish_script.py
 
       - name: Apply gameplay polish
