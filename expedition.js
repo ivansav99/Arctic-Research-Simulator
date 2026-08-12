@@ -337,6 +337,7 @@
   let activeNpcEncounter = null;
   let cashAnimation = null;
   let devCareerOverride = null;
+  let relocationPortCache = {key:null,ports:[]};
 
   function vessel() { return VESSELS[state.currentVessel]; }
   function profileFor(item) { return item?.portrait?{portrait:item.portrait,recruitmentPool:item.recruitmentPool||'player'}:profileById[item?.profileId] || profileById[slug(item?.name)] || SCIENTIST_PROFILES[0]; }
@@ -354,12 +355,44 @@
     let level=1; for (const id of [...(template.equipment||[]),...(template.consumables||[])]) level=Math.max(level,EQUIPMENT[id]?.tier||1); return Math.min(3,level);
   }
   function missionMinCrew(template) {
+    const title=String(template?.title||'').toLowerCase();
+    if ((template?.berthReserve||0)>0 && (template?.stationDelivery||template?.anyScientist||/deliver|transport|supply|field team|team deployment/.test(title))) return 1;
     const explicit=Number(template?.minCrew); if(Number.isFinite(explicit)&&explicit>0)return Math.max(1,Math.round(explicit));
     const level=templateCareerLevel(template),bounds={1:[1,3],2:[3,10],3:[10,20]}[level]||[1,3];
     const rewards=TEMPLATES.filter(item=>templateCareerLevel(item)===level).map(item=>Number(item.reward)||0).filter(value=>value>0);
     const low=rewards.length?Math.min(...rewards):0,high=rewards.length?Math.max(...rewards):low,reward=Math.max(low,Number(template?.reward)||low),t=high>low?clamp((reward-low)/(high-low),0,1):0;
     return Math.round(bounds[0]+(bounds[1]-bounds[0])*t);
   }
+  function templateRelativeReward(template) {
+    const level=templateCareerLevel(template),rewards=TEMPLATES.filter(item=>templateCareerLevel(item)===level&&!item.weather).map(item=>Number(item.reward)||0).filter(Boolean),low=rewards.length?Math.min(...rewards):0,high=rewards.length?Math.max(...rewards):low;
+    return high>low?clamp(((Number(template?.reward)||low)-low)/(high-low),0,1):0;
+  }
+  function missionSpecialistRequirements(template) {
+    if(Array.isArray(template?.specialistRequirements))return clone(template.specialistRequirements);
+    if(template?.anyScientist)return [];
+    const level=templateCareerLevel(template),specialties=[...new Set(template?.specialties||[])];
+    if(level<2||specialties.length<2)return [];
+    const relative=templateRelativeReward(template),seed=[...String(template?.id||template?.title||'')].reduce((sum,ch)=>(sum*31+ch.charCodeAt(0))>>>0,17),interdisciplinary=relative>=.42&&(seed%100)<(level>=3?62:42);
+    if(!interdisciplinary)return [];
+    const count=level>=3&&specialties.length>=3&&relative>=.7&&(seed%3!==1)?3:2,minCareer=level>=3?'professor':'postdoc';
+    return specialties.slice(0,count).map(specialty=>({specialties:[specialty],minCareer,count:1}));
+  }
+  function expandedSpecialistNeeds(template) {
+    const needs=[];for(const requirement of missionSpecialistRequirements(template))for(let i=0;i<(requirement.count||1);i++)needs.push(requirement);return needs;
+  }
+  function specialistAssignment(template) {
+    const needs=expandedSpecialistNeeds(template);if(!needs.length)return {missing:0,ids:[]};let best=[];
+    const walk=(index,used,ids)=>{if(index>=needs.length){if(ids.length>best.length)best=[...ids];return;}walk(index+1,used,ids);const need=needs[index];for(const scientist of state.scientists){if(used.has(scientist.id)||careerLevel(scientist.career)<careerLevel(need.minCareer)||!(need.specialties||[]).includes(scientist.specialty))continue;used.add(scientist.id);ids.push(scientist.id);walk(index+1,used,ids);ids.pop();used.delete(scientist.id);}};walk(0,new Set(),[]);return {missing:Math.max(0,needs.length-best.length),ids:best};
+  }
+  function specialistRequirementsMet(template) { return specialistAssignment(template).missing===0; }
+  function missionFitsCurrentVessel(template,ship=vessel()) { return missionMinCrew(template)+Math.max(0,Number(template?.berthReserve)||0)<=ship.berths; }
+  function vesselRewardScale(ship=vessel()) {
+    const starter=VESSELS.fishing,baseCapital=Math.max(1,vesselPurchasePrice(starter)||120000),capital=Math.max(baseCapital,vesselPurchasePrice(ship)||ship.marketPrice||baseCapital);
+    const operatingCost=s=>Math.max(1,(s.nuclearFuel?0:s.fuelCapacity*s.fuelUnitCost)+s.foodCapacity*s.foodUnitCost+s.supplyCapacity*250),baseOperating=operatingCost(starter),operating=operatingCost(ship);
+    const capitalIndex=1+Math.max(0,Math.log10(capital/baseCapital))*1.35,operatingIndex=1+Math.max(0,Math.log10(operating/baseOperating))*.9;
+    return clamp(capitalIndex*.7+operatingIndex*.3,1,12);
+  }
+  function wildlifeObservationData(ship=vessel()) { return ({fishing:2,trawler:4,coastal:8,global:16,icebreaker:32,nuclear:64}[ship.id]||2); }
   function payroll() { return state.scientists.reduce((sum,item) => sum + (CAREERS[item.career]?.salary || 0), 0); }
   function normalizedPortId(port=state.port) { return port?.id || slug(port?.name || ''); }
   const RUSSIAN_PORTS = new Set(['murmansk','arkhangelsk','dikson','tiksi','pevek','anadyr']);
@@ -367,7 +400,7 @@
   function activeGrants() {
     return state.targets.filter(item => (item.kind==='grant'||item.kind==='contract') && !['completed','failed','dropped'].includes(item.status));
   }
-  function grantCapacity() { return Math.max(1,state.scientists.length); }
+  function grantCapacity() { const level=playerCareerLevel();if(level<2)return Math.max(1,state.scientists.length);const postdocs=state.scientists.filter(item=>item.career==='postdoc').length,professors=state.scientists.filter(item=>item.career==='professor').length;return Math.max(2,postdocs*2+professors*3); }
   function grantLoad() {
     return activeGrants().length+(state.deployments||[]).filter(item=>item.originalKind==='grant'&&item.status==='collecting').length;
   }
@@ -378,15 +411,12 @@
     return false;
   }
   function vesselsForPort(port=state.port) {
-    const id=normalizedPortId(port);
-    if (id==='murmansk') return [VESSELS.nuclear];
-    if (id==='longyearbyen') return ['fishing','trawler','coastal','global','icebreaker'].map(id=>VESSELS[id]);
-    return [];
+    if (isRussianPort(port)) return [VESSELS.nuclear];
+    return ['fishing','trawler','coastal','global','icebreaker'].map(id=>VESSELS[id]);
   }
   function vesselForSaleHere(id,port=state.port) {
-    const portId=normalizedPortId(port);
-    if (id==='nuclear') return portId==='murmansk';
-    return portId==='longyearbyen' && ['fishing','trawler','coastal','global','icebreaker'].includes(id);
+    if (id==='nuclear') return isRussianPort(port);
+    return !isRussianPort(port)&&['fishing','trawler','coastal','global','icebreaker'].includes(id);
   }
   function vesselScienceTier(ship=vessel()) { return ship.slots.heavy>0?3:ship.slots.medium>0?2:1; }
   function equipmentPossibleOnShip(item,ship=vessel()) {
@@ -418,7 +448,7 @@
     if (devCareerOverride) return;
     const player=playerScientist();
     if (player?.career==='grad' && state.papers.length>=2 && state.citations>=100) {
-      player.career='postdoc'; recordScientist(player); promotionQueue.push({name:'Chief Scientist',career:'postdoc',papers:state.papers.length,missions:player.missions||0,message:'Congratulations, you finally earned your PhD degree! Two published papers and 100 citations have earned postdoc status. You may now hire postdocs (one per 100 citations), purchase medium-duty science systems, commission a coastal-class research vessel, relocate your expedition to ports around the Arctic, and receive much more sophisticated postdoc-level research programs.'}); addLog('Chief Scientist promoted to postdoc · coastal R/V and medium equipment unlocked.');
+      player.career='postdoc'; recordScientist(player); promotionQueue.push({name:'Chief Scientist',career:'postdoc',papers:state.papers.length,missions:player.missions||0,message:`Congratulations, you finally earned your PhD degree! You reached postdoc status with ${state.papers.length} published papers and ${Math.floor(state.citations)} citations. You may now hire postdocs (one per 100 citations), purchase medium-duty science systems, commission a coastal-class research vessel, relocate your expedition to ports around the Arctic, and receive much more sophisticated postdoc-level research programs.`}); addLog('Chief Scientist promoted to postdoc · coastal R/V and medium equipment unlocked.');
     }
     if (player?.career==='postdoc' && state.papers.length>=10 && state.citations>=1000) {
       player.career='professor'; recordScientist(player); promotionQueue.push({name:'Chief Scientist',career:'professor',papers:state.papers.length,missions:player.missions||0,message:'Ten published papers and 1,000 citations have earned professor status. Global research vessels, icebreakers and heavy equipment are unlocked. Professors lead the highest-complexity programs and can originate new grants while at sea.'}); addLog('Chief Scientist promoted to professor · global vessels, icebreakers and heavy equipment unlocked.');
@@ -506,6 +536,8 @@
   }
   function eligible(template, weather=null) {
     if (!hasSpecialty(template)) return false;
+    if (!missionFitsCurrentVessel(template)) return false;
+    if (!specialistRequirementsMet(template)) return false;
     if ((template.equipment || []).some(id => !equipmentOperational(id))) return false;
     if (state.scientists.length<missionMinCrew(template)) return false;
     if (template.weather && weather && template.weather !== weather.type) return false;
@@ -607,7 +639,7 @@
   }
   function researchDistanceWindow(template,kind,options={}) {
     if(options.nearby){const max=options.iceThickness>=2?70:90;return{min:10,max};}
-    const ranges={fishing:[5,48],trawler:[8,110],coastal:[18,260],global:[35,520],icebreaker:[55,880],nuclear:[70,1200]}, range=ranges[state.currentVessel]||ranges.fishing;
+    const ranges={fishing:[5,48],trawler:[10,125],coastal:[28,330],global:[65,700],icebreaker:[95,1050],nuclear:[125,1450]}, range=ranges[state.currentVessel]||ranges.fishing;
     const progress=clamp(state.completed.length/12,0,1),localMax=state.currentVessel==='fishing'?28+progress*34:state.currentVessel==='trawler'?55+progress*55:range[1];
     const min=template.minDistance??(kind==='opportunity'?Math.min(45,range[0]+15):range[0]);
     const requestedMax=min+(template.distanceRange??(kind==='opportunity'?range[1]*.45:range[1]-range[0]));
@@ -638,7 +670,8 @@
     return null;
   }
   function buildTarget(template, origin, rng, kind='grant', options={}) {
-    const scale=.88+rng()*.26, vesselScale=DATA_SCALE_BY_VESSEL[state.currentVessel]||3, crewScale=1+Math.min(.5,Math.max(0,state.scientists.length-1)*.03);
+    if(!missionFitsCurrentVessel(template))return null;
+    const scale=.88+rng()*.26, vesselScale=DATA_SCALE_BY_VESSEL[state.currentVessel]||3, crewScale=1+Math.min(.5,Math.max(0,state.scientists.length-1)*.03), rewardScale=vesselRewardScale();
     const window=researchDistanceWindow(template,kind,options);
     const validator=callbacks.isResearchSiteSuitable;
     const avoidPoints=[...state.targets,...state.offers,...(state.recentGrantSites||[])].filter(item=>item.status!=='completed');
@@ -673,13 +706,13 @@
       id:`${kind}-${template.id}-${Date.now()}-${Math.floor(rng()*1e6)}`,
       templateId:template.id, title:template.title, shortTitle:template.shortTitle, description:template.description,
       specialties:[...(template.specialties || [])], anyScientist:!!template.anyScientist,
-      equipment:[...(template.equipment || [])], consumables:[...(template.consumables || [])], minCrew:missionMinCrew(template),
+      equipment:[...(template.equipment || [])], consumables:[...(template.consumables || [])], minCrew:missionMinCrew(template), specialistRequirements:missionSpecialistRequirements(template),
       steps:[...(template.steps || [])], media:clone(template.media), lat:point.lat, lon:point.lon,
-      data:Math.max(1,Math.round(template.data*scale*vesselScale*crewScale*iceValueMultiplier)), reward:Math.round(template.reward*scale*(kind === 'opportunity' ? 1.6 : 2)*iceValueMultiplier),
+      data:Math.max(1,Math.round(template.data*scale*vesselScale*crewScale*iceValueMultiplier)), reward:Math.round(template.reward*scale*(kind === 'opportunity'||kind==='weather-opportunity' ? 1.6 : 2)*iceValueMultiplier*rewardScale),
       supplies:Math.max(1,Math.round(template.supplies*scale)), workHours:Math.max(4,Math.round(template.workHours*scale)),
       missionMode:template.missionMode || 'immediate', deploymentDays:template.deploymentDays || 0,
       recoveryAfterDays:template.recoveryAfterDays || 0, weather:template.weather || null,
-      anywhere:!!template.anywhere, stationDelivery:!!template.stationDelivery, berthReserve:template.berthReserve||0, shore:!!template.shore, glacier:!!template.glacier, terrestrial:!!template.terrestrial, fjordPreferred:!!template.fjordPreferred, siteName:point.siteName||null, iceValueMultiplier, status:'active', kind, selected:false,
+      anywhere:!!template.anywhere, stationDelivery:!!template.stationDelivery, berthReserve:template.berthReserve||0, shore:!!template.shore, glacier:!!template.glacier, terrestrial:!!template.terrestrial, fjordPreferred:!!template.fjordPreferred, siteName:point.siteName||null, iceValueMultiplier, status:'active', kind, selected:false, discoveredAtDay:state.elapsedDays, expiresAtDay:kind==='weather-opportunity'?state.elapsedDays+2.25:kind==='opportunity'?state.elapsedDays+3+rng()*2:null, weatherEventId:options.weatherEventId||null,
       sourcePortId:normalizedPortId(origin), recoveryTitle:template.recoveryTitle||null,recoveryShortTitle:template.recoveryShortTitle||null,
       recoveryDescription:template.recoveryDescription||null,recoveryAfterDaysByVessel:clone(template.recoveryAfterDaysByVessel||{}),
       consumablePerStation:clone(template.consumablePerStation||{})
@@ -726,13 +759,13 @@
   function generateOffers(port,{fresh=false}={}) {
     if(!port)return; const portId=normalizedPortId(port),cycle=`${portId}:${state.portVisits}`; if(!fresh&&state.grantOfferCycle===cycle)return; state.grantOfferCycle=cycle;
     const rng=seeded(`${portId}-${state.portVisits}-grants-v5`),activeTemplates=new Set(activeGrants().map(item=>item.templateId));
-    const available=TEMPLATES.filter(item=>!item.weather&&eligible(item)&&!activeTemplates.has(item.id)&&!(state.droppedGrantTemplates||[]).includes(item.id)&&(item.unlockAfter||0)<=state.completed.length&&(!item.onlyPorts||item.onlyPorts.includes(portId))&&(state.grantCooldowns?.[`${portId}:${item.id}`]||0)<=state.elapsedDays);
-    const teamLevel=Math.max(1,...state.scientists.map(item=>careerLevel(item.career))),postdocCount=state.scientists.filter(item=>item.career==='postdoc').length,professorCount=state.scientists.filter(item=>item.career==='professor').length,weighted=[];
+    const careerFloor=playerCareerLevel(),available=TEMPLATES.filter(item=>!item.weather&&(careerFloor<2||templateCareerLevel(item)>=careerFloor)&&eligible(item)&&!activeTemplates.has(item.id)&&!(state.droppedGrantTemplates||[]).includes(item.id)&&(item.unlockAfter||0)<=state.completed.length&&(!item.onlyPorts||item.onlyPorts.includes(portId))&&(state.grantCooldowns?.[`${portId}:${item.id}`]||0)<=state.elapsedDays);
+    const teamLevel=playerCareerLevel(),postdocCount=state.scientists.filter(item=>item.career==='postdoc').length,professorCount=state.scientists.filter(item=>item.career==='professor').length,weighted=[];
     for(const template of available){const level=templateCareerLevel(template);let weight=teamLevel===1?(level===1?7:1):teamLevel===2?(level===2?9:level===1?3:1):(level===3?11:level===2?4:2);if(level===2)weight+=postdocCount*3+professorCount*2;if(level===3)weight+=professorCount*4;if(template.fjordPreferred)weight+=2;for(let i=0;i<weight;i++)weighted.push(template);}
     for(let i=weighted.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[weighted[i],weighted[j]]=[weighted[j],weighted[i]];} const pool=[],seen=new Set(); for(const item of weighted)if(!seen.has(item.id)){seen.add(item.id);pool.push(item);}
     if(state.completed.length===0){const harbor=pool.find(item=>item.id==='harbor-soundings');if(harbor){pool.splice(pool.indexOf(harbor),1);pool.unshift(harbor);}}
     state.offers=[]; const specialtyCount=new Set(state.scientists.map(item=>item.specialty)).size,seniorBonus=hiredCareerCount('postdoc')+hiredCareerCount('professor')*2,offerLimit=Math.min(9,Math.max(3,2+specialtyCount+seniorBonus));
-    for(const template of pool){if(state.offers.length>=offerLimit)break;const target=buildTarget(template,port,rng,'grant');if(target)state.offers.push(target);} if(!state.offers.length){const fallback=buildTarget(compatibleFallbackTemplate(),port,rng,'grant');if(fallback)state.offers.push(fallback);}
+    for(const template of pool){if(state.offers.length>=offerLimit)break;const target=buildTarget(template,port,rng,'grant');if(target)state.offers.push(target);} if(!state.offers.length&&playerCareerLevel()<2){const fallback=buildTarget(compatibleFallbackTemplate(),port,rng,'grant');if(fallback)state.offers.push(fallback);}
   }
 
   function mediaMarkup(item, className='') {
@@ -781,10 +814,10 @@
     return'Open water';
   }
   function vesselCard(item) {
-    const active=state.currentVessel===item.id,unlocked=vesselMarketUnlock(item.id),forSale=vesselForSaleHere(item.id),preview=crewPreviewForVessel(item),gate=gateStatus(item,preview.kept),blockedAsset=deployedTradeAsset(),credit=vesselTradeInValue(),listPrice=vesselPurchasePrice(item),due=Math.max(0,listPrice-credit),grantBlocked=grantLoad()>Math.max(1,preview.kept.length),fuel=item.nuclearFuel?'REACTOR · ∞':formatCapacity(item.fuelCapacity,'L');
+    const active=state.currentVessel===item.id,unlocked=vesselMarketUnlock(item.id),forSale=vesselForSaleHere(item.id),preview=crewPreviewForVessel(item),gate=gateStatus(item,preview.kept),blockedAsset=deployedTradeAsset(),credit=vesselTradeInValue(),listPrice=vesselPurchasePrice(item),net=listPrice-credit,due=Math.max(0,net),refund=Math.max(0,-net),grantBlocked=grantLoad()>Math.max(1,preview.kept.length),fuel=item.nuclearFuel?'REACTOR · ∞':formatCapacity(item.fuelCapacity,'L');
     const careerNeed=item.id==='coastal'?'Postdoc Chief Scientist':(['global','icebreaker','nuclear'].includes(item.id)?'Professor Chief Scientist':'No career gate');
-    const checks=[{ok:active||unlocked,text:active?'Currently equipped vessel':unlocked?`${careerNeed} requirement met`:careerNeed},{ok:active||forSale,text:forSale?'Sold at this port':item.id==='nuclear'?'Sold only in Murmansk':'Conventional vessels sold in Longyearbyen'},{ok:active||!blockedAsset,text:blockedAsset?`Recover ${EQUIPMENT[blockedAsset]?.name||'deployed equipment'}`:'No deployed trade-blocking equipment'},{ok:active||gate.ready,text:gate.label},{ok:active||!grantBlocked,text:grantBlocked?'Reduce active grants before downsizing crew':'Active grants fit retained crew'},{ok:active||state.money>=due,text:`Cash after trade credit: need ${cash(due)}`}];
-    const disabled=active||checks.some(check=>!check.ok),image=item.image||'assets/vessels/base-vessel.png',reason=active?'EQUIPPED':disabled?'REQUIREMENTS NOT MET':`TRADE IN & COMMISSION · ${cash(due)}`,badge=active?'EQUIPPED':(listPrice?cash(listPrice):'STARTER VESSEL');
+    const checks=[{ok:active||unlocked,text:active?'Currently equipped vessel':unlocked?`${careerNeed} requirement met`:careerNeed},{ok:active||forSale,text:forSale?'Sold at this port':item.id==='nuclear'?'Sold in Russian Arctic ports':'Conventional vessels sold at non-Russian Arctic ports'},{ok:active||!blockedAsset,text:blockedAsset?`Recover ${EQUIPMENT[blockedAsset]?.name||'deployed equipment'}`:'No deployed trade-blocking equipment'},{ok:active||gate.ready,text:gate.label},{ok:active||!grantBlocked,text:grantBlocked?'Reduce active grants before downsizing crew':'Active grants fit retained crew'},{ok:active||state.money>=due,text:refund>0?`Trade credit exceeds list price · receive ${cash(refund)}`:`Cash after trade credit: need ${cash(due)}`}];
+    const disabled=active||checks.some(check=>!check.ok),image=item.image||'assets/vessels/base-vessel.png',reason=active?'EQUIPPED':disabled?'REQUIREMENTS NOT MET':refund>0?`TRADE IN & RECEIVE ${cash(refund)}`:`TRADE IN & COMMISSION · ${cash(due)}`,badge=active?'EQUIPPED':(listPrice?cash(listPrice):'STARTER VESSEL');
     return `<details class="arx-card arx-store-details ${active?'selected':''}" data-arx-store-details="vessel-${item.id}"><summary><span><b>${escapeHtml(item.shipName||item.name)}</b><small>${escapeHtml(item.name)} · ${item.className} · ${item.berths} BERTHS</small></span><em class="${disabled&&!active?'price-locked':''}">${badge}</em></summary><div class="arx-detail-split"><figure class="arx-media compact"><img src="${escapeHtml(image)}" alt="Side view of ${escapeHtml(item.shipName||item.name)}"></figure><div><p>${escapeHtml(item.description)}</p><ul class="arx-spec-list arx-vessel-specs"><li>${item.cruiseKnots} kn cruise · ${item.maxKnots} kn maximum</li><li>${escapeHtml(vesselIceCapabilityText(item))}</li><li>${fuel} fuel · ${item.foodEnduranceDays} d provisions</li><li>${item.helidecks} helideck${item.helidecks===1?'':'s'}</li><li>${slotSummary(item,{light:0,medium:0,heavy:0})}</li><li>${item.berths} total berths</li><li>List price ${cash(listPrice)} · current vessel trade credit ${cash(credit)}</li></ul><div class="arx-requirement-checklist">${checks.map(check=>`<div class="${check.ok?'ready':'missing'}"><i>${check.ok?'✓':'!'}</i><span>${escapeHtml(check.text)}</span></div>`).join('')}</div><button data-arx-action="vessel" data-id="${item.id}" ${disabled?'disabled':''}>${reason}</button></div></div></details>`;
   }
   function missionsForEquipment(id) {
@@ -815,11 +848,25 @@
     }
     return tiles.join('')||'<div class="arx-empty-slot full"><b>✓</b><span>ALL SCIENCE SLOTS OCCUPIED</span></div>';
   }
+  function equipmentCategory(item) {
+    const text=`${item?.id||''} ${item?.name||''} ${(item?.specialties||[]).join(' ')}`.toLowerCase();
+    if(item?.consumable)return 'Consumables & Sample Supplies';
+    if(/drone|aerostat|atmos|weather|radar|radiometer|lidar|starlink|satellite/.test(text))return 'Atmosphere, Remote Sensing & Communications';
+    if(/mooring|glider|float|auv|rov|autonomous|drifter/.test(text))return 'Autonomous Platforms & Moorings';
+    if(/plankton|fish|fisher|edna|biology|ecology|mammal|hydrophone|net/.test(text))return 'Biology & Ecology';
+    if(/ice|snow|sediment|core|magnet|geophys|seafloor/.test(text))return 'Sea Ice, Seafloor & Geophysics';
+    if(/ctd|adcp|xbt|winch|current|salin|echo|sonar|hydrograph|water/.test(text))return 'Oceanography & Hydrography';
+    return 'General Science Systems';
+  }
+  function categorizedEquipmentMarkup(items) {
+    const order=['Oceanography & Hydrography','Biology & Ecology','Sea Ice, Seafloor & Geophysics','Atmosphere, Remote Sensing & Communications','Autonomous Platforms & Moorings','Consumables & Sample Supplies','General Science Systems'],groups=new Map();
+    for(const item of items){const category=equipmentCategory(item);if(!groups.has(category))groups.set(category,[]);groups.get(category).push(item);}
+    return order.filter(category=>groups.has(category)).map(category=>`<section class="arx-equipment-category"><h3 style="margin-top:18px">${escapeHtml(category)}</h3><div class="arx-grid arx-store-list">${groups.get(category).map(equipmentCard).join('')}</div></section>`).join('');
+  }
   function equipmentCatalogMarkup(ship=vessel()) {
     const items=equipmentForVessel(ship), aboard=items.filter(item=>isInstalled(item.id)||(item.consumable&&(state.inventory[item.id]||0)>0)), available=items.filter(item=>!aboard.includes(item)), usage=slotUsage();
-    return `<div class="arx-slot-banner"><b>SCIENCE DECK</b><span>${slotSummary(ship,usage)} · helidecks ${helideckUsage()}/${ship.helidecks}</span><small>Trade-in value is 100% of purchase price, so swapping equipment is encouraged.</small></div><h3>Already aboard</h3><div class="arx-grid arx-store-list">${aboard.map(equipmentCard).join('')||'<div class="arx-empty"><b>No portable science equipment aboard.</b></div>'}</div><div class="arx-empty-slots">${emptySlotMarkup(ship)}</div><h3 style="margin-top:18px">Available for this vessel</h3><div class="arx-grid arx-store-list">${available.map(equipmentCard).join('')||'<div class="arx-empty"><b>No further compatible equipment at this port.</b></div>'}</div>`;
+    return `<div class="arx-slot-banner"><b>SCIENCE DECK</b><span>${slotSummary(ship,usage)} · helidecks ${helideckUsage()}/${ship.helidecks}</span><small>Trade-in value is 100% of purchase price, so swapping equipment is encouraged.</small></div><h3>Already aboard</h3><div class="arx-grid arx-store-list">${aboard.map(equipmentCard).join('')||'<div class="arx-empty"><b>No portable science equipment aboard.</b></div>'}</div><div class="arx-empty-slots">${emptySlotMarkup(ship)}</div><h3 style="margin-top:22px">Available equipment by category</h3>${categorizedEquipmentMarkup(available)||'<div class="arx-empty"><b>No further compatible equipment at this port.</b></div>'}`;
   }
-
   function missionFoodProjection(item) {
     const resources=callbacks.getResources?.()||{fuel:100,food:100}, hours=remainingWorkHours(item), days=effectiveDays(item,hours);
     const estimate=callbacks.estimateMissionResources?.(item,{workDays:days,workHours:hours})||{};
@@ -828,9 +875,11 @@
     return {days,remaining,fuelRemaining,travelDays:estimate.travelDays||0,returnKm:estimate.returnKm||0};
   }
   function missionReadiness(target) {
-    const projection=missionFoodProjection(target), rows=[];
+    const projection=missionFoodProjection(target), rows=[],player=playerScientist();
     const teamReady=hasSpecialty(target);
-    rows.push({label:'Qualified science team',ready:teamReady,detail:target.anyScientist?'Any scientist aboard':target.specialties.map(id=>specialtyById[id]?.name||id).join(' / ')});
+    rows.push({label:'Qualified science team',ready:teamReady,detail:target.anyScientist?`${player?.name||'You'} · Chief Scientist qualifies`:target.specialties.map(id=>specialtyById[id]?.name||id).join(' / ')});
+    const requirements=missionSpecialistRequirements(target);
+    if(requirements.length){const assignment=specialistAssignment(target),names=requirements.map(requirement=>`${CAREERS[requirement.minCareer]?.name||requirement.minCareer}: ${(requirement.specialties||[]).map(id=>specialtyById[id]?.name||id).join(' / ')}`);rows.push({label:`Interdisciplinary specialists · ${requirements.length}`,ready:assignment.missing===0,detail:assignment.missing?`${assignment.missing} specialist position${assignment.missing===1?'':'s'} still missing · ${names.join(' + ')}`:names.join(' + ')});}
     const minCrew=target.minCrew||missionMinCrew(target);
     rows.push({label:'Minimum expedition team',ready:state.scientists.length>=minCrew,detail:`${state.scientists.length} aboard · ${minCrew} required`});
     if (target.berthReserve) {
@@ -841,14 +890,8 @@
       const item=EQUIPMENT[id], ready=equipmentOperational(id);
       rows.push({label:item?.name||id,ready,detail:ready?'Aboard and operable':isInstalled(id)||state.inventory[id]?'Aboard, but the required operator or support system is missing':'Not aboard'});
     }
-    for (const id of target.consumables||[]) {
-      const needed=remainingConsumableNeed(target,id), aboard=state.inventory[id]||0;
-      rows.push({label:EQUIPMENT[id]?.name||id,ready:aboard>=needed,detail:`${aboard} aboard · ${needed} needed for remaining stations`});
-    }
-    const supplies=remainingSupplies(target);
-    rows.push({label:'Lab supplies',ready:state.supplies>=supplies,detail:`${state.supplies} aboard · ${supplies} needed`});
-    rows.push({label:'Food through the work and return',ready:projection.remaining>=15,detail:`Projected ${Math.max(0,Math.floor(projection.remaining))}% on return`});
-    if (!vessel().nuclearFuel) rows.push({label:'Fuel through the work and return',ready:projection.fuelRemaining>=10,detail:`Projected ${Math.max(0,Math.floor(projection.fuelRemaining))}% on return`});
+    rows.push({label:'Food reserve',ready:projection.remaining>=5,detail:`Projected ${Math.round(projection.remaining)}% after mission`});
+    if(!vessel().nuclearFuel)rows.push({label:'Fuel reserve',ready:projection.fuelRemaining>=3,detail:`Projected ${Math.round(projection.fuelRemaining)}% after mission`});
     return {ready:rows.every(row=>row.ready),rows,projection};
   }
   function readinessMarkup(readiness) {
@@ -869,7 +912,7 @@
     return `<article class="arx-card grant"><div class="arx-card-head"><div><b>${escapeHtml(item.title)}</b><small>INSTRUMENT COLLECTING · RETURN VISIT PENDING</small></div><em>${Math.max(0,Math.ceil(item.remainingDays||0))} d</em></div><p>Autonomous observations are underway. This research grant continues to occupy one scientist-led grant slot until recovery.</p><button disabled>RECOVERY WINDOW NOT OPEN YET</button></article>`;
   }
 
-  function relocationPorts() { return (callbacks.getRelocationPorts?.()||[]).map(item=>({...item,id:item.id||slug(item.name)})); }
+  function relocationPorts(force=false) { const key=`${state.currentVessel}:${Math.floor((state.elapsedDays||0)*2)}`;if(!force&&relocationPortCache.key===key)return relocationPortCache.ports;const ports=(callbacks.getRelocationPorts?.()||[]).map(item=>({...item,id:item.id||slug(item.name)}));relocationPortCache={key,ports};return ports; }
   function emergencyRelocationAllowed() {
     if(playerCareerLevel()>=2||['icebreaker','nuclear'].includes(state.currentVessel))return false;
     const currentId=normalizedPortId(state.port),current=relocationPorts().find(item=>item.id===currentId);
@@ -888,6 +931,7 @@
     if (port.frozen&&port.relocationAvailable===false) { toast(`${port.name.toUpperCase()} · PORT CURRENTLY FROZEN IN`); return; }
     if (state.money<RELOCATION_COST) { toast(`RELOCATION REQUIRES ${cash(RELOCATION_COST)}`); return; }
     const oldMoney=state.money; adjustMoney(-RELOCATION_COST); state.homePortId=id;
+    closePort(); relocationPortCache={key:null,ports:[]};
     const moved=callbacks.relocateToPort?.(id);
     if (!moved) { state.money=oldMoney; cashAnimation={from:oldMoney-RELOCATION_COST,to:oldMoney}; toast('RELOCATION FAILED · PORT APPROACH UNAVAILABLE'); changed(); return; }
     addLog(`Home port relocated to ${port.name}, ${port.country||'Arctic'} · ${cash(RELOCATION_COST)}.`);
@@ -951,7 +995,7 @@
     const modal=root.querySelector('#arx-port-modal'), resources=callbacks.getResources?.()||{fuel:100,food:100}, ship=vessel(), quote=resupplyAllQuote(resources,ship), usage=slotUsage();
     const tab=(id,label,attention=false)=>`<button data-arx-tab="${id}" class="${activePortTab===id?'active':''} ${attention?'attention':''}">${label}</button>`, panel=id=>`arx-tab ${activePortTab===id?'active':''}`;
     const collecting=(state.deployments||[]).filter(item=>item.originalKind==='grant'&&item.status==='collecting'), grantAttention=state.offers.length>0&&grantLoad()<grantCapacity();
-    modal.innerHTML=`<div class="arx-modal-card arx-port-card"><button class="arx-close" data-arx-action="close-port" aria-label="Close port">×</button><header><small>PORT CALL · ${escapeHtml(state.port?.name||'ARCTIC PORT')}</small><h2>Expedition Services</h2></header><div class="arx-port-navrow"><nav class="arx-tabs arx-tabs-top">${tab('vessel','Your Vessel')}${tab('fleet','Shipyard')}${tab('crew','Scientists')}${tab('equipment','Equipment')}${tab('contracts','Research Grants',grantAttention)}${relocationUnlocked()?tab('relocate','Relocate Home Port'):''}</nav><div class="arx-port-cash"><span><small>CASH</small><b data-arx-cash>${cash(state.money)}</b></span><button data-arx-action="open-private-funding">APPLY FOR PRIVATE FUNDING</button></div></div>${state.bridgeSupportNotice?`<div class="arx-bridge-support"><b>UNIVERSITY BRIDGE SUPPORT</b><span>${escapeHtml(state.bridgeSupportNotice)}</span></div>`:''}<section class="${panel('vessel')}" data-arx-panel="vessel">${portVesselDashboardMarkup(resources,ship,quote)}</section><section class="${panel('fleet')}" data-arx-panel="fleet"><h3>${normalizedPortId()==='murmansk'?'Murmansk Nuclear Shipyard':normalizedPortId()==='longyearbyen'?'Longyearbyen Vessel Broker':'No vessel dealer at this port'}</h3><p class="arx-help">Every vessel class sold here is displayed from the start. Red prices and the requirement checklist show what still stands between you and the next hull.</p><div class="arx-grid arx-store-list">${vesselsForPort().map(vesselCard).join('')||'<div class="arx-empty"><b>No vessels sold at this port.</b></div>'}</div></section><section class="${panel('crew')}" data-arx-panel="crew"><p class="arx-help">Salaries are deducted daily for everyone aboard, including you. Released scientists remain available to rehire during the same port call.</p><div class="arx-vessel-columns"><section><h3>Available to hire</h3><div class="arx-grid arx-store-list">${state.candidates.map(item=>scientistCard(item,true)).join('')||'<div class="arx-empty"><b>No new candidates at this port.</b></div>'}</div></section><section><h3>Current crew · ${state.scientists.length}/${ship.berths}</h3><div class="arx-grid arx-store-list">${state.scientists.map(item=>scientistCard(item)).join('')}</div></section></div></section><section class="${panel('equipment')}" data-arx-panel="equipment"><h3>Scientific instrumentation for ${escapeHtml(ship.shipName||ship.name)}</h3><p class="arx-help">${slotSummary(ship,usage)} · helidecks ${helideckUsage()}/${ship.helidecks}. Equipment that loses its qualified operator is marked in red until the team is restored.</p>${equipmentCatalogMarkup(ship)}</section><section class="${panel('contracts')}" data-arx-panel="contracts"><h3>Active research grants · ${grantLoad()}/${grantCapacity()}</h3><p class="arx-help">More scientific specialties aboard produce a broader grant board. A different port always has its own fresh market; only return visits to the same port use cooldowns. Ice-capable expeditions receive strong sponsor premiums for work in thicker pack ice.</p><div class="arx-grid">${[...activeGrants().map(activeGrantCard),...collecting.map(collectingGrantCard)].join('')||'<div class="arx-empty"><b>No active research grants.</b></div>'}</div><h3>New grant offers</h3><div class="arx-grid">${state.offers.map(offerCard).join('')||'<div class="arx-empty"><b>Building a compatible sponsor call…</b><p>The grant board always provides at least one program that matches the expertise aboard.</p></div>'}</div></section>${relocationUnlocked()?`<section class="${panel('relocate')}" data-arx-panel="relocate"><h3>Relocate home port</h3>${relocationPanelMarkup()}</section>`:''}</div>`;
+    modal.innerHTML=`<div class="arx-modal-card arx-port-card"><button class="arx-close" data-arx-action="close-port" aria-label="Close port">×</button><header><small>PORT CALL · ${escapeHtml(state.port?.name||'ARCTIC PORT')}</small><h2>Expedition Services</h2></header><div class="arx-port-navrow"><nav class="arx-tabs arx-tabs-top">${tab('vessel','Your Vessel')}${tab('fleet','Shipyard')}${tab('crew','Scientists')}${tab('equipment','Equipment')}${tab('contracts','Research Grants',grantAttention)}${relocationUnlocked()?tab('relocate','Relocate Home Port'):''}</nav><div class="arx-port-cash"><span><small>CASH</small><b data-arx-cash>${cash(state.money)}</b></span><button data-arx-action="open-private-funding">APPLY FOR PRIVATE FUNDING</button></div></div>${state.bridgeSupportNotice?`<div class="arx-bridge-support"><b>UNIVERSITY BRIDGE SUPPORT</b><span>${escapeHtml(state.bridgeSupportNotice)}</span></div>`:''}<section class="${panel('vessel')}" data-arx-panel="vessel">${portVesselDashboardMarkup(resources,ship,quote)}</section><section class="${panel('fleet')}" data-arx-panel="fleet"><h3>${isRussianPort()?'Russian Nuclear Shipyard':normalizedPortId()==='longyearbyen'?'Longyearbyen Vessel Broker':'Arctic Vessel Broker'}</h3><p class="arx-help">Every vessel class sold here is displayed from the start. Red prices and the requirement checklist show what still stands between you and the next hull.</p><div class="arx-grid arx-store-list">${vesselsForPort().map(vesselCard).join('')||'<div class="arx-empty"><b>No vessels sold at this port.</b></div>'}</div></section><section class="${panel('crew')}" data-arx-panel="crew"><p class="arx-help">Salaries are deducted daily for everyone aboard, including you. Released scientists remain available to rehire during the same port call.</p><div class="arx-vessel-columns"><section><h3>Available to hire</h3><div class="arx-grid arx-store-list">${state.candidates.map(item=>scientistCard(item,true)).join('')||'<div class="arx-empty"><b>No new candidates at this port.</b></div>'}</div></section><section><h3>Current crew · ${state.scientists.length}/${ship.berths}</h3><div class="arx-grid arx-store-list">${state.scientists.map(item=>scientistCard(item)).join('')}</div></section></div></section><section class="${panel('equipment')}" data-arx-panel="equipment"><h3>Scientific instrumentation for ${escapeHtml(ship.shipName||ship.name)}</h3><p class="arx-help">${slotSummary(ship,usage)} · helidecks ${helideckUsage()}/${ship.helidecks}. Equipment that loses its qualified operator is marked in red until the team is restored.</p>${equipmentCatalogMarkup(ship)}</section><section class="${panel('contracts')}" data-arx-panel="contracts"><h3>Active research grants · ${grantLoad()}/${grantCapacity()}</h3><p class="arx-help">More scientific specialties aboard produce a broader grant board. A different port always has its own fresh market; only return visits to the same port use cooldowns. Ice-capable expeditions receive strong sponsor premiums for work in thicker pack ice.</p><div class="arx-grid">${[...activeGrants().map(activeGrantCard),...collecting.map(collectingGrantCard)].join('')||'<div class="arx-empty"><b>No active research grants.</b></div>'}</div><h3>New grant offers</h3><div class="arx-grid">${state.offers.map(offerCard).join('')||'<div class="arx-empty"><b>Building a compatible sponsor call…</b><p>The grant board always provides at least one program that matches the expertise aboard.</p></div>'}</div></section>${relocationUnlocked()?`<section class="${panel('relocate')}" data-arx-panel="relocate"><h3>Relocate home port</h3>${relocationPanelMarkup()}</section>`:''}</div>`;
     modal.classList.add('open'); portOpen=true;
     const card=modal.querySelector('.arx-port-card'), tabs=card.querySelector('.arx-tabs'); card.scrollTop=portScrollTop; tabs.scrollLeft=portTabsScrollLeft;
     const detail=openStoreDetail&&card.querySelector(`[data-arx-store-details="${openStoreDetail}"]`); if (detail) detail.open=true;
@@ -1035,9 +1079,11 @@
     modal.classList.add('open');
   }
   function participantIdsFor(target) {
-    const requiredLevel=Math.max(1,...[...(target.equipment||[]),...(target.consumables||[])].map(id=>EQUIPMENT[id]?.tier||1));
-    if (target.anyScientist) return state.scientists.filter(item=>careerLevel(item.career)>=Math.min(requiredLevel,1)).map(item=>item.id);
-    return state.scientists.filter(item=>(target.specialties||[]).includes(item.specialty)&&careerLevel(item.career)>=requiredLevel).map(item=>item.id);
+    const player=playerScientist(),requiredLevel=templateCareerLevel(target);if(target?.anyScientist)return player?[player.id]:[];
+    const specialistIds=specialistAssignment(target).ids||[],ids=[...specialistIds];
+    const candidates=state.scientists.filter(item=>(target.specialties||[]).includes(item.specialty)&&careerLevel(item.career)>=requiredLevel).sort((a,b)=>careerLevel(b.career)-careerLevel(a.career));
+    for(const item of candidates)if(!ids.includes(item.id))ids.push(item.id);
+    return ids.length?ids:(player?[player.id]:[]);
   }
   function creditSpecialtyMission(target,participantIds) {
     if (!(target.specialties||[]).length) return;
@@ -1176,13 +1222,15 @@
   }
   function templateSupportedByVessel(template) {
     if (template.transect&&stationCountFor(template)<2) return false;
+    if (!missionFitsCurrentVessel(template)) return false;
     return (template.equipment||[]).every(id=>equipmentPossibleOnShip(EQUIPMENT[id],vessel()));
   }
   function teamCouldDoWithEquipment(template) {
     return hasSpecialty(template)&&templateSupportedByVessel(template)&&!eligible(template)&&(template.equipment||[]).some(id=>!equipmentOperational(id));
   }
   function teamCouldDoWithMoreCrew(template) {
-    return hasSpecialty(template)&&templateSupportedByVessel(template)&&(template.equipment||[]).every(id=>equipmentOperational(id))&&state.scientists.length<missionMinCrew(template);
+    const specialistGap=specialistAssignment(template).missing;
+    return hasSpecialty(template)&&templateSupportedByVessel(template)&&(template.equipment||[]).every(id=>equipmentOperational(id))&&((state.scientists.length<missionMinCrew(template))||(specialistGap>0&&specialistGap<=1));
   }
   function maybeOfferProfessorGrant(environment={}) {
     const professorCount=state.scientists.filter(item=>item.career==='professor').length,cooldown=Math.max(1.5,6/professorCount);if(!professorCount||state.port||state.remoteOffer||grantLoad()>=grantCapacity()||state.elapsedDays-(state.lastProfessorGrantDay||-999)<cooldown)return false;
@@ -1194,27 +1242,27 @@
     if (maybeOfferProfessorGrant(payload)) return null;
     const weather=payload.weather;
     if (weather?.type && weather.type!=='clear' && weather.eventId && !state.weatherEventsSeen.includes(weather.eventId)) {
-      const weatherTemplates=TEMPLATES.filter(item=>item.weather===weather.type), basic=weatherTemplates.find(item=>item.anyScientist), advanced=weatherTemplates.filter(item=>!item.anyScientist&&eligible(item,weather));
+      const careerFloor=playerCareerLevel(),weatherTemplates=TEMPLATES.filter(item=>item.weather===weather.type&&(careerFloor<2||templateCareerLevel(item)>=careerFloor)&&templateSupportedByVessel(item)), basic=careerFloor<2?weatherTemplates.find(item=>item.anyScientist):null, advanced=weatherTemplates.filter(item=>!item.anyScientist&&eligible(item,weather));
       const spawned=[];
       for (const template of [basic,advanced[0]].filter(Boolean)) {
-        const rng=seeded(`${weather.eventId}-${template.id}`), target=buildTarget(template,payload.position,rng,'weather-opportunity');
-        if (target) { target.selected=spawned.length===0; state.targets.push(target); spawned.push(target); }
+        const rng=seeded(`${weather.eventId}-${template.id}`), target=buildTarget(template,payload.position,rng,'weather-opportunity',{weatherEventId:weather.eventId});
+        if (target) { target.selected=false; state.targets.push(target); spawned.push(target); }
       }
       state.weatherEventsSeen.push(weather.eventId);
       if (spawned.length) { toast(`WEATHER RESEARCH AVAILABLE · ${spawned.map(item=>item.shortTitle).join(' + ')}`); changed(); return spawned[0]; }
       return null;
     }
     const coastal=payload.fjord||payload.fjordScore>.38||payload.coastal||payload.coastDistanceKm<30,iceEdge=!!payload.iceEdge||payload.ice==='marginal'||payload.ice==='fast',iceThickness=Math.max(0,Number(payload.iceThickness)||0),deepIce=payload.ice==='packed'||payload.ice==='cracked'||payload.ice==='fast',inIce=iceEdge||deepIce,teamLevel=Math.max(1,...state.scientists.map(item=>careerLevel(item.career))),postdocCount=state.scientists.filter(item=>item.career==='postdoc').length,professorCount=state.scientists.filter(item=>item.career==='professor').length;
-    const opportunityCap=inIce?12:8;if(state.targets.filter(item=>item.kind==='opportunity'||item.kind==='weather-opportunity').length>=opportunityCap)return null;
+    const opportunityCap=4;if(state.targets.filter(item=>item.kind==='opportunity'||item.kind==='weather-opportunity').length>=opportunityCap)return null;
     const rng=seeded(`${payload.position.lat.toFixed(2)}-${payload.position.lon.toFixed(2)}-${state.portVisits}-${state.completed.length}-${Math.floor(state.elapsedDays*4)}`),recent=new Set(state.recentGrantTemplates||[]),unlockCredit=teamLevel>=3?8:teamLevel>=2?3:0;
-    let possible=TEMPLATES.filter(item=>!item.weather&&templateSupportedByVessel(item)&&(item.unlockAfter||0)<=state.completed.length+unlockCredit&&!recent.has(item.id));
+    let possible=TEMPLATES.filter(item=>!item.weather&&templateSupportedByVessel(item)&&(playerCareerLevel()<2||templateCareerLevel(item)>=playerCareerLevel())&&(item.unlockAfter||0)<=state.completed.length+unlockCredit&&!recent.has(item.id));
     if(inIce){const icePossible=possible.filter(item=>item.iceAllowed);if(icePossible.length)possible=icePossible;}if(!possible.length)return null;
     const weighted=possible.flatMap(template=>{let weight=1,level=templateCareerLevel(template);if(coastal&&(template.coastal||template.fjordPreferred||template.tier==='local'))weight+=payload.fjord?14:7;if(iceEdge&&template.iceAllowed)weight+=18;if(deepIce&&template.iceAllowed)weight+=30+iceThickness*18;if(inIce&&!template.iceAllowed)weight=1;if(teamLevel===2)weight+=level===2?18:level===1?2:0;if(teamLevel>=3)weight+=level===3?42:level===2?12:1;if(level===2)weight+=postdocCount*4+professorCount*3;if(level===3)weight+=professorCount*12;if(payload.ramming&&template.iceAllowed)weight+=25;if(!coastal&&template.tier!=='local')weight+=2;return Array(Math.max(1,Math.round(weight))).fill(template);});
     const ready=weighted.filter(item=>eligible(item)), aspirational=weighted.filter(item=>teamCouldDoWithEquipment(item)||teamCouldDoWithMoreCrew(item)), otherMissing=weighted.filter(item=>!eligible(item));
     let pool;
     if (aspirational.length&&rng()<.48) pool=aspirational; else if (ready.length) pool=ready; else pool=aspirational.length?aspirational:otherMissing;
     const template=pool[Math.floor(rng()*pool.length)],target=buildTarget(template,payload.position,rng,'opportunity',{nearby:inIce,iceThickness}); if (!target) return null;
-    if(!state.targets.some(item=>item.selected))target.selected=true;
+    target.selected=false;
     state.targets.push(target); toast(`NEW RESEARCH OPPORTUNITY · ${target.shortTitle}`); changed(); return target;
   }
 
@@ -1252,7 +1300,7 @@
     const individualId=String(context.individualId||context.id||`${key}:${Number(context.lat||0).toFixed(3)}:${Number(context.lon||0).toFixed(3)}`);
     const firstSpecies=!state.observed.includes(key), firstIndividual=!state.observedIndividuals.includes(individualId);
     if (firstSpecies) state.observed.push(key);
-    if (firstIndividual) { state.observedIndividuals.push(individualId); addData(2); addLog(`${item.displayName} observation archived · +2 data.`); }
+    if (firstIndividual) { const wildlifeData=wildlifeObservationData(); state.observedIndividuals.push(individualId); addData(wildlifeData); addLog(`${item.displayName} observation archived · +${wildlifeData} data.`); }
     const progress=groupProgress(item.group);
     if (progress.complete&&!state.claimedGroups.includes(item.group)) {
       state.claimedGroups.push(item.group); adjustMoney(GROUP_REWARDS[item.group]||30000); state.citations+=5;
@@ -1261,7 +1309,7 @@
     }
     const tone=item.photoTone==='dark'?'dark':'';
     const modal=root.querySelector('#arx-wildlife-modal');
-    modal.innerHTML=`<div class="arx-modal-card arx-wildlife-card"><button class="arx-close" data-arx-action="close-wildlife">×</button><div class="arx-photo ${item.photoFit==='contain'?'contain':''} ${tone}"><img src="${escapeHtml(item.photo)}" alt="${escapeHtml(item.displayName)}"><span>${firstIndividual?'OBSERVATION ARCHIVED · +2 DATA':'THIS INDIVIDUAL ALREADY OBSERVED · +0 DATA'}</span></div><div class="arx-species"><small>${escapeHtml(item.group)} · ${progress.seen}/${progress.total}</small><h2>${escapeHtml(item.displayName)}</h2><em>${escapeHtml(item.scientificName)}</em><p class="arx-observation-note">${firstIndividual?'A new individual observation added exactly 2 data points. Its glowing chart ring is now cleared.':'This is the same animal or school already recorded during this expedition, so no additional data were added.'}</p><ul>${item.facts.map(fact=>`<li>${escapeHtml(fact)}</li>`).join('')}</ul><a href="${escapeHtml(item.source)}" target="_blank" rel="noopener">${escapeHtml(item.credit)}</a><div class="arx-modal-actions"><button data-arx-action="field-guide">OPEN FIELD GUIDE</button><button class="ghost" data-arx-action="close-wildlife">DISMISS</button></div></div></div>`;
+    modal.innerHTML=`<div class="arx-modal-card arx-wildlife-card"><button class="arx-close" data-arx-action="close-wildlife">×</button><div class="arx-photo ${item.photoFit==='contain'?'contain':''} ${tone}"><img src="${escapeHtml(item.photo)}" alt="${escapeHtml(item.displayName)}"><span>${firstIndividual?`OBSERVATION ARCHIVED · +${wildlifeObservationData()} DATA`:'THIS INDIVIDUAL ALREADY OBSERVED · +0 DATA'}</span></div><div class="arx-species"><small>${escapeHtml(item.group)} · ${progress.seen}/${progress.total}</small><h2>${escapeHtml(item.displayName)}</h2><em>${escapeHtml(item.scientificName)}</em><p class="arx-observation-note">${firstIndividual?`A new individual observation added ${wildlifeObservationData()} data points. Its glowing chart ring is now cleared.`:'This is the same animal or school already recorded during this expedition, so no additional data were added.'}</p><ul>${item.facts.map(fact=>`<li>${escapeHtml(fact)}</li>`).join('')}</ul><a href="${escapeHtml(item.source)}" target="_blank" rel="noopener">${escapeHtml(item.credit)}</a><div class="arx-modal-actions"><button data-arx-action="field-guide">OPEN FIELD GUIDE</button><button class="ghost" data-arx-action="close-wildlife">DISMISS</button></div></div></div>`;
     modal.classList.add('open'); changed();
   }
   function openFieldGuide() {
@@ -1288,6 +1336,9 @@
     if (!Number.isFinite(days)||days<=0) return;
     state.elapsedDays=(Number(state.elapsedDays)||0)+days;
     state.recentGrantSites=(state.recentGrantSites||[]).filter(site=>state.elapsedDays-(site.day||0)<90).slice(0,18);
+    const activeWeather=environment?.weather||null,expiredOpportunityIds=new Set();
+    state.targets=state.targets.filter(target=>{if(target.kind!=='opportunity'&&target.kind!=='weather-opportunity')return true;const timedOut=Number.isFinite(target.expiresAtDay)&&state.elapsedDays>=target.expiresAtDay,weatherGone=target.kind==='weather-opportunity'&&activeWeather&&(activeWeather.type==='clear'||(target.weatherEventId&&activeWeather.eventId!==target.weatherEventId));if(timedOut||weatherGone){expiredOpportunityIds.add(target.id);return false;}return true;});
+    if(state.navigation?.id&&expiredOpportunityIds.has(state.navigation.id))state.navigation=null;
     const cooldownBefore=Math.ceil(state.publicationCooldown), citationsBefore=Math.floor(state.citations), moneyBefore=Math.round(state.money);
     const total=state.economyDays+days, billable=Math.floor(total+1e-9); state.economyDays=total-billable;
     state.publicationCooldown=Math.max(0,state.publicationCooldown-days);
@@ -1646,7 +1697,7 @@
   }
   function getMapTargets() { return state.targets.map(item=>({...item,mapEligible:eligible(item,item.weather?{type:item.weather}:null)})); }
   function resetWildlifeObservations(ids=[]) { const clear=new Set(ids.map(String)); state.observedIndividuals=(state.observedIndividuals||[]).filter(id=>!clear.has(String(id))); callbacks.onStateChange?.(); }
-  function selectTarget(id) { state.targets.forEach(item=>item.selected=item.id===id); renderSidebar(); }
+  function selectTarget(id) { const chosen=state.targets.find(item=>item.id===id),random=chosen&&(chosen.kind==='opportunity'||chosen.kind==='weather-opportunity');state.targets.forEach(item=>{const isRandom=item.kind==='opportunity'||item.kind==='weather-opportunity';if(random){if(isRandom)item.selected=item.id===id;}else item.selected=item.id===id;}); renderSidebar(); }
   function getState() { return clone(state); }
   function createCheckpoint() { return getState(); }
   function restoreCheckpoint(snapshot) {
