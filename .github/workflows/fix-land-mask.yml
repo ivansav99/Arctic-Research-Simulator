@@ -1,0 +1,35 @@
+name: Fix navigation land mask
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-land-mask.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-land-mask:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preserve coastline land in detailed terrain mask
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('game.js')
+          text = path.read_text()
+          old = "const isLand=(x,y)=>{const raster=terrainRasterLandAt(x,y);return raster==null?polygonIsLand(x,y):raster;};"
+          new = "const isLand=(x,y)=>polygonIsLand(x,y)||terrainRasterLandAt(x,y)===true;"
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'Expected exactly one isLand expression, found {count}')
+          path.write_text(text.replace(old, new))
+      - name: Commit correction
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add game.js
+          git commit -m "Keep coastline land in navigation mask"
+          git push
