@@ -10,16 +10,12 @@ struct ContentView: View {
 }
 
 struct GameWebView: UIViewRepresentable {
-    // The native shell intentionally loads the same GitHub Pages build as the
-    // website. Keeping one web codebase prevents the iOS test app from drifting
-    // away from the browser version while the simulator is still evolving.
     static let gameURL = URL(string: "https://ivansav99.github.io/Arctic-Research-Simulator/?app=ios")!
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
-        // Keep the persistent store so browser saves survive app launches.
         configuration.websiteDataStore = .default()
         configuration.defaultWebpagePreferences.preferredContentMode = .mobile
 
@@ -41,11 +37,7 @@ struct GameWebView: UIViewRepresentable {
         webView.allowsBackForwardNavigationGestures = false
         if #available(iOS 16.4, *) { webView.isInspectable = true }
 
-        // Always revalidate the live page on launch instead of allowing a stale
-        // WKWebView document cache to make the app appear one release behind.
-        var request = URLRequest(url: Self.gameURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 30)
-        request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
-        request.setValue("no-cache", forHTTPHeaderField: "Pragma")
+        let request = URLRequest(url: Self.gameURL, cachePolicy: .reloadRevalidatingCacheData, timeoutInterval: 30)
         webView.load(request)
         return webView
     }
