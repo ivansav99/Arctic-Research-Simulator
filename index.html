@@ -11,7 +11,7 @@
   <meta name="ar-posthog-token" content="phc_rYfM85otBymrrrWNRiBSL3zdTavrripB2vt584ZNV7NM">
   <meta name="ar-posthog-host" content="https://us.i.posthog.com">
   <title>Arctic Research</title>
-  <link rel="stylesheet" href="style.css?v=expedition-22k-mobile">
+  <link rel="stylesheet" href="style.css?v=expedition-22m-phone2">
 </head>
 <body>
   <main id="game" aria-label="Arctic Research navigation map">
@@ -40,7 +40,17 @@
     <div class="time-controls hud" aria-label="Current calendar speed">
       <label>TIME</label><output id="time-speed">×1</output>
     </div>
-    <aside class="minimap hud" aria-label="Overview map showing vessel position"><div><small>ARCTIC OVERVIEW</small><b id="mini-location">SVALBARD</b></div><canvas id="minimap" width="300" height="300"></canvas></aside>
+    <aside id="minimap-panel" class="minimap hud" aria-label="Navigation overview map">
+      <button id="minimap-close" class="minimap-close" type="button" aria-label="Close navigation chart">×</button>
+      <div class="minimap-heading"><small>NAVIGATION CHART</small><b id="mini-location">SVALBARD</b></div>
+      <canvas id="minimap" width="300" height="300" aria-label="Open navigation chart"></canvas>
+      <div class="minimap-nav-details">
+        <span><small>POSITION</small><b id="mini-position">—</b></span>
+        <span><small>COURSE</small><b id="mini-course">STOPPED</b></span>
+        <span><small>SEA ICE</small><b id="mini-ice">OPEN WATER</b></span>
+        <span><small>WEATHER</small><b id="mini-weather">CLEAR</b></span>
+      </div>
+    </aside>
     <div class="scale" aria-hidden="true"><i></i><span id="scale-distance">15 km</span></div>
     <section id="welcome" class="welcome title-screen hud" aria-live="polite">
       <div id="title-main" class="title-pane">
@@ -53,7 +63,6 @@
           <button id="save-button" class="secondary hidden" type="button">SAVE GAME</button>
           <button id="load-button" class="secondary" type="button">LOAD GAME</button>
           <button id="how-button" class="secondary" type="button">HOW TO PLAY</button>
-          <button id="resume-button" class="secondary hidden" type="button">RETURN TO EXPEDITION</button>
         </div>
         <p id="continue-summary" class="save-summary"></p>
       </div>
@@ -96,8 +105,8 @@
   <script src="river-data.js"></script>
   <script src="wildlife-data.js?v=expedition-22c-visuals"></script>
   <script src="visual-assets-data.js?v=expedition-22c-visuals"></script>
-  <script src="expedition.js?v=expedition-22j-progression"></script>
+  <script src="expedition.js?v=expedition-22m-phone2"></script>
   <script src="sprite-atlas-data.js?v=expedition-22c-visuals"></script>
-  <script src="game.js?v=expedition-22k-mobile"></script>
+  <script src="game.js?v=expedition-22m-phone2"></script>
 </body>
 </html>
