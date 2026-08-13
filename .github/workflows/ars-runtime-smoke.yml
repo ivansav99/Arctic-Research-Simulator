@@ -1,0 +1,39 @@
+name: ARS runtime smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ars-runtime-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Launch local game and inspect browser errors
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8123 >/tmp/ars-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          sleep 1
+          CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)
+          test -n "$CHROME"
+          set +e
+          "$CHROME" --headless=new --no-sandbox --disable-gpu --enable-logging=stderr --v=0 --virtual-time-budget=6000 --dump-dom http://127.0.0.1:8123/ >/tmp/ars-dom.html 2>/tmp/ars-chrome.log
+          STATUS=$?
+          set -e
+          cat /tmp/ars-chrome.log
+          echo '--- DOM markers ---'
+          grep -E 'ARCTIC RESEARCH|Navigation overview map|CONTINUE EXPEDITION' /tmp/ars-dom.html | head -20 || true
+          if grep -Ei 'Uncaught|ReferenceError|TypeError|SyntaxError' /tmp/ars-chrome.log; then
+            echo 'Browser JavaScript error detected'
+            exit 1
+          fi
+          test "$STATUS" -eq 0
