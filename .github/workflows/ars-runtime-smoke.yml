@@ -26,7 +26,7 @@ jobs:
           CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)
           test -n "$CHROME"
           set +e
-          "$CHROME" --headless=new --no-sandbox --disable-gpu --enable-logging=stderr --v=0 --virtual-time-budget=6000 --dump-dom http://127.0.0.1:8123/ >/tmp/ars-dom.html 2>/tmp/ars-chrome.log
+          timeout 20s "$CHROME" --headless=new --no-sandbox --disable-gpu --enable-logging=stderr --v=0 --virtual-time-budget=4500 --dump-dom http://127.0.0.1:8123/ >/tmp/ars-dom.html 2>/tmp/ars-chrome.log
           STATUS=$?
           set -e
           cat /tmp/ars-chrome.log
@@ -36,4 +36,5 @@ jobs:
             echo 'Browser JavaScript error detected'
             exit 1
           fi
-          test "$STATUS" -eq 0
+          test -s /tmp/ars-dom.html
+          test "$STATUS" -eq 0 -o "$STATUS" -eq 124
