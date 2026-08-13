@@ -22,6 +22,7 @@ jobs:
           python tools/fix_aug13_phone2.py
           python tools/fix_aug13_phone2b.py
           python tools/fix_aug13_phone2c.py
+          python tools/fix_aug13_phone2d.py
       - name: Apply requested phone and gameplay changes
         run: python tools/ars_aug13_phone2.py
       - name: Validate JavaScript and requested features
@@ -50,9 +51,9 @@ jobs:
       - name: Publish changes
         run: |
           set -euo pipefail
-          rm -f tools/ars_aug13_phone2.py tools/fix_aug13_phone2.py tools/fix_aug13_phone2b.py tools/fix_aug13_phone2c.py .github/workflows/ars-aug13-phone2.yml
+          rm -f tools/ars_aug13_phone2.py tools/fix_aug13_phone2.py tools/fix_aug13_phone2b.py tools/fix_aug13_phone2c.py tools/fix_aug13_phone2d.py .github/workflows/ars-aug13-phone2.yml
           git config user.name 'ARS Build Bot'
           git config user.email 'ars-build@users.noreply.github.com'
-          git add index.html style.css expedition.js game.js assets/vessels/boreal-crown.svg tools/ars_aug13_phone2.py tools/fix_aug13_phone2.py tools/fix_aug13_phone2b.py tools/fix_aug13_phone2c.py .github/workflows/ars-aug13-phone2.yml
+          git add index.html style.css expedition.js game.js assets/vessels/boreal-crown.svg tools/ars_aug13_phone2.py tools/fix_aug13_phone2.py tools/fix_aug13_phone2b.py tools/fix_aug13_phone2c.py tools/fix_aug13_phone2d.py .github/workflows/ars-aug13-phone2.yml
           git commit -m 'Polish phone UI navigation and startup flow'
           git push origin HEAD:main
