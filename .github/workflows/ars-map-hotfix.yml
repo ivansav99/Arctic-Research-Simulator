@@ -1,0 +1,60 @@
+name: ARS map hotfix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ars-map-hotfix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  hotfix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Apply hotfix
+        run: python tools/ars_aug13_map_hotfix.py
+      - name: Validate source
+        run: |
+          set -euo pipefail
+          node --check expedition.js
+          node --check game.js
+          grep -q 'expedition-22n-mapfix' index.html
+          grep -q 'id="resume-button" class="hidden"' index.html
+          grep -q 'function updatePortTabHints' expedition.js
+          grep -q 'arx-tab-hint.hidden' expedition.js
+          grep -q 'MINIMAP DRAW FAILED' game.js
+      - name: Browser runtime smoke
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8123 >/tmp/ars-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          sleep 1
+          CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)
+          test -n "$CHROME"
+          set +e
+          timeout 18s "$CHROME" --headless=new --no-sandbox --disable-gpu --enable-logging=stderr --v=0 --virtual-time-budget=4500 --dump-dom http://127.0.0.1:8123/ >/tmp/ars-dom.html 2>/tmp/ars-chrome.log
+          STATUS=$?
+          set -e
+          cat /tmp/ars-chrome.log
+          if grep -Ei 'Uncaught|ReferenceError|TypeError|SyntaxError' /tmp/ars-chrome.log; then
+            echo 'Browser JavaScript error detected'
+            exit 1
+          fi
+          test -s /tmp/ars-dom.html
+          test "$STATUS" -eq 0 -o "$STATUS" -eq 124
+      - name: Publish hotfix
+        run: |
+          set -euo pipefail
+          rm -f tools/ars_aug13_map_hotfix.py .github/workflows/ars-map-hotfix.yml .github/workflows/ars-runtime-smoke.yml
+          git config user.name 'ARS Build Bot'
+          git config user.email 'ars-build@users.noreply.github.com'
+          git add index.html expedition.js game.js tools/ars_aug13_map_hotfix.py .github/workflows/ars-map-hotfix.yml .github/workflows/ars-runtime-smoke.yml
+          git commit -m 'Fix map startup resilience and port tab hints'
+          git push origin HEAD:main
