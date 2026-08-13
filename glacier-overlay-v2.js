@@ -6,8 +6,6 @@
   const game = document.getElementById('game');
   if (!data || !map || !game || !Array.isArray(data.regions)) return;
 
-  // Independent visual layer only. This script never replaces or patches any
-  // game canvas method, so a glacier rendering problem cannot stop drawMap().
   const overlay = document.createElement('canvas');
   overlay.id = 'glacier-overlay';
   overlay.setAttribute('aria-hidden', 'true');
@@ -34,9 +32,6 @@
   let surfaceH = 0;
   let lastDraw = 0;
 
-  // A small viewport-aligned color field gives the broad ArcticDEM elevation
-  // signal. The opacity is deliberately moderate so the much finer IBCAO/
-  // GEBCO relief already drawn by the game remains visible underneath.
   const FIELD = 96;
   const fieldCanvas = document.createElement('canvas');
   fieldCanvas.width = FIELD;
@@ -77,7 +72,6 @@
   window.addEventListener('resize', resize, { passive: true });
   resize();
 
-  // Same EPSG:3996 polar stereographic geometry used by the game.
   const PS_A = 6378137;
   const PS_F = 1 / 298.257223563;
   const PS_E = Math.sqrt(PS_F * (2 - PS_F));
@@ -162,14 +156,14 @@
       for (let px = 0; px < FIELD; px++) {
         const wx = camera.x + ((px + 0.5) / FIELD - 0.5) * spanX;
         const h = surfaceHeightAt(wx, wy);
-        const hh = h == null ? 0.32 : Math.max(0, Math.min(1, h));
+        const hh = h == null ? 0.30 : Math.max(0, Math.min(1, h));
         const lift = Math.sqrt(hh);
-        const grey = Math.round(220 + 28 * lift);
+        const grey = Math.round(224 + 27 * lift);
         const j = (py * FIELD + px) * 4;
-        out[j] = Math.max(0, grey - 10);
+        out[j] = Math.max(0, grey - 8);
         out[j + 1] = grey;
-        out[j + 2] = Math.min(255, grey + 5);
-        out[j + 3] = Math.round(102 + 34 * lift);
+        out[j + 2] = Math.min(255, grey + 4);
+        out[j + 3] = Math.round(158 + 46 * lift);
       }
     }
     fieldCtx.putImageData(image, 0, 0);
@@ -213,7 +207,7 @@
     if (fieldCtx) {
       ctx.drawImage(fieldCanvas, 0, 0, width, height);
     } else {
-      ctx.fillStyle = 'rgba(218,232,236,.46)';
+      ctx.fillStyle = 'rgba(226,238,242,.68)';
       ctx.fillRect(0, 0, width, height);
     }
     ctx.restore();
