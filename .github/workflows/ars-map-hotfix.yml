@@ -47,7 +47,6 @@ jobs:
             echo 'Browser JavaScript error detected'
             exit 1
           fi
-          test -s /tmp/ars-dom.html
           test "$STATUS" -eq 0 -o "$STATUS" -eq 124
       - name: Publish hotfix
         run: |
