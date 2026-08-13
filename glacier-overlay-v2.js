@@ -4,6 +4,9 @@
   const data = window.AR_GLACIER_DATA;
   const map = document.getElementById('map');
   const game = document.getElementById('game');
+  const miniCanvas = document.getElementById('minimap');
+  const miniPanel = document.getElementById('minimap-panel');
+  const miniCtx = miniCanvas?.getContext('2d') || null;
   if (!data || !map || !game || !Array.isArray(data.regions)) return;
 
   const overlay = document.createElement('canvas');
@@ -169,6 +172,54 @@
     fieldCtx.putImageData(image, 0, 0);
   }
 
+  function drawMiniMapGlaciers(camera) {
+    if (!miniCtx || !miniCanvas) return;
+    const size = Number(miniCanvas.width) || 300;
+    const expanded = miniPanel?.classList.contains('expanded') || false;
+    const worldRadius = expanded ? 1100 : 520;
+    const radius = size / 2 - (expanded ? 30 : 20);
+    const k = radius / worldRadius;
+    const bounds = {
+      minX: camera.x - worldRadius,
+      maxX: camera.x + worldRadius,
+      minY: camera.y - worldRadius,
+      maxY: camera.y + worldRadius
+    };
+    const visible = regions.filter(region => intersects(region.b, bounds));
+    if (!visible.length) return;
+    const project = p => ({
+      x: size / 2 + (p[0] - camera.x) * k,
+      y: size / 2 + (p[1] - camera.y) * k
+    });
+    miniCtx.save();
+    miniCtx.beginPath();
+    miniCtx.arc(size / 2, size / 2, radius, 0, Math.PI * 2);
+    miniCtx.clip();
+    miniCtx.beginPath();
+    for (const region of visible) {
+      for (const ring of region.r || []) {
+        for (let i = 0; i < ring.length; i++) {
+          const s = project(ring[i]);
+          if (i) miniCtx.lineTo(s.x, s.y); else miniCtx.moveTo(s.x, s.y);
+        }
+        miniCtx.closePath();
+      }
+    }
+    miniCtx.fillStyle = 'rgba(228,241,245,.78)';
+    try { miniCtx.fill('evenodd'); } catch (error) { miniCtx.fill(); }
+    miniCtx.restore();
+  }
+
+  function miniLoop() {
+    requestAnimationFrame(miniLoop);
+    try {
+      const camera = currentCamera();
+      if (camera) drawMiniMapGlaciers(camera);
+    } catch (error) {
+      console.error('Glacier minimap draw error', error);
+    }
+  }
+
   function draw(now) {
     requestAnimationFrame(draw);
     if (now - lastDraw < 55) return;
@@ -213,5 +264,6 @@
     ctx.restore();
   }
 
+  requestAnimationFrame(miniLoop);
   requestAnimationFrame(draw);
 })();
