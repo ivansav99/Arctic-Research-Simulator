@@ -307,7 +307,7 @@
   function pathPolygon(c,pts,project){c.beginPath();pts.forEach((p,i)=>{const s=project(p.x,p.y);i?c.lineTo(s.x,s.y):c.moveTo(s.x,s.y);});c.closePath();}
   function pointInPolygon(x,y,pts){let inside=false;for(let i=0,j=pts.length-1;i<pts.length;j=i++){const a=pts[i],b=pts[j];if(((a.y>y)!==(b.y>y))&&x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x)inside=!inside;}return inside;}
   const polygonIsLand=(x,y)=>land.some(shape=>x>=shape.minX&&x<=shape.maxX&&y>=shape.minY&&y<=shape.maxY&&pointInPolygon(x,y,shape.pts));
-  const isLand=(x,y)=>{const raster=terrainRasterLandAt(x,y);return raster==null?polygonIsLand(x,y):raster;};
+  const isLand=(x,y)=>polygonIsLand(x,y)||terrainRasterLandAt(x,y)===true;
   function segmentDistance(x,y,a,b){const dx=b.x-a.x,dy=b.y-a.y,len=dx*dx+dy*dy;if(!len)return Math.hypot(x-a.x,y-a.y);const t=Math.max(0,Math.min(1,((x-a.x)*dx+(y-a.y)*dy)/len));return Math.hypot(x-(a.x+t*dx),y-(a.y+t*dy));}
   function coastDistance(x,y,limit){let best=limit+1;const gx0=Math.floor((x-limit)/COAST_CELL),gx1=Math.floor((x+limit)/COAST_CELL),gy0=Math.floor((y-limit)/COAST_CELL),gy1=Math.floor((y+limit)/COAST_CELL),seen=new Set();for(let gx=gx0;gx<=gx1;gx++)for(let gy=gy0;gy<=gy1;gy++){for(const segment of coastGrid.get(coastKey(gx,gy))||[]){if(seen.has(segment))continue;seen.add(segment);best=Math.min(best,segmentDistance(x,y,segment.a,segment.b));}}return best;}
   const smoothstep=(a,b,v)=>{const t=Math.max(0,Math.min(1,(v-a)/(b-a)));return t*t*(3-2*t);};
