@@ -126,7 +126,7 @@
     const b = cv(q(x1, y0));
     const c = cv(q(x0, y1));
     const d = cv(q(x1, y1));
-    valid = [a, b, c, d].filter(v => v != null);
+    const valid = [a, b, c, d].filter(v => v != null);
     if (!valid.length) return null;
     const fallback = valid.reduce((sum, v) => sum + v, 0) / valid.length;
     const v00 = a ?? fallback;
