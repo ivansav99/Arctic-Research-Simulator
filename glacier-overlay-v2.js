@@ -2,39 +2,16 @@
   'use strict';
 
   const data = window.AR_GLACIER_DATA;
-  const map = document.getElementById('map');
-  const game = document.getElementById('game');
-  const miniCanvas = document.getElementById('minimap');
-  const miniPanel = document.getElementById('minimap-panel');
-  const miniCtx = miniCanvas?.getContext('2d') || null;
-  if (!data || !map || !game || !Array.isArray(data.regions)) return;
-
-  const overlay = document.createElement('canvas');
-  overlay.id = 'glacier-overlay';
-  overlay.setAttribute('aria-hidden', 'true');
-  Object.assign(overlay.style, {
-    position: 'fixed',
-    inset: '0',
-    width: '100%',
-    height: '100%',
-    pointerEvents: 'none',
-    zIndex: '1'
-  });
-  game.appendChild(overlay);
-
-  const ctx = overlay.getContext('2d');
-  if (!ctx) return;
+  if (!data || !Array.isArray(data.regions)) return;
 
   const extentKm = Number(data.extentKm) || 2910;
   const regions = data.regions;
-  let width = 0;
-  let height = 0;
-  let dpr = 1;
   let surfacePixels = null;
   let surfaceW = 0;
   let surfaceH = 0;
-  let lastDraw = 0;
 
+  // Keep the broad, smooth ArcticDEM tint that worked well visually, while
+  // letting the much finer terrain imagery underneath provide local relief.
   const FIELD = 96;
   const fieldCanvas = document.createElement('canvas');
   fieldCanvas.width = FIELD;
@@ -59,53 +36,6 @@
     }
   });
   surfaceImage.src = data.surfaceImage || 'assets/data/arctic-surface-elevation.png';
-
-  function resize() {
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    width = window.innerWidth;
-    height = window.innerHeight;
-    const pw = Math.max(1, Math.round(width * dpr));
-    const ph = Math.max(1, Math.round(height * dpr));
-    if (overlay.width !== pw || overlay.height !== ph) {
-      overlay.width = pw;
-      overlay.height = ph;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-  }
-  window.addEventListener('resize', resize, { passive: true });
-  resize();
-
-  const PS_A = 6378137;
-  const PS_F = 1 / 298.257223563;
-  const PS_E = Math.sqrt(PS_F * (2 - PS_F));
-  const PS_LAT_TS = 75 * Math.PI / 180;
-  const psT = phi => Math.tan(Math.PI / 4 - phi / 2) /
-    Math.pow((1 - PS_E * Math.sin(phi)) / (1 + PS_E * Math.sin(phi)), PS_E / 2);
-  const PS_MC = Math.cos(PS_LAT_TS) /
-    Math.sqrt(1 - PS_E * PS_E * Math.sin(PS_LAT_TS) ** 2);
-  const PS_TC = psT(PS_LAT_TS);
-
-  function polar(lat, lon) {
-    if (lat >= 89.999999) return { x: 0, y: 0 };
-    const phi = lat * Math.PI / 180;
-    const a = lon * Math.PI / 180;
-    const r = PS_A * PS_MC * psT(phi) / PS_TC / 1000;
-    return { x: r * Math.sin(a), y: r * Math.cos(a) };
-  }
-
-  function currentCamera() {
-    const text = document.getElementById('position')?.textContent || '';
-    const match = text.match(/([0-9.]+)\s*°?N\s+([0-9.]+)\s*°?([EW])/i);
-    if (!match) return null;
-    const lat = Number(match[1]);
-    const lon = Number(match[2]) * (match[3].toUpperCase() === 'W' ? -1 : 1);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    const center = polar(lat, lon);
-    const zoomText = document.getElementById('zoom-level')?.textContent || '100%';
-    const zoom = Math.max(0.4, (parseFloat(zoomText) || 100) / 100);
-    const baseScale = Math.max(3.4, Math.min(5.2, Math.min(width, height) / 145));
-    return { x: center.x, y: center.y, scale: baseScale * zoom };
-  }
 
   function surfaceHeightAt(x, y) {
     if (!surfacePixels || Math.abs(x) > extentKm || Math.abs(y) > extentKm) return null;
@@ -134,30 +64,44 @@
       (v01 * (1 - tx) + v11 * tx) * ty;
   }
 
-  function visibleBounds(camera, margin = 16) {
-    return {
-      minX: camera.x - width / camera.scale / 2 - margin,
-      maxX: camera.x + width / camera.scale / 2 + margin,
-      minY: camera.y - height / camera.scale / 2 - margin,
-      maxY: camera.y + height / camera.scale / 2 + margin
-    };
-  }
-
   function intersects(b, bounds) {
     return b && !(b[2] < bounds.minX || b[0] > bounds.maxX ||
       b[3] < bounds.minY || b[1] > bounds.maxY);
   }
 
-  function buildField(camera) {
+  function visibleFor(centerX, centerY, radiusX, radiusY, margin = 16) {
+    const bounds = {
+      minX: centerX - radiusX - margin,
+      maxX: centerX + radiusX + margin,
+      minY: centerY - radiusY - margin,
+      maxY: centerY + radiusY + margin
+    };
+    return regions.filter(region => intersects(region.b, bounds));
+  }
+
+  function appendRegionsPath(ctx, visible, project) {
+    ctx.beginPath();
+    for (const region of visible) {
+      for (const ring of region.r || []) {
+        for (let i = 0; i < ring.length; i++) {
+          const s = project(ring[i]);
+          if (i) ctx.lineTo(s.x, s.y); else ctx.moveTo(s.x, s.y);
+        }
+        ctx.closePath();
+      }
+    }
+  }
+
+  function buildField(centerX, centerY, scale, width, height) {
     if (!fieldCtx) return;
     const image = fieldCtx.createImageData(FIELD, FIELD);
     const out = image.data;
-    const spanX = width / camera.scale;
-    const spanY = height / camera.scale;
+    const spanX = width / scale;
+    const spanY = height / scale;
     for (let py = 0; py < FIELD; py++) {
-      const wy = camera.y + ((py + 0.5) / FIELD - 0.5) * spanY;
+      const wy = centerY + ((py + 0.5) / FIELD - 0.5) * spanY;
       for (let px = 0; px < FIELD; px++) {
-        const wx = camera.x + ((px + 0.5) / FIELD - 0.5) * spanX;
+        const wx = centerX + ((px + 0.5) / FIELD - 0.5) * spanX;
         const h = surfaceHeightAt(wx, wy);
         const hh = h == null ? 0.30 : Math.max(0, Math.min(1, h));
         const lift = Math.sqrt(hh);
@@ -172,87 +116,18 @@
     fieldCtx.putImageData(image, 0, 0);
   }
 
-  function drawMiniMapGlaciers(camera) {
-    if (!miniCtx || !miniCanvas) return;
-    const size = Number(miniCanvas.width) || 300;
-    const expanded = miniPanel?.classList.contains('expanded') || false;
-    const worldRadius = expanded ? 1100 : 520;
-    const radius = size / 2 - (expanded ? 30 : 20);
-    const k = radius / worldRadius;
-    const bounds = {
-      minX: camera.x - worldRadius,
-      maxX: camera.x + worldRadius,
-      minY: camera.y - worldRadius,
-      maxY: camera.y + worldRadius
-    };
-    const visible = regions.filter(region => intersects(region.b, bounds));
+  window.AR_DRAW_MAIN_GLACIERS = ({ctx, width, height, state, scale, worldToScreen}) => {
+    if (!ctx || !state || !Number.isFinite(scale) || scale <= 0 || !worldToScreen) return;
+    const radiusX = width / scale / 2;
+    const radiusY = height / scale / 2;
+    const visible = visibleFor(state.x, state.y, radiusX, radiusY);
     if (!visible.length) return;
-    const project = p => ({
-      x: size / 2 + (p[0] - camera.x) * k,
-      y: size / 2 + (p[1] - camera.y) * k
-    });
-    miniCtx.save();
-    miniCtx.beginPath();
-    miniCtx.arc(size / 2, size / 2, radius, 0, Math.PI * 2);
-    miniCtx.clip();
-    miniCtx.beginPath();
-    for (const region of visible) {
-      for (const ring of region.r || []) {
-        for (let i = 0; i < ring.length; i++) {
-          const s = project(ring[i]);
-          if (i) miniCtx.lineTo(s.x, s.y); else miniCtx.moveTo(s.x, s.y);
-        }
-        miniCtx.closePath();
-      }
-    }
-    miniCtx.fillStyle = 'rgba(228,241,245,.78)';
-    try { miniCtx.fill('evenodd'); } catch (error) { miniCtx.fill(); }
-    miniCtx.restore();
-  }
-
-  function miniLoop() {
-    requestAnimationFrame(miniLoop);
-    try {
-      const camera = currentCamera();
-      if (camera) drawMiniMapGlaciers(camera);
-    } catch (error) {
-      console.error('Glacier minimap draw error', error);
-    }
-  }
-
-  function draw(now) {
-    requestAnimationFrame(draw);
-    if (now - lastDraw < 55) return;
-    lastDraw = now;
-
-    resize();
-    ctx.clearRect(0, 0, width, height);
-    const camera = currentCamera();
-    if (!camera) return;
-
-    const bounds = visibleBounds(camera);
-    const visible = regions.filter(region => intersects(region.b, bounds));
-    if (!visible.length) return;
-
-    const project = p => ({
-      x: width / 2 + (p[0] - camera.x) * camera.scale,
-      y: height / 2 + (p[1] - camera.y) * camera.scale
-    });
 
     ctx.save();
-    ctx.beginPath();
-    for (const region of visible) {
-      for (const ring of region.r || []) {
-        for (let i = 0; i < ring.length; i++) {
-          const s = project(ring[i]);
-          if (i) ctx.lineTo(s.x, s.y); else ctx.moveTo(s.x, s.y);
-        }
-        ctx.closePath();
-      }
-    }
+    appendRegionsPath(ctx, visible, p => worldToScreen(p[0], p[1]));
     try { ctx.clip('evenodd'); } catch (error) { ctx.clip(); }
 
-    buildField(camera);
+    buildField(state.x, state.y, scale, width, height);
     ctx.imageSmoothingEnabled = true;
     try { ctx.imageSmoothingQuality = 'high'; } catch (error) {}
     if (fieldCtx) {
@@ -262,8 +137,21 @@
       ctx.fillRect(0, 0, width, height);
     }
     ctx.restore();
-  }
+  };
 
-  requestAnimationFrame(miniLoop);
-  requestAnimationFrame(draw);
+  window.AR_DRAW_MINI_GLACIERS = ({ctx, project, c, radius, geometry, worldRadius}) => {
+    if (!ctx || !project || !geometry || !Number.isFinite(radius) || radius <= 0) return;
+    const visible = visibleFor(geometry.centerX, geometry.centerY, worldRadius, worldRadius, 0);
+    if (!visible.length) return;
+
+    ctx.save();
+    // Use the minimap's exact circle. There is no second, smaller glacier clip.
+    ctx.beginPath();
+    ctx.arc(c, c, radius, 0, Math.PI * 2);
+    ctx.clip();
+    appendRegionsPath(ctx, visible, p => project(p[0], p[1]));
+    ctx.fillStyle = 'rgba(228,241,245,.78)';
+    try { ctx.fill('evenodd'); } catch (error) { ctx.fill(); }
+    ctx.restore();
+  };
 })();
