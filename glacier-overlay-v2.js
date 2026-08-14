@@ -5,14 +5,45 @@
   if (!data || !Array.isArray(data.regions)) return;
 
   const extentKm = Number(data.extentKm) || 2910;
-  const regions = data.regions;
   let surfacePixels = null;
   let surfaceW = 0;
   let surfaceH = 0;
 
-  // Keep the broad, smooth ArcticDEM tint that worked well visually, while
-  // letting the much finer terrain imagery underneath provide local relief.
-  const FIELD = 96;
+  // Smooth only coarse rings. Detailed Natural Earth rings are already dense;
+  // multiplying those points would add CPU cost without improving the edge.
+  function chaikin(ring, iterations) {
+    let pts = Array.isArray(ring) ? ring : [];
+    for (let pass = 0; pass < iterations && pts.length >= 4; pass++) {
+      const next = [];
+      for (let i = 0; i < pts.length; i++) {
+        const a = pts[i];
+        const b = pts[(i + 1) % pts.length];
+        next.push([
+          a[0] * 0.75 + b[0] * 0.25,
+          a[1] * 0.75 + b[1] * 0.25
+        ]);
+        next.push([
+          a[0] * 0.25 + b[0] * 0.75,
+          a[1] * 0.25 + b[1] * 0.75
+        ]);
+      }
+      pts = next;
+    }
+    return pts;
+  }
+
+  const regions = data.regions.map(region => ({
+    ...region,
+    r: (region.r || []).map(ring => {
+      const n = ring.length;
+      const iterations = n < 90 ? 2 : n < 260 ? 1 : 0;
+      return iterations ? chaikin(ring, iterations) : ring;
+    })
+  }));
+
+  // A modest field resolution is enough because the ArcticDEM source is broad
+  // relief. Fine terrain texture continues to come from the underlying chart.
+  const FIELD = 112;
   const fieldCanvas = document.createElement('canvas');
   fieldCanvas.width = FIELD;
   fieldCanvas.height = FIELD;
@@ -105,12 +136,13 @@
         const h = surfaceHeightAt(wx, wy);
         const hh = h == null ? 0.30 : Math.max(0, Math.min(1, h));
         const lift = Math.sqrt(hh);
-        const grey = Math.round(224 + 27 * lift);
+        // Low ice is cool light gray; high ice approaches clean white.
+        const grey = Math.round(214 + 39 * lift);
         const j = (py * FIELD + px) * 4;
-        out[j] = Math.max(0, grey - 8);
+        out[j] = Math.max(0, grey - 4);
         out[j + 1] = grey;
-        out[j + 2] = Math.min(255, grey + 4);
-        out[j + 3] = Math.round(158 + 46 * lift);
+        out[j + 2] = Math.min(255, grey + 3);
+        out[j + 3] = 255;
       }
     }
     fieldCtx.putImageData(image, 0, 0);
@@ -128,12 +160,13 @@
     try { ctx.clip('evenodd'); } catch (error) { ctx.clip(); }
 
     buildField(state.x, state.y, scale, width, height);
+    ctx.globalAlpha = 1;
     ctx.imageSmoothingEnabled = true;
     try { ctx.imageSmoothingQuality = 'high'; } catch (error) {}
     if (fieldCtx) {
       ctx.drawImage(fieldCanvas, 0, 0, width, height);
     } else {
-      ctx.fillStyle = 'rgba(226,238,242,.68)';
+      ctx.fillStyle = 'rgb(226,235,238)';
       ctx.fillRect(0, 0, width, height);
     }
     ctx.restore();
@@ -145,12 +178,11 @@
     if (!visible.length) return;
 
     ctx.save();
-    // Use the minimap's exact circle. There is no second, smaller glacier clip.
     ctx.beginPath();
     ctx.arc(c, c, radius, 0, Math.PI * 2);
     ctx.clip();
     appendRegionsPath(ctx, visible, p => project(p[0], p[1]));
-    ctx.fillStyle = 'rgba(228,241,245,.78)';
+    ctx.fillStyle = 'rgb(230,238,241)';
     try { ctx.fill('evenodd'); } catch (error) { ctx.fill(); }
     ctx.restore();
   };
