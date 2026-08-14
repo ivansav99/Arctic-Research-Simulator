@@ -1,27 +1,22 @@
-name: Run cleanup pass
+name: Validate cleanup JavaScript
 
 on:
   push:
     branches:
       - main
     paths:
-      - '.github/scripts/cleanup_pass_20260814.py'
       - '.github/workflows/run-cleanup-pass-20260814.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  patch:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply patch
-        run: python .github/scripts/cleanup_pass_20260814.py
-      - name: Commit changes
+      - name: Check JavaScript syntax
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add game.js expedition.js style.css
-          git commit -m "Clean up winter map minimap pause and vessel sprites"
-          git push
+          node --check game.js
+          node --check expedition.js
+          node --check glacier-overlay-v2.js
