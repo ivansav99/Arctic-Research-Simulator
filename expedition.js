@@ -1734,7 +1734,7 @@
     initialize,enterPort,leavePort,tickDays,getVesselModifiers,getMapTargets,selectTarget,updateNavigation,openTarget,openNavigationPrompt,
     completeTarget,openWildlife,openVessel,openNpcVessel,openCharacterSetup,confirmDeparture,getState,createCheckpoint,restoreCheckpoint,
     restoreSnapshot:restoreCheckpoint,ensureMinimumSupplies,maybeSpawnOpportunity,isWildlifeObserved:id=>state.observedIndividuals.includes(String(id)),resetWildlifeObservations,
-    isBusy:()=>!!activeOperation||!!root?.querySelector('.arx-modal.open')
+    isBusy:()=>!!activeOperation||!!root?.querySelector('.arx-modal.open')||!!root?.querySelector('.arx-sidebar.open')
   };
   window.ArcticResearch=api;
 })();

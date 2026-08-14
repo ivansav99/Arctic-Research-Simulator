@@ -270,3 +270,9 @@ body { overscroll-behavior: none; touch-action: none; }
 @media (pointer:coarse) and (max-width:900px) and (orientation:portrait){.top-hud{top:calc(env(safe-area-inset-top) + 10px)!important}.minimap:not(.expanded){top:calc(env(safe-area-inset-top) + 12px)!important}#arx-root #arx-dev-toggle{left:50%!important;right:auto!important;top:calc(env(safe-area-inset-top) + 12px)!important;bottom:auto!important;transform:translateX(-50%)!important}.resource-warning{top:calc(env(safe-area-inset-top) + 70px)!important}}
 @media (pointer:coarse) and (max-width:900px) and (orientation:landscape){.minimap:not(.expanded){top:max(8px,calc(env(safe-area-inset-top) + 5px))!important}#arx-root #arx-dev-toggle{left:50%!important;right:auto!important;top:max(8px,calc(env(safe-area-inset-top) + 5px))!important;bottom:auto!important;transform:translateX(-50%)!important}}
 @media(max-width:620px){.minimap.expanded .minimap-nav-details{grid-template-columns:1fr 1fr}.minimap.expanded #minimap{width:min(90vw,430px)!important;height:min(90vw,430px)!important;max-height:55vh!important}}
+
+
+/* 2026-08-14 navigation chart cleanup */
+.nav-chart-open #arx-mobile-toggle{display:none!important}
+.minimap.expanded #minimap{width:min(76vw,64vh,620px)!important;height:min(76vw,64vh,620px)!important;max-height:none!important;aspect-ratio:1/1!important;border-radius:50%!important}
+@media(max-width:620px){.minimap.expanded #minimap{width:min(90vw,55vh,430px)!important;height:min(90vw,55vh,430px)!important;max-height:none!important;aspect-ratio:1/1!important;border-radius:50%!important}}
