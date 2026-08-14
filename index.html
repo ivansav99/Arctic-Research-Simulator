@@ -40,7 +40,7 @@
     </div>
     <aside id="minimap-panel" class="minimap hud" aria-label="Navigation overview map">
       <button id="minimap-close" class="minimap-close" type="button" aria-label="Close navigation chart">×</button>
-      <div class="minimap-heading"><small>NAVIGATION CHART</small><b id="mini-location">SVALBARD</b></div>
+      <div class="minimap-heading"><small>NAVIGATION CHART · <span id="mini-date">01 SEP 2026</span></small><b id="mini-location">SVALBARD</b></div>
       <canvas id="minimap" width="300" height="300" aria-label="Open navigation chart"></canvas>
       <div class="minimap-nav-details">
         <span><small>POSITION</small><b id="mini-position">—</b></span>
@@ -110,6 +110,16 @@
   <script src="save-summary-fix.js?v=expedition-22x-glaciers2"></script>
   <script src="frame-guard.js?v=expedition-22x-glaciers2"></script>
   <script src="game.js?v=expedition-22y-cleanup"></script>
-  <script src="glacier-overlay-v2.js?v=expedition-22y-cleanup"></script>
+  <script src="glacier-overlay-v2.js?v=expedition-22z-glacierfix"></script>
+  <script>
+    (()=>{
+      const source=document.getElementById('calendar-date');
+      const target=document.getElementById('mini-date');
+      if(!source||!target)return;
+      const sync=()=>{target.textContent=source.textContent||'—';};
+      new MutationObserver(sync).observe(source,{childList:true,subtree:true,characterData:true});
+      sync();
+    })();
+  </script>
 </body>
 </html>
