@@ -1,0 +1,28 @@
+name: Export Drive sync files
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/export-drive-sync-20260814.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ars-drive-sync
+          path: |
+            index.html
+            game.js
+            expedition.js
+            style.css
+            glacier-overlay-v2.js
+          if-no-files-found: error
+          retention-days: 1
