@@ -1,0 +1,99 @@
+#relief-3d-canvas,
+#relief-3d-labels {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+}
+#relief-3d-canvas {
+  z-index: 1;
+  background: linear-gradient(#7fb7c5 0%, #4f8395 38%, #173d57 100%);
+  cursor: crosshair;
+  touch-action: none;
+}
+#relief-3d-labels {
+  z-index: 2;
+  pointer-events: none;
+}
+#relief-3d-ship {
+  position: fixed;
+  z-index: 3;
+  left: 50%;
+  bottom: max(-14px, calc(env(safe-area-inset-bottom) - 14px));
+  width: clamp(118px, 15vw, 185px);
+  height: auto;
+  transform: translateX(-50%);
+  display: none;
+  pointer-events: none;
+  filter: drop-shadow(0 14px 18px rgba(0,20,30,.24));
+}
+.relief-mode-toggle {
+  position: fixed;
+  z-index: 5;
+  right: 84px;
+  top: 169px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 92px;
+  padding: 3px;
+  gap: 3px;
+  border-radius: 11px;
+}
+.relief-mode-toggle button {
+  height: 32px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #91bdc8;
+  font: 900 9px/1 system-ui,sans-serif;
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+.relief-mode-toggle button.active {
+  background: rgba(246,211,101,.94);
+  color: #17323b;
+  box-shadow: 0 3px 10px rgba(0,0,0,.2);
+}
+.relief-3d-badge {
+  position: fixed;
+  z-index: 4;
+  left: 50%;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: none;
+  padding: 6px 9px;
+  border: 1px solid rgba(219,244,248,.3);
+  border-radius: 7px;
+  background: rgba(3,28,43,.62);
+  color: rgba(230,249,251,.86);
+  font: 800 7px/1 system-ui,sans-serif;
+  letter-spacing: .13em;
+  pointer-events: none;
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
+body.relief-3d-active #map { opacity: 0; pointer-events: none; }
+body.relief-3d-active #relief-3d-canvas,
+body.relief-3d-active #relief-3d-labels,
+body.relief-3d-active #relief-3d-ship,
+body.relief-3d-active .relief-3d-badge { display: block; }
+body.relief-3d-active .scale { display: none; }
+body.nav-chart-open .relief-mode-toggle { display: none; }
+body.nav-chart-open #relief-3d-canvas { pointer-events: none; }
+
+@media (max-width: 640px) {
+  .relief-mode-toggle {
+    right: 72px;
+    top: 148px;
+    width: 82px;
+  }
+  .relief-mode-toggle button { height: 29px; font-size: 8px; }
+  #relief-3d-ship { width: clamp(110px, 28vw, 152px); bottom: -8px; }
+  .relief-3d-badge { bottom: max(12px, env(safe-area-inset-bottom)); font-size: 6px; }
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .relief-mode-toggle { top: 92px; right: 78px; }
+  #relief-3d-ship { width: clamp(104px, 15vw, 145px); bottom: -20px; }
+}
