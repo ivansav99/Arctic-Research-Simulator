@@ -327,8 +327,9 @@
       }
     };
     image.onerror = () => {
-      console.warn('3D terrain overview unavailable; 3D mode will remain disabled.');
+      console.warn('3D terrain overview unavailable; returning to 2D.');
       terrainReady = false;
+      if(mode==='3d'){setMode('2d',false);try{window.AR_SHOW_TOAST?.('3D TERRAIN SOURCE UNAVAILABLE · RETURNED TO 2D');}catch(error){}}
     };
     image.src = sourceUrl;
   }
@@ -452,7 +453,7 @@
     const projection = new Float32Array(16);
     const view = new Float32Array(16);
     perspective(projection, 50 * Math.PI / 180, aspect, .08, 12);
-    lookAt(view, [0, -1.72, 1.58], [0, .58, -.05], [0, 0, 1]);
+    lookAt(view, [0, -1.65, 1.90], [0, .55, -.05], [0, 0, 1]);
     multiply(vpMatrix, projection, view);
   }
 
