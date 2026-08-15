@@ -8,7 +8,8 @@
   const STORAGE_KEY = 'arctic-research-render-mode-v1';
   const extentKm = 2910;
   const dprCap = 1.5;
-  const sourceUrl = 'https://wms.gebco.net/2024/north-polar/mapserv?BBOX=-2910000%2C-2910000%2C2910000%2C2910000&crs=EPSG%3A3996&format=image%2Fjpeg&height=2048&layers=GEBCO_NORTH_POLAR_VIEW_bed_2024&request=getmap&service=wms&version=1.3.0&width=2048';
+  const terrainRequestPixels = matchMedia('(pointer:coarse)').matches ? 1536 : 2048;
+  const PIVOT_NDC_SHIFT = 0.50;
 
   const reliefCanvas = document.createElement('canvas');
   reliefCanvas.id = 'relief-3d-canvas';
@@ -49,6 +50,11 @@
   let glacierMaskTexture = null;
   let glacierElevTexture = null;
   let terrainReady = false;
+  let terrainTexCenterX = 0;
+  let terrainTexCenterY = 0;
+  let terrainTexSpan = 0;
+  let terrainRequestSerial = 0;
+  let terrainLoading = false;
   let mode = '2d';
   let currentYaw = 0;
   let lastNow = performance.now();
@@ -160,12 +166,16 @@
       uniform sampler2D uGlacierElev;
       uniform vec2 uCenter;
       uniform vec2 uSpan;
+      uniform vec2 uTexCenter;
+      uniform float uTexSpan;
       uniform float uExtent;
+      uniform float uPivotShift;
       uniform float uYaw;
       uniform float uVerticalLand;
       uniform float uVerticalSea;
       uniform mat4 uVP;
       out vec2 vTerrainUv;
+      out vec2 vGlacierUv;
       out float vRelief;
       out float vForward;
 
@@ -188,11 +198,13 @@
 
       void main() {
         vec2 world = uCenter + vec2((a_uv.x - 0.5) * uSpan.x, (a_uv.y - 0.5) * uSpan.y);
-        vec2 tuv = (world + vec2(uExtent)) / (2.0 * uExtent);
+        vec2 tuv = (world - uTexCenter) / uTexSpan + vec2(0.5);
+        vec2 guv = (world + vec2(uExtent)) / (2.0 * uExtent);
         vTerrainUv = tuv;
+        vGlacierUv = guv;
         vec3 terrain = texture(uTerrain, clamp(tuv, 0.001, 0.999)).rgb;
-        float glacierMask = texture(uGlacierMask, clamp(tuv, 0.001, 0.999)).r;
-        float glacierElev = texture(uGlacierElev, clamp(tuv, 0.001, 0.999)).r;
+        float glacierMask = texture(uGlacierMask, clamp(guv, 0.001, 0.999)).r;
+        float glacierElev = texture(uGlacierElev, clamp(guv, 0.001, 0.999)).r;
         bool land = looksLand(terrain) || glacierMask > 0.4;
         float reliefKm;
         if (glacierMask > 0.4) {
@@ -210,6 +222,7 @@
         vec2 p = rotated / max(45.0, normalizer) * 2.0;
         vec3 local = vec3(p.x, -p.y, z);
         gl_Position = uVP * vec4(local, 1.0);
+        gl_Position.y -= uPivotShift * gl_Position.w;
         vRelief = z;
         vForward = local.y;
       }
@@ -221,16 +234,21 @@
       uniform sampler2D uGlacierMask;
       uniform sampler2D uGlacierElev;
       in vec2 vTerrainUv;
+      in vec2 vGlacierUv;
       in float vRelief;
       in float vForward;
       out vec4 outColor;
 
       void main() {
         vec2 uv = clamp(vTerrainUv, 0.001, 0.999);
+        vec2 guv = clamp(vGlacierUv, 0.001, 0.999);
         vec3 color = texture(uTerrain, uv).rgb;
-        float glacier = texture(uGlacierMask, uv).r;
+        float luminance = dot(color, vec3(0.24, 0.60, 0.16));
+        color = mix(vec3(luminance), color, 1.10);
+        color = clamp((color - 0.5) * 1.06 + 0.5, 0.0, 1.0);
+        float glacier = texture(uGlacierMask, guv).r;
         if (glacier > 0.35) {
-          float elev = texture(uGlacierElev, uv).r;
+          float elev = texture(uGlacierElev, guv).r;
           float lift = sqrt(clamp(elev, 0.0, 1.0));
           float grey = mix(0.80, 0.985, lift);
           color = vec3(grey * 0.985, grey, min(1.0, grey * 1.01));
@@ -239,10 +257,8 @@
         float dy = dFdy(vRelief);
         vec3 normal = normalize(vec3(-dx * 9.0, -dy * 9.0, 1.0));
         vec3 sun = normalize(vec3(-0.38, -0.52, 0.76));
-        float light = clamp(0.68 + dot(normal, sun) * 0.34, 0.50, 1.18);
+        float light = clamp(0.80 + dot(normal, sun) * 0.24, 0.66, 1.14);
         color *= light;
-        float distanceFog = smoothstep(0.55, 2.2, vForward);
-        color = mix(color, vec3(0.66, 0.80, 0.84), distanceFog * 0.24);
         outColor = vec4(color, 1.0);
       }
     `;
@@ -307,33 +323,64 @@
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([50, 112, 140, 255]));
     }
 
-    loadTerrainTexture();
     buildGlacierTextures();
     return true;
   }
 
-  function loadTerrainTexture() {
+  function terrainTextureUrl(cx, cy, span) {
+    const half = span / 2;
+    const minE = Math.round((cx - half) * 1000);
+    const maxE = Math.round((cx + half) * 1000);
+    const minN = Math.round(-(cy + half) * 1000);
+    const maxN = Math.round(-(cy - half) * 1000);
+    return `https://wms.gebco.net/2024/north-polar/mapserv?BBOX=${minE}%2C${minN}%2C${maxE}%2C${maxN}&crs=EPSG%3A3996&format=image%2Fpng&height=${terrainRequestPixels}&layers=GEBCO_NORTH_POLAR_VIEW_bed_2024&request=getmap&service=wms&version=1.3.0&width=${terrainRequestPixels}`;
+  }
+
+  function ensureTerrainTexture(view) {
+    if (!gl || !terrainTexture || !view || terrainLoading) return;
+    const spanX = view.width / view.scale;
+    const spanY = view.height / view.scale;
+    const desiredSpan = Math.max(180, Math.min(1900, Math.hypot(spanX, spanY) * 1.50));
+    const moved = terrainTexSpan > 0 ? Math.hypot(view.x - terrainTexCenterX, view.y - terrainTexCenterY) : Infinity;
+    const scaleChanged = terrainTexSpan <= 0 || desiredSpan < terrainTexSpan * 0.78 || desiredSpan > terrainTexSpan * 1.28;
+    if (terrainReady && moved < terrainTexSpan * 0.11 && !scaleChanged) return;
+
+    const serial = ++terrainRequestSerial;
     const image = new Image();
+    const requestX = view.x;
+    const requestY = view.y;
+    const requestSpan = desiredSpan;
+    terrainLoading = true;
     image.crossOrigin = 'anonymous';
     image.decoding = 'async';
     image.onload = () => {
+      if (serial !== terrainRequestSerial || !gl) return;
       try {
         gl.bindTexture(gl.TEXTURE_2D, terrainTexture);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-        gl.generateMipmap(gl.TEXTURE_2D);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        terrainTexCenterX = requestX;
+        terrainTexCenterY = requestY;
+        terrainTexSpan = requestSpan;
         terrainReady = true;
       } catch (error) {
-        console.error('3D terrain texture upload failed', error);
+        console.error('3D local terrain texture upload failed', error);
+      } finally {
+        terrainLoading = false;
       }
     };
     image.onerror = () => {
-      console.warn('3D terrain overview unavailable; returning to 2D.');
-      terrainReady = false;
-      if(mode==='3d'){setMode('2d',false);try{window.AR_SHOW_TOAST?.('3D TERRAIN SOURCE UNAVAILABLE · RETURNED TO 2D');}catch(error){}}
+      if (serial !== terrainRequestSerial) return;
+      terrainLoading = false;
+      console.warn('3D local terrain texture unavailable.');
+      if (!terrainReady && mode === '3d') {
+        setMode('2d', false);
+        try { window.AR_SHOW_TOAST?.('3D TERRAIN SOURCE UNAVAILABLE · RETURNED TO 2D'); } catch (error) {}
+      }
     };
-    image.src = sourceUrl;
+    image.src = terrainTextureUrl(requestX, requestY, requestSpan);
   }
 
   function chaikin(ring, passes) {
@@ -484,9 +531,10 @@
     const cy = m[1] * x + m[5] * y + m[9] * z + m[13];
     const cw = m[3] * x + m[7] * y + m[11] * z + m[15];
     if (cw <= .03) return null;
+    const ndcY = cy / cw - PIVOT_NDC_SHIFT;
     return {
       x: (cx / cw * .5 + .5) * innerWidth,
-      y: (1 - (cy / cw * .5 + .5)) * innerHeight,
+      y: (1 - (ndcY * .5 + .5)) * innerHeight,
       w: cw
     };
   }
@@ -559,9 +607,10 @@
     const halfMid = halfStern * .82;
     const turn = clamp(wrapPi((view.angle || 0) - currentYaw), -.30, .30);
     shipCtx.save();
-    shipCtx.translate(cx, 0);
+    const turnPivotY = stern - 10;
+    shipCtx.translate(cx, turnPivotY);
     shipCtx.rotate(turn * .42);
-    shipCtx.translate(-cx, 0);
+    shipCtx.translate(-cx, -turnPivotY);
 
     const shadow = shipCtx.createRadialGradient(cx, stern - 12, 5, cx, stern - 12, 82);
     shadow.addColorStop(0, 'rgba(0,20,29,.40)');
@@ -700,12 +749,14 @@
     requestAnimationFrame(render);
     const dt = Math.min(.05, Math.max(0, (now - lastNow) / 1000));
     lastNow = now;
-    if (mode !== '3d' || !gl || !terrainReady) return;
+    if (mode !== '3d' || !gl) return;
+    const view = getView();
+    if (!view || !Number.isFinite(view.scale) || view.scale <= 0) return;
+    ensureTerrainTexture(view);
+    if (!terrainReady) return;
     if (now - last3DDraw < target3DFrameMs) return;
     last3DDraw = now;
     resize();
-    const view = getView();
-    if (!view || !Number.isFinite(view.scale) || view.scale <= 0) return;
     lastView = view;
     if (!Number.isFinite(currentYaw)) currentYaw = view.angle || 0;
     const delta = wrapPi((view.angle || 0) - currentYaw);
@@ -725,7 +776,10 @@
     const spanY = view.height / view.scale;
     gl.uniform2f(gl.getUniformLocation(program, 'uCenter'), view.x, view.y);
     gl.uniform2f(gl.getUniformLocation(program, 'uSpan'), spanX, spanY);
+    gl.uniform2f(gl.getUniformLocation(program, 'uTexCenter'), terrainTexCenterX, terrainTexCenterY);
+    gl.uniform1f(gl.getUniformLocation(program, 'uTexSpan'), terrainTexSpan);
     gl.uniform1f(gl.getUniformLocation(program, 'uExtent'), extentKm);
+    gl.uniform1f(gl.getUniformLocation(program, 'uPivotShift'), PIVOT_NDC_SHIFT);
     gl.uniform1f(gl.getUniformLocation(program, 'uYaw'), currentYaw);
     gl.uniform1f(gl.getUniformLocation(program, 'uVerticalLand'), 8.0);
     gl.uniform1f(gl.getUniformLocation(program, 'uVerticalSea'), 2.7);

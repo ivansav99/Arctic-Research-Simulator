@@ -125,8 +125,7 @@
 
   function buildField(centerX, centerY, scale, width, height) {
     if (!fieldCtx) return;
-    const image = fieldCtx.createImageData(FIELD, FIELD);
-    const out = image.data;
+    const heights = new Float32Array(FIELD * FIELD);
     const spanX = width / scale;
     const spanY = height / scale;
     for (let py = 0; py < FIELD; py++) {
@@ -134,14 +133,29 @@
       for (let px = 0; px < FIELD; px++) {
         const wx = centerX + ((px + 0.5) / FIELD - 0.5) * spanX;
         const h = surfaceHeightAt(wx, wy);
-        const hh = h == null ? 0.30 : Math.max(0, Math.min(1, h));
-        const lift = Math.sqrt(hh);
-        // Low ice is cool light gray; high ice approaches clean white.
-        const grey = Math.round(214 + 39 * lift);
+        heights[py * FIELD + px] = h == null ? 0.30 : Math.max(0, Math.min(1, h));
+      }
+    }
+
+    const image = fieldCtx.createImageData(FIELD, FIELD);
+    const out = image.data;
+    const sample = (x, y) => heights[Math.max(0, Math.min(FIELD - 1, y)) * FIELD + Math.max(0, Math.min(FIELD - 1, x))];
+    const sun = [-0.42, -0.58, 0.70];
+    for (let py = 0; py < FIELD; py++) {
+      for (let px = 0; px < FIELD; px++) {
+        const h = heights[py * FIELD + px];
+        const dx = (sample(px + 1, py) - sample(px - 1, py)) * 20;
+        const dy = (sample(px, py + 1) - sample(px, py - 1)) * 20;
+        const nx = -dx, ny = -dy, nz = 1;
+        const inv = 1 / Math.max(0.001, Math.hypot(nx, ny, nz));
+        const illumination = Math.max(0.54, Math.min(1.20, 0.76 + (nx * sun[0] + ny * sun[1] + nz * sun[2]) * inv * 0.38));
+        const lift = Math.sqrt(h);
+        const base = 207 + 47 * lift;
+        const tone = Math.max(174, Math.min(255, Math.round(base * illumination)));
         const j = (py * FIELD + px) * 4;
-        out[j] = Math.max(0, grey - 4);
-        out[j + 1] = grey;
-        out[j + 2] = Math.min(255, grey + 3);
+        out[j] = Math.max(0, tone - 5);
+        out[j + 1] = tone;
+        out[j + 2] = Math.min(255, tone + 4);
         out[j + 3] = 255;
       }
     }
