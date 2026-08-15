@@ -891,7 +891,9 @@
     if(shouldTrim){
       const shoulder=widthPx*.29,cut=heightPx*.13;
       ctx.beginPath();
-      ctx.moveTo(-shoulder,top);ctx.lineTo(shoulder,top);ctx.lineTo(right,top+cut);ctx.lineTo(right,bottom);ctx.lineTo(left,bottom);ctx.lineTo(left,top+cut);ctx.closePath();ctx.clip();
+      // Atlas vessel art is authored bow-down and rotated PI by the caller.
+      // Trim the source-image bottom corners so the displayed bow is chamfered.
+      ctx.moveTo(left,top);ctx.lineTo(right,top);ctx.lineTo(right,bottom-cut);ctx.lineTo(shoulder,bottom);ctx.lineTo(-shoulder,bottom);ctx.lineTo(left,bottom-cut);ctx.closePath();ctx.clip();
     }
     if(cls==='icebreaker')ctx.filter='grayscale(.62) sepia(.42) saturate(.72) brightness(1.08)';
     drawSpriteCentered(sprite,widthPx,heightPx);
