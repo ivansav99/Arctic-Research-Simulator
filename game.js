@@ -885,6 +885,18 @@
     ctx.fill();
   }
   function drawSpriteCentered(sprite,widthPx,heightPx){ctx.drawImage(sprite.image,sprite.sx,sprite.sy,sprite.sw,sprite.sh,-widthPx/2,-heightPx/2,widthPx,heightPx);}
+  function drawVesselSpriteCentered(sprite,widthPx,heightPx,cls=''){
+    const top=-heightPx/2,bottom=heightPx/2,left=-widthPx/2,right=widthPx/2,shouldTrim=['global','icebreaker','nuclear'].includes(cls);
+    ctx.save();
+    if(shouldTrim){
+      const shoulder=widthPx*.29,cut=heightPx*.13;
+      ctx.beginPath();
+      ctx.moveTo(-shoulder,top);ctx.lineTo(shoulder,top);ctx.lineTo(right,top+cut);ctx.lineTo(right,bottom);ctx.lineTo(left,bottom);ctx.lineTo(left,top+cut);ctx.closePath();ctx.clip();
+    }
+    if(cls==='icebreaker')ctx.filter='grayscale(.62) sepia(.42) saturate(.72) brightness(1.08)';
+    drawSpriteCentered(sprite,widthPx,heightPx);
+    ctx.restore();
+  }
   function wildlifeSpriteFor(species,category){
     const name=String(species||'').toUpperCase();
     if(category==='whale')return name.includes('NARWHAL')?SPRITES.wildlife.narwhal:SPRITES.wildlife.whale;
@@ -982,24 +994,6 @@
   function safeNpcPosition(npc,x=npc.x,y=npc.y){if(npcAllowedAt(npc,x,y))return{x,y};for(let radius=8;radius<=180;radius+=8)for(let index=0;index<20;index++){const angle=npc.angle+index*Math.PI/10,cx=x+Math.cos(angle)*radius,cy=y+Math.sin(angle)*radius;if(npcAllowedAt(npc,cx,cy))return{x:cx,y:cy};}return null;}
   function npcCourseAllowed(npc,x,y){for(const fraction of[.25,.5,.75,1])if(!npcAllowedAt(npc,npc.x+(x-npc.x)*fraction,npc.y+(y-npc.y)*fraction))return false;return true;}
   function updateNpcVessels(dt){npcUpdateAccumulator+=dt;if(npcUpdateAccumulator<.045)return;const stepTime=Math.min(.12,npcUpdateAccumulator);npcUpdateAccumulator=0;for(const npc of npcVessels){if(!npcActive(npc))continue;if(!npc.ready){const safe=safeNpcPosition(npc);if(safe){npc.x=safe.x;npc.y=safe.y;}npc.ready=true;}const goal=npc.route[npc.routeIndex%npc.route.length],dx=goal.x-npc.x,dy=goal.y-npc.y,distance=Math.hypot(dx,dy);if(distance<16){npc.routeIndex=(npc.routeIndex+1)%npc.route.length;continue;}const desired=Math.atan2(dy,dx),turn=((desired-npc.angle+Math.PI*3)%(Math.PI*2))-Math.PI;npc.angle+=Math.max(-.028,Math.min(.028,turn));const distanceStep=Math.min(distance,npc.speed*KNOT_TO_WORLD_SPEED*stepTime*.24),nx=npc.x+Math.cos(npc.angle)*distanceStep,ny=npc.y+Math.sin(npc.angle)*distanceStep;if(npcCourseAllowed(npc,nx,ny)){npc.x=nx;npc.y=ny;}else{npc.routeIndex=(npc.routeIndex+1)%npc.route.length;npc.angle+=Math.PI*.45;const safe=safeNpcPosition(npc);if(safe){npc.x=safe.x;npc.y=safe.y;}}}}
-  function drawResearchShipIcon(cls,size){
-    const w=size.w,h=size.h,half=h/2,isNuclear=cls==='nuclear',isIcebreaker=cls==='icebreaker';
-    const hull=isNuclear?'#b74b40':isIcebreaker?'#b79a6a':'#35667a';
-    const lower=isNuclear?'#762f2a':isIcebreaker?'#76644b':'#173f51';
-    const deck=isNuclear?'#f1eadf':isIcebreaker?'#eee8d9':'#eff7f5';
-    const accent=isNuclear?'#f3cf62':isIcebreaker?'#76c8cb':'#75c4db';
-    ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.shadowColor='rgba(0,20,30,.28)';ctx.shadowBlur=5;ctx.shadowOffsetY=2;
-    ctx.fillStyle=hull;ctx.strokeStyle='rgba(239,251,252,.96)';ctx.lineWidth=1.3;ctx.beginPath();
-    ctx.moveTo(0,-half);ctx.bezierCurveTo(w*.34,-half*.74,w*.47,-half*.20,w*.43,half*.47);ctx.quadraticCurveTo(w*.32,half*.89,0,half);ctx.quadraticCurveTo(-w*.32,half*.89,-w*.43,half*.47);ctx.bezierCurveTo(-w*.47,-half*.20,-w*.34,-half*.74,0,-half);ctx.closePath();ctx.fill();ctx.stroke();
-    ctx.shadowBlur=0;ctx.fillStyle=lower;ctx.beginPath();ctx.moveTo(-w*.38,half*.42);ctx.quadraticCurveTo(0,half*.58,w*.38,half*.42);ctx.lineTo(w*.30,half*.78);ctx.quadraticCurveTo(0,half*.92,-w*.30,half*.78);ctx.closePath();ctx.fill();
-    ctx.fillStyle=deck;ctx.beginPath();ctx.moveTo(-w*.25,-half*.38);ctx.lineTo(w*.25,-half*.38);ctx.lineTo(w*.31,half*.27);ctx.lineTo(-w*.31,half*.27);ctx.closePath();ctx.fill();
-    ctx.fillStyle='#31596a';ctx.fillRect(-w*.19,-half*.25,w*.38,Math.max(3,h*.075));
-    ctx.fillStyle=accent;ctx.fillRect(-w*.025,-half*.60,w*.05,h*.18);
-    ctx.strokeStyle=accent;ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(-w*.22,-half*.02);ctx.lineTo(w*.22,-half*.02);ctx.stroke();
-    if(isIcebreaker||isNuclear){ctx.strokeStyle=isNuclear?'#f4d66f':'#72c4c7';ctx.lineWidth=1.35;ctx.beginPath();ctx.arc(0,half*.48,isNuclear?w*.22:w*.19,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.moveTo(-w*.14,half*.48);ctx.lineTo(w*.14,half*.48);ctx.moveTo(0,half*.34);ctx.lineTo(0,half*.62);ctx.stroke();}
-    if(cls==='global'){ctx.fillStyle='#f8fbf8';ctx.beginPath();ctx.arc(-w*.14,-half*.45,Math.max(2,w*.075),0,Math.PI*2);ctx.fill();ctx.strokeStyle='#8bd2e2';ctx.beginPath();ctx.moveTo(w*.12,-half*.47);ctx.lineTo(w*.32,-half*.24);ctx.stroke();}
-    ctx.restore();
-  }
   function drawNpcHull(length,width,fill,accent='#eaf8fa'){
     ctx.fillStyle=fill;ctx.strokeStyle='rgba(233,251,252,.96)';ctx.lineWidth=1.25;ctx.beginPath();ctx.moveTo(0,-length*.52);ctx.quadraticCurveTo(width*.56,-length*.3,width*.5,length*.36);ctx.quadraticCurveTo(0,length*.55,-width*.5,length*.36);ctx.quadraticCurveTo(-width*.56,-length*.3,0,-length*.52);ctx.closePath();ctx.fill();ctx.stroke();ctx.strokeStyle=accent;ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(-width*.34,length*.28);ctx.lineTo(width*.34,length*.28);ctx.stroke();
   }
@@ -1007,9 +1001,11 @@
   function drawNpcIcon(npc){
     const cls=String(npc.classId||'').toLowerCase(),sprite=SPRITES.vessels[cls];ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
     if(npc.id==='mv-boreal-crown'){ctx.shadowColor='rgba(0,17,28,.38)';ctx.shadowBlur=4;ctx.fillStyle='#173c50';ctx.beginPath();ctx.moveTo(0,-23);ctx.lineTo(9,-13);ctx.lineTo(8,19);ctx.lineTo(-8,19);ctx.lineTo(-9,-13);ctx.closePath();ctx.fill();ctx.shadowBlur=0;ctx.fillStyle='#eef8f8';ctx.beginPath();ctx.moveTo(0,-15);ctx.lineTo(6,-8);ctx.lineTo(6,11);ctx.lineTo(-6,11);ctx.lineTo(-6,-8);ctx.closePath();ctx.fill();ctx.fillStyle='#5cb1d0';ctx.fillRect(-5,-6,10,5);ctx.fillRect(-5,3,10,4);ctx.fillStyle='#f6d365';ctx.fillRect(-1,-19,2,7);ctx.strokeStyle='rgba(230,250,252,.85)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-7,14);ctx.lineTo(7,14);ctx.stroke();ctx.restore();return;}
-    if(['global','icebreaker','nuclear'].includes(cls)){const dims=cls==='nuclear'?[30,51]:cls==='icebreaker'?[29,49]:[28,47];drawResearchShipIcon(cls,{w:dims[0],h:dims[1]});ctx.restore();return;}
     if(spriteReady(sprite)){
-      const dims=cls==='coastal'?[25,44]:[23,42];ctx.save();ctx.rotate(Math.PI);drawSpriteCentered(sprite,dims[0],dims[1]);ctx.restore();ctx.globalCompositeOperation='source-atop';ctx.globalAlpha=.3;ctx.fillStyle=npcTint(npc);ctx.fillRect(-dims[0]/2,-dims[1]/2,dims[0],dims[1]);ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;ctx.restore();return;
+      const dims=cls==='nuclear'?[30,51]:cls==='icebreaker'?[29,49]:cls==='global'?[28,47]:cls==='coastal'?[25,44]:[23,42];
+      ctx.save();ctx.rotate(Math.PI);drawVesselSpriteCentered(sprite,dims[0],dims[1],cls);ctx.restore();
+      if(!['global','icebreaker','nuclear'].includes(cls)){ctx.globalCompositeOperation='source-atop';ctx.globalAlpha=.3;ctx.fillStyle=npcTint(npc);ctx.fillRect(-dims[0]/2,-dims[1]/2,dims[0],dims[1]);ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;}
+      ctx.restore();return;
     }
     if(npc.kind==='canoe'){ctx.fillStyle='#78442d';ctx.strokeStyle='#f3e6c8';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(0,-14);ctx.quadraticCurveTo(8,0,0,15);ctx.quadraticCurveTo(-8,0,0,-14);ctx.fill();ctx.stroke();ctx.beginPath();ctx.moveTo(-9,-8);ctx.lineTo(9,9);ctx.stroke();ctx.restore();return;}
     if(npc.kind==='sailing'){ctx.strokeStyle='#f6fbfb';ctx.lineWidth=1.4;ctx.fillStyle='#784f38';ctx.beginPath();ctx.ellipse(0,5,6,14,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle='#f5f0d8';ctx.beginPath();ctx.moveTo(0,-19);ctx.lineTo(0,6);ctx.lineTo(14,4);ctx.closePath();ctx.fill();ctx.stroke();ctx.fillStyle='#f0d86c';ctx.fillRect(-1.1,-20,2.2,29);ctx.restore();return;}
@@ -1038,10 +1034,8 @@
     ctx.shadowBlur=10;
     ctx.shadowOffsetY=3;
     const largeClass=vesselIceId(item);
-    if(['global','icebreaker','nuclear'].includes(largeClass)){
-      drawResearchShipIcon(largeClass,size);
-    }else if(spriteReady(sprite)){
-      ctx.save();ctx.rotate(Math.PI);drawSpriteCentered(sprite,size.w,size.h);drawVesselClassDetails(item,size);ctx.restore();
+    if(spriteReady(sprite)){
+      ctx.save();ctx.rotate(Math.PI);drawVesselSpriteCentered(sprite,size.w,size.h,largeClass);drawVesselClassDetails(item,size);ctx.restore();
     }else{
       ctx.fillStyle='#f7f1dc';
       ctx.beginPath();
@@ -1163,9 +1157,7 @@
   function setZoom(change,silent=false){
     const previousZoom=zoomLevel,minZoom=Math.max(.7,vesselModifiers().minZoom),steps=[.7,1.1,1.45,1.8,2.3,2.8].filter(value=>value>=minZoom-.001),direction=change>0?1:change<0?-1:0;let index=steps.reduce((best,value,i)=>Math.abs(value-zoomLevel)<Math.abs(steps[best]-zoomLevel)?i:best,0);if(direction)index=Math.max(0,Math.min(steps.length-1,index+direction));else index=Math.max(0,steps.findIndex(value=>value>=minZoom-.001));zoomLevel=steps[index]??minZoom;scale=baseScale*zoomLevel;if(zoomLevel!==previousZoom)iceFloes.length=0;ui.zoomLevel.textContent=Math.round(zoomLevel*100)+'%';ui.scaleDistance.textContent=Math.max(2,Math.round(15/zoomLevel))+' km';ui.zoomIn.disabled=index>=steps.length-1;ui.zoomOut.disabled=index<=0;if(!silent)showToast(zoomLevel>1?'CHART DETAIL '+Math.round(zoomLevel*100)+'%':'CHART OVERVIEW '+Math.round(zoomLevel*100)+'%');
   }
-  window.AR_3D_VIEW=()=>{const ship=vesselModifiers();return{x:state.x,y:state.y,angle:state.angle,zoomLevel,scale,width,height,moving:state.moving,commandActive:state.commandActive,ramming:state.ramming,paused:state.gameOver||menuOpen||minimapExpanded||!!research?.isBusy?.(),started:state.started,seasonDay:state.seasonDay,year:state.year,vesselId:vesselIceId(ship),vesselName:ship.name||'Research Vessel',labels:chartLabels};};
-  window.AR_SHOW_TOAST=showToast;
-  function frame(now){const dt=Math.min(.04,(now-last)/1000);last=now;const paused=state.gameOver||menuOpen||minimapExpanded||!!research?.isBusy?.();sound.update(paused);let weather;if(!paused){updateBrokenIceDrift(dt/zoomLevel);updatePackIceTextureDrift(dt/zoomLevel);serviceNearbyPort();update(dt);weather=updateWeatherAnnouncement();updateIceReadout();updateCompass();if(now-lastResearchNavigation>250){lastResearchNavigation=now;updateResearchNavigation();}}else{updateCalendar(0);weather=currentWeather();ui.weatherValue.textContent=weather.type==='clear'?'CLEAR':`${weather.label} ${weather.rating}/10 · ${weather.visibilityKm} KM`;updateIceReadout();updateCompass();}const margin=60/scale,minX=state.x-width/scale/2-margin,maxX=state.x+width/scale/2+margin,minY=state.y-height/scale/2-margin,maxY=state.y+height/scale/2+margin;if(!paused){updateFloes(dt/zoomLevel,minX,maxX,minY,maxY);updateWakeFloes(dt/zoomLevel);updateWildlifeEncounters(dt);updateFishSchools(dt/zoomLevel);updateWildlife(dt/zoomLevel);updateNpcVessels(dt/zoomLevel);}updateResourceWarning();if(!window.AR_3D_ACTIVE){drawMap();drawResearchTargets();drawNpcVessels();drawSeasonalLighting();drawWeather(weather);drawPortMarkers();drawWildlifeObservationRings();drawFog(weather);drawResearchTargets(true);/* wildlife labels intentionally hidden; species is revealed on interaction */drawResearchGuidance();}try{drawMiniMap();}catch(error){console.error('MINIMAP DRAW FAILED',error);}if(!window.AR_3D_ACTIVE)drawVessel();requestAnimationFrame(frame);}
+  function frame(now){const dt=Math.min(.04,(now-last)/1000);last=now;const paused=state.gameOver||menuOpen||minimapExpanded||!!research?.isBusy?.();sound.update(paused);let weather;if(!paused){updateBrokenIceDrift(dt/zoomLevel);updatePackIceTextureDrift(dt/zoomLevel);serviceNearbyPort();update(dt);weather=updateWeatherAnnouncement();updateIceReadout();updateCompass();if(now-lastResearchNavigation>250){lastResearchNavigation=now;updateResearchNavigation();}}else{updateCalendar(0);weather=currentWeather();ui.weatherValue.textContent=weather.type==='clear'?'CLEAR':`${weather.label} ${weather.rating}/10 · ${weather.visibilityKm} KM`;updateIceReadout();updateCompass();}const margin=60/scale,minX=state.x-width/scale/2-margin,maxX=state.x+width/scale/2+margin,minY=state.y-height/scale/2-margin,maxY=state.y+height/scale/2+margin;if(!paused){updateFloes(dt/zoomLevel,minX,maxX,minY,maxY);updateWakeFloes(dt/zoomLevel);updateWildlifeEncounters(dt);updateFishSchools(dt/zoomLevel);updateWildlife(dt/zoomLevel);updateNpcVessels(dt/zoomLevel);}updateResourceWarning();drawMap();drawResearchTargets();drawNpcVessels();drawSeasonalLighting();drawWeather(weather);drawPortMarkers();drawWildlifeObservationRings();drawFog(weather);drawResearchTargets(true);/* wildlife labels intentionally hidden; species is revealed on interaction */drawResearchGuidance();try{drawMiniMap();}catch(error){console.error('MINIMAP DRAW FAILED',error);}drawVessel();requestAnimationFrame(frame);}
   research?.initialize?.({
     wildlifeCatalog:window.ARCTIC_WILDLIFE_CATALOG||{},
     isResearchSiteSuitable,
