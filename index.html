@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Arctic Research">
   <link rel="manifest" href="manifest.webmanifest">
   <title>Arctic Research</title>
-  <link rel="stylesheet" href="style.css?v=expedition-22y-cleanup">
+  <link rel="stylesheet" href="style.css?v=expedition-23e-polish">
 </head>
 <body>
   <main id="game" aria-label="Arctic Research navigation map">
@@ -42,10 +42,11 @@
       <button id="minimap-close" class="minimap-close" type="button" aria-label="Close navigation chart">×</button>
       <div class="minimap-heading"><small>NAVIGATION CHART · <span id="mini-date">01 SEP 2026</span></small><b id="mini-location">SVALBARD</b></div>
       <canvas id="minimap" width="300" height="300" aria-label="Open navigation chart"></canvas>
+      <div class="minimap-zoom-controls" aria-label="Navigation chart zoom controls"><button id="mini-zoom-out" type="button" aria-label="Zoom navigation chart out">−</button><span id="mini-zoom-level">100%</span><button id="mini-zoom-in" type="button" aria-label="Zoom navigation chart in">+</button></div>
       <div class="minimap-nav-details">
         <span><small>POSITION</small><b id="mini-position">—</b></span>
-        <span><small>COURSE</small><b id="mini-course">STOPPED</b></span>
-        <span><small>SEA ICE</small><b id="mini-ice">OPEN WATER</b></span>
+        <span><small>CHART ZOOM</small><b id="mini-course">100%</b></span>
+        <span><small>ICE CONDITIONS:</small><b id="mini-ice">OPEN WATER</b></span>
         <span><small>WEATHER</small><b id="mini-weather">CLEAR</b></span>
       </div>
     </aside>
@@ -104,12 +105,12 @@
   <script src="river-data.js"></script>
   <script src="wildlife-data.js?v=expedition-22c-visuals"></script>
   <script src="visual-assets-data.js?v=expedition-22c-visuals"></script>
-  <script src="expedition.js?v=expedition-22y-cleanup"></script>
+  <script src="expedition.js?v=expedition-23e-polish"></script>
   <script src="sprite-atlas-data.js?v=expedition-22c-visuals"></script>
   <script src="glacier-data.js?v=expedition-22x-glaciers2"></script>
   <script src="save-summary-fix.js?v=expedition-22x-glaciers2"></script>
   <script src="frame-guard.js?v=expedition-22x-glaciers2"></script>
-  <script src="game.js?v=expedition-23d-2drestore"></script>
+  <script src="game.js?v=expedition-23e-polish"></script>
   <script src="glacier-overlay-v2.js?v=expedition-23d-terrainice"></script>
   <script>
     (()=>{

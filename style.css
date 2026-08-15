@@ -276,3 +276,32 @@ body { overscroll-behavior: none; touch-action: none; }
 .nav-chart-open #arx-mobile-toggle{display:none!important}
 .minimap.expanded #minimap{width:min(76vw,64vh,620px)!important;height:min(76vw,64vh,620px)!important;max-height:none!important;aspect-ratio:1/1!important;border-radius:50%!important}
 @media(max-width:620px){.minimap.expanded #minimap{width:min(90vw,55vh,430px)!important;height:min(90vw,55vh,430px)!important;max-height:none!important;aspect-ratio:1/1!important;border-radius:50%!important}}
+
+
+/* Expedition 23e: larger overview chart and phone navigation layout. */
+.minimap-zoom-controls{display:none}
+.minimap.expanded{grid-template-rows:auto minmax(0,1fr) auto auto!important}
+.minimap.expanded .minimap-heading{display:grid!important;grid-template-columns:1fr!important;justify-items:center!important;text-align:center!important;width:min(760px,92vw)!important;padding:0 42px 7px!important}
+.minimap.expanded .minimap-heading small{grid-row:1}.minimap.expanded .minimap-heading b{grid-row:2;margin-top:4px;font-size:12px!important;color:#f6d365!important}
+.minimap.expanded .minimap-zoom-controls{display:flex!important;align-items:center;justify-content:center;gap:7px;margin-top:8px}
+.minimap-zoom-controls button{width:38px;height:32px;border:1px solid rgba(166,230,244,.28);border-radius:7px;background:rgba(30,79,96,.55);color:#eafaff;font-size:19px}.minimap-zoom-controls button:disabled{opacity:.35}.minimap-zoom-controls span{min-width:58px;color:#f6d365;font-size:9px;font-weight:900;text-align:center}
+.minimap.expanded .minimap-nav-details{box-sizing:border-box!important;padding:0 4px!important}
+@media (pointer:coarse) and (max-width:900px){
+  .minimap:not(.expanded){width:129px!important;height:129px!important}
+  .minimap:not(.expanded) #minimap{width:129px!important;height:129px!important}
+}
+@media (pointer:coarse) and (max-width:900px) and (orientation:portrait){
+  .minimap.expanded{padding:12px!important}
+  .minimap.expanded #minimap{width:min(92vw,56vh,500px)!important;height:min(92vw,56vh,500px)!important}
+  .minimap.expanded .minimap-nav-details{width:min(94vw,520px)!important;grid-template-columns:1fr 1fr!important;gap:7px!important;margin-top:7px!important}
+  .minimap.expanded .minimap-nav-details span{min-width:0!important;padding:8px 5px!important}
+}
+@media (pointer:coarse) and (max-width:900px) and (orientation:landscape){
+  .minimap.expanded{padding:max(8px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))!important;grid-template-columns:minmax(0,1fr) minmax(180px,24vw)!important;grid-template-rows:auto minmax(0,1fr) auto!important;column-gap:12px!important}
+  .minimap.expanded .minimap-heading{grid-column:1!important;grid-row:1!important;width:100%!important;padding:0 36px 4px!important}
+  .minimap.expanded #minimap{grid-column:1!important;grid-row:2 / 4!important;width:min(78vh,calc(100vw - 230px))!important;height:min(78vh,calc(100vw - 230px))!important;max-width:100%!important;align-self:center!important}
+  .minimap.expanded .minimap-zoom-controls{grid-column:2!important;grid-row:1!important;align-self:end!important;margin:0 0 8px!important}
+  .minimap.expanded .minimap-nav-details{grid-column:2!important;grid-row:2 / 4!important;width:100%!important;grid-template-columns:1fr!important;align-content:center!important;gap:7px!important;margin:0!important;min-width:0!important}
+  .minimap.expanded .minimap-nav-details span{min-width:0!important;padding:8px 5px!important;overflow:hidden!important}
+  .minimap.expanded .minimap-nav-details b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
