@@ -1,0 +1,28 @@
+name: Tune 3D relief safety
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/scripts/tune_relief3d.py'
+      - '.github/workflows/tune-relief3d.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply safety patch
+        run: python .github/scripts/tune_relief3d.py
+      - name: Validate JavaScript
+        run: node --check relief-3d.js
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add relief-3d.js
+          git commit -m "Harden 3D relief fallback and camera angle"
+          git push
