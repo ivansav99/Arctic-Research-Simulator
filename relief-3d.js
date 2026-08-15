@@ -53,6 +53,8 @@
   let currentYaw = 0;
   let lastNow = performance.now();
   let lastLabelDraw = 0;
+  let last3DDraw = 0;
+  const target3DFrameMs = matchMedia('(pointer:coarse)').matches ? 33 : 22;
   let webglFailed = false;
   let vpMatrix = new Float32Array(16);
   let lastView = null;
@@ -699,6 +701,8 @@
     const dt = Math.min(.05, Math.max(0, (now - lastNow) / 1000));
     lastNow = now;
     if (mode !== '3d' || !gl || !terrainReady) return;
+    if (now - last3DDraw < target3DFrameMs) return;
+    last3DDraw = now;
     resize();
     const view = getView();
     if (!view || !Number.isFinite(view.scale) || view.scale <= 0) return;
