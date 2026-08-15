@@ -1,0 +1,30 @@
+name: Add 3D relief hooks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/scripts/add_relief3d.py'
+      - '.github/workflows/add-relief3d.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply 3D hooks
+        run: python .github/scripts/add_relief3d.py
+      - name: Validate JavaScript
+        run: |
+          node --check game.js
+          node --check relief-3d.js
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add game.js
+          git commit -m "Expose reversible 3D relief renderer hooks"
+          git push
