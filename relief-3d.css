@@ -20,7 +20,7 @@
   position: fixed;
   z-index: 3;
   left: 50%;
-  bottom: max(-14px, calc(env(safe-area-inset-bottom) - 14px));
+  bottom: max(19vh, calc(env(safe-area-inset-bottom) + 34px));
   width: clamp(118px, 15vw, 185px);
   height: auto;
   transform: translateX(-50%);
@@ -89,11 +89,11 @@ body.nav-chart-open #relief-3d-canvas { pointer-events: none; }
     width: 82px;
   }
   .relief-mode-toggle button { height: 29px; font-size: 8px; }
-  #relief-3d-ship { width: clamp(110px, 28vw, 152px); bottom: -8px; }
+  #relief-3d-ship { width: clamp(110px, 28vw, 152px); bottom: max(19vh, calc(env(safe-area-inset-bottom) + 22px)); }
   .relief-3d-badge { bottom: max(12px, env(safe-area-inset-bottom)); font-size: 6px; }
 }
 
 @media (orientation: landscape) and (max-height: 520px) {
   .relief-mode-toggle { top: 92px; right: 78px; }
-  #relief-3d-ship { width: clamp(104px, 15vw, 145px); bottom: -20px; }
+  #relief-3d-ship { width: clamp(104px, 15vw, 145px); bottom: max(18vh, calc(env(safe-area-inset-bottom) + 16px)); }
 }

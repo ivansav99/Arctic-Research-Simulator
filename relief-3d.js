@@ -8,8 +8,10 @@
   const STORAGE_KEY = 'arctic-research-render-mode-v1';
   const extentKm = 2910;
   const dprCap = 1.5;
-  const terrainRequestPixels = matchMedia('(pointer:coarse)').matches ? 1536 : 2048;
-  const PIVOT_NDC_SHIFT = 0.50;
+  const terrainRequestPixels = matchMedia('(pointer:coarse)').matches ? 2048 : 3072;
+  const PIVOT_NDC_SHIFT = 0.28;
+  const TERRAIN_MESH_SCALE = 2.6;
+  const TERRAIN_TEXTURE_SCALE = 3.4;
 
   const reliefCanvas = document.createElement('canvas');
   reliefCanvas.id = 'relief-3d-canvas';
@@ -275,8 +277,8 @@
       throw new Error(gl.getProgramInfoLog(program) || 'program link failed');
     }
 
-    const cols = 96;
-    const rows = 72;
+    const cols = 128;
+    const rows = 96;
     const vertices = new Float32Array((cols + 1) * (rows + 1) * 2);
     let k = 0;
     for (let y = 0; y <= rows; y++) {
@@ -340,7 +342,8 @@
     if (!gl || !terrainTexture || !view || terrainLoading) return;
     const spanX = view.width / view.scale;
     const spanY = view.height / view.scale;
-    const desiredSpan = Math.max(180, Math.min(1900, Math.hypot(spanX, spanY) * 1.50));
+    const baseSpan = Math.max(spanX, spanY);
+    const desiredSpan = Math.max(260, Math.min(3600, baseSpan * TERRAIN_TEXTURE_SCALE));
     const moved = terrainTexSpan > 0 ? Math.hypot(view.x - terrainTexCenterX, view.y - terrainTexCenterY) : Infinity;
     const scaleChanged = terrainTexSpan <= 0 || desiredSpan < terrainTexSpan * 0.78 || desiredSpan > terrainTexSpan * 1.28;
     if (terrainReady && moved < terrainTexSpan * 0.11 && !scaleChanged) return;
@@ -772,10 +775,11 @@
     gl.useProgram(program);
     gl.bindVertexArray(vao);
 
-    const spanX = view.width / view.scale;
-    const spanY = view.height / view.scale;
+    const baseSpanX = view.width / view.scale;
+    const baseSpanY = view.height / view.scale;
+    const renderSpan = Math.max(baseSpanX, baseSpanY) * TERRAIN_MESH_SCALE;
     gl.uniform2f(gl.getUniformLocation(program, 'uCenter'), view.x, view.y);
-    gl.uniform2f(gl.getUniformLocation(program, 'uSpan'), spanX, spanY);
+    gl.uniform2f(gl.getUniformLocation(program, 'uSpan'), renderSpan, renderSpan);
     gl.uniform2f(gl.getUniformLocation(program, 'uTexCenter'), terrainTexCenterX, terrainTexCenterY);
     gl.uniform1f(gl.getUniformLocation(program, 'uTexSpan'), terrainTexSpan);
     gl.uniform1f(gl.getUniformLocation(program, 'uExtent'), extentKm);
@@ -804,32 +808,40 @@
   function inverseProject(clientX, clientY) {
     const view = lastView || getView();
     if (!view) return null;
-    let u = clamp(clientX / innerWidth, 0, 1);
-    let v = clamp(clientY / innerHeight, 0, 1);
-    const spanX = view.width / view.scale;
-    const spanY = view.height / view.scale;
-    for (let iteration = 0; iteration < 8; iteration++) {
-      const worldX = view.x + (u - .5) * spanX;
-      const worldY = view.y + (v - .5) * spanY;
+    const baseSpanX = view.width / view.scale;
+    const baseSpanY = view.height / view.scale;
+    const searchSpan = Math.max(baseSpanX, baseSpanY) * TERRAIN_MESH_SCALE;
+    let worldX = view.x + (clientX / innerWidth - .5) * searchSpan;
+    let worldY = view.y + (clientY / innerHeight - .5) * searchSpan;
+    const eps = Math.max(0.08, Math.max(baseSpanX, baseSpanY) / 1200);
+
+    for (let iteration = 0; iteration < 10; iteration++) {
       const p = projectWorld(worldX, worldY, view, 0);
       if (!p) return null;
       const ex = p.x - clientX;
       const ey = p.y - clientY;
       if (Math.hypot(ex, ey) < .45) break;
-      const du = .0015, dv = .0015;
-      const px = projectWorld(view.x + (u + du - .5) * spanX, worldY, view, 0);
-      const py = projectWorld(worldX, view.y + (v + dv - .5) * spanY, view, 0);
+      const px = projectWorld(worldX + eps, worldY, view, 0);
+      const py = projectWorld(worldX, worldY + eps, view, 0);
       if (!px || !py) break;
-      const j00 = (px.x - p.x) / du, j10 = (px.y - p.y) / du;
-      const j01 = (py.x - p.x) / dv, j11 = (py.y - p.y) / dv;
+      const j00 = (px.x - p.x) / eps, j10 = (px.y - p.y) / eps;
+      const j01 = (py.x - p.x) / eps, j11 = (py.y - p.y) / eps;
       const det = j00 * j11 - j01 * j10;
-      if (Math.abs(det) < 1e-5) break;
-      const stepU = (j11 * ex - j01 * ey) / det;
-      const stepV = (-j10 * ex + j00 * ey) / det;
-      u = clamp(u - stepU, -.15, 1.15);
-      v = clamp(v - stepV, -.15, 1.15);
+      if (Math.abs(det) < 1e-7) break;
+      const stepX = (j11 * ex - j01 * ey) / det;
+      const stepY = (-j10 * ex + j00 * ey) / det;
+      worldX -= stepX;
+      worldY -= stepY;
+      const dx = worldX - view.x, dy = worldY - view.y;
+      const limit = searchSpan * .58;
+      worldX = view.x + clamp(dx, -limit, limit);
+      worldY = view.y + clamp(dy, -limit, limit);
     }
-    return { x: u * innerWidth, y: v * innerHeight };
+
+    return {
+      x: (worldX - view.x) * view.scale + view.width / 2,
+      y: (worldY - view.y) * view.scale + view.height / 2
+    };
   }
 
   reliefCanvas.addEventListener('pointerdown', event => {
