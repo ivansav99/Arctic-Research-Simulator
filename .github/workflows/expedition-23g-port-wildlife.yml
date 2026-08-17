@@ -1,0 +1,42 @@
+name: Expedition 23g port wildlife
+on:
+  push:
+    paths:
+      - '.github/workflows/expedition-23g-port-wildlife.yml'
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build patch script
+        run: cat .github/scripts/p23g_0 .github/scripts/p23g_1 > /tmp/patch.py
+      - name: Validate patch script
+        run: python -m py_compile /tmp/patch.py
+      - name: Apply patch
+        run: python /tmp/patch.py
+      - name: Validate JavaScript
+        run: |
+          node --check expedition.js
+          node --check game.js
+          git diff --check
+      - name: Validate requested behavior
+        run: |
+          grep -q "ENTERING PORT" game.js
+          grep -q "appendWakeSegment" game.js
+          grep -q "ferryHorn" game.js
+          grep -q "WILDLIFE OPEN FAILED" game.js
+          grep -q "255,235,122,1" game.js
+          grep -q "suppressPortSound" expedition.js
+          grep -q "guaranteed-grant" expedition.js
+          grep -q "!template.anywhere&&validator" expedition.js
+          grep -q "expedition-23g-port-wildlife" index.html
+      - name: Commit runtime changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add expedition.js game.js index.html
+          git diff --cached --quiet && { echo 'No runtime changes produced'; exit 1; }
+          git commit -m "Fix port arrival wake grants horn and wildlife"
+          git push
