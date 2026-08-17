@@ -47,7 +47,7 @@ jobs:
           sleep 2
           CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
           test -n "$CHROME"
-          "$CHROME" --headless --no-sandbox --disable-gpu --virtual-time-budget=9500 --dump-dom http://127.0.0.1:8765/smoke.html >/tmp/dom.html 2>/tmp/chrome.log || true
+          timeout 30s "$CHROME" --headless --no-sandbox --disable-gpu --disable-background-networking --host-resolver-rules="MAP wms.gebco.net 127.0.0.1" --virtual-time-budget=9500 --dump-dom http://127.0.0.1:8765/smoke.html >/tmp/dom.html 2>/tmp/chrome.log || true
           echo '--- smoke markers ---'
           grep -o 'data-smoke-[a-z]*="[^"]*"' /tmp/dom.html || true
           echo '--- modal markers ---'
