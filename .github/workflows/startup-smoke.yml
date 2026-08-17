@@ -13,25 +13,33 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           source=Path('index.html').read_text()
-          click='''<script>setTimeout(()=>document.getElementById('start-button')?.click(),700);</script>'''
+          click='''<script>
+          if(!sessionStorage.getItem('ars-smoke-clicked')){
+            sessionStorage.setItem('ars-smoke-clicked','1');
+            setTimeout(()=>document.getElementById('start-button')?.click(),700);
+          }
+          </script>'''
           Path('startup-click.html').write_text(source.replace('</body>',click+'\n</body>'))
-          auto='''<script>sessionStorage.setItem('arctic-research-start-new-v1','1');</script>'''
-          Path('startup-auto.html').write_text(source.replace('<script src="coast-data.js"></script>',auto+'\n  <script src="coast-data.js"></script>'))
           PY
       - name: Start local site
         run: |
           python3 -m http.server 8765 >/tmp/server.log 2>&1 &
           sleep 2
-      - name: Exercise startup paths in Chromium
+      - name: Exercise hardened startup in Chromium
         run: |
           CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
           test -n "$CHROME"
-          for TEST in click auto; do
-            "$CHROME" --headless --no-sandbox --disable-gpu --enable-logging=stderr --v=1 --user-data-dir="/tmp/chrome-$TEST" --virtual-time-budget=5000 --dump-dom "http://127.0.0.1:8765/startup-$TEST.html" >"/tmp/dom-$TEST.html" 2>"/tmp/chrome-$TEST.log" || true
-            echo "--- $TEST DOM markers ---"
-            grep -o 'id="arx-character-modal"[^>]*' "/tmp/dom-$TEST.html" || true
-            grep -o 'id="welcome"[^>]*' "/tmp/dom-$TEST.html" || true
-            echo "--- $TEST JS errors ---"
-            grep -Ei 'Uncaught|ReferenceError|TypeError|SyntaxError|ERROR.*javascript|CONSOLE' "/tmp/chrome-$TEST.log" | tail -n 80 || true
-            grep -q 'id="arx-character-modal"[^>]*class="[^"]*open' "/tmp/dom-$TEST.html"
-          done
+          "$CHROME" --headless --no-sandbox --disable-gpu --enable-logging=stderr --v=1 --user-data-dir=/tmp/ars-chrome --virtual-time-budget=7000 --dump-dom http://127.0.0.1:8765/startup-click.html >/tmp/dom-click.html 2>/tmp/chrome-click.log || true
+          echo '--- Click startup DOM markers ---'
+          grep -o 'id="arx-character-modal"[^>]*' /tmp/dom-click.html || true
+          grep -o 'id="welcome"[^>]*' /tmp/dom-click.html || true
+          echo '--- Click startup JS errors ---'
+          grep -Ei 'Uncaught|ReferenceError|TypeError|SyntaxError|NEW GAME START FAILED|AUTO NEW GAME START FAILED' /tmp/chrome-click.log | tail -n 80 || true
+          grep -q 'id="arx-character-modal"[^>]*class="[^"]*open' /tmp/dom-click.html
+          "$CHROME" --headless --no-sandbox --disable-gpu --enable-logging=stderr --v=1 --user-data-dir=/tmp/ars-chrome-direct --virtual-time-budget=5000 --dump-dom 'http://127.0.0.1:8765/?new=1&build=23h' >/tmp/dom-direct.html 2>/tmp/chrome-direct.log || true
+          echo '--- Direct startup DOM markers ---'
+          grep -o 'id="arx-character-modal"[^>]*' /tmp/dom-direct.html || true
+          grep -o 'id="welcome"[^>]*' /tmp/dom-direct.html || true
+          echo '--- Direct startup JS errors ---'
+          grep -Ei 'Uncaught|ReferenceError|TypeError|SyntaxError|NEW GAME START FAILED|AUTO NEW GAME START FAILED' /tmp/chrome-direct.log | tail -n 80 || true
+          grep -q 'id="arx-character-modal"[^>]*class="[^"]*open' /tmp/dom-direct.html
