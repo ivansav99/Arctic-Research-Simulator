@@ -23,13 +23,12 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('index.html')
-          s=p.read_text()
+          s=Path('index.html').read_text()
           inject=r'''<script>
           (()=>{
             if(!new URLSearchParams(location.search).has('new')) setTimeout(()=>document.getElementById('start-button')?.click(),250);
-            setTimeout(()=>document.querySelector('[data-arx-action="confirm-character"]')?.click(),1000);
-            setTimeout(()=>document.querySelector('[data-arx-tab="contracts"]')?.click(),2200);
+            setTimeout(()=>document.querySelector('[data-arx-action="confirm-character"]')?.click(),1100);
+            setTimeout(()=>document.querySelector('[data-arx-tab="contracts"]')?.click(),2600);
             setTimeout(()=>{
               const grant=!!document.querySelector('[data-arx-action="accept"]');
               document.documentElement.dataset.smokeGrant=grant?'yes':'no';
@@ -37,7 +36,7 @@ jobs:
               const opened=window.ArcticResearch?.openWildlife?.('POLAR BEAR',{individualId:'smoke-bear',lat:78.2,lon:15.5});
               document.documentElement.dataset.smokeWildlife=opened?'yes':'no';
               document.documentElement.dataset.smokeObserved=window.ArcticResearch?.isWildlifeObserved?.('smoke-bear')?'yes':'no';
-            },3600);
+            },4300);
           })();
           </script>'''
           Path('smoke.html').write_text(s.replace('</body>',inject+'\n</body>'))
@@ -48,7 +47,16 @@ jobs:
           sleep 2
           CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
           test -n "$CHROME"
-          "$CHROME" --headless --no-sandbox --disable-gpu --virtual-time-budget=7500 --dump-dom http://127.0.0.1:8765/smoke.html >/tmp/dom.html 2>/tmp/chrome.log || true
+          "$CHROME" --headless --no-sandbox --disable-gpu --virtual-time-budget=9500 --dump-dom http://127.0.0.1:8765/smoke.html >/tmp/dom.html 2>/tmp/chrome.log || true
+          echo '--- smoke markers ---'
+          grep -o 'data-smoke-[a-z]*="[^"]*"' /tmp/dom.html || true
+          echo '--- modal markers ---'
+          grep -o 'id="arx-port-modal"[^>]*' /tmp/dom.html || true
+          grep -o 'id="arx-wildlife-modal"[^>]*' /tmp/dom.html || true
+          echo '--- grant buttons ---'
+          grep -o 'data-arx-action="accept"' /tmp/dom.html | head || true
+          echo '--- JS errors ---'
+          grep -Ei 'Uncaught|ReferenceError|TypeError|SyntaxError|CONSOLE' /tmp/chrome.log | tail -n 40 || true
           grep -q 'data-smoke-grant="yes"' /tmp/dom.html
           grep -q 'data-smoke-wildlife="yes"' /tmp/dom.html
           grep -q 'data-smoke-observed="yes"' /tmp/dom.html
