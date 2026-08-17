@@ -24,24 +24,20 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           s=Path('index.html').read_text()
+          freeze="<script>window.requestAnimationFrame=function(){return 0};window.cancelAnimationFrame=function(){};</script>\n"
+          s=s.replace('<script src="coast-data.js"></script>',freeze+'<script src="coast-data.js"></script>')
           inject=r'''<script>
           (()=>{
-            setTimeout(()=>document.getElementById('start-button')?.click(),200);
-            setTimeout(()=>document.querySelector('[data-arx-action="confirm-character"]')?.click(),850);
-            setTimeout(()=>document.querySelector('[data-arx-tab="contracts"]')?.click(),1900);
-            setTimeout(()=>{
-              const grant=!!document.querySelector('[data-arx-action="accept"]');
-              document.documentElement.dataset.smokeGrant=grant?'yes':'no';
-            },4300);
-            setTimeout(()=>document.querySelector('[data-arx-action="close-port"]')?.click(),4700);
-            setTimeout(()=>{
-              const opened=window.ArcticResearch?.openWildlife?.('POLAR BEAR',{individualId:'smoke-bear',lat:78.2,lon:15.5});
-              document.documentElement.dataset.smokeWildlife=opened?'yes':'no';
-            },5200);
+            setTimeout(()=>document.getElementById('start-button')?.click(),120);
+            setTimeout(()=>document.querySelector('[data-arx-action="confirm-character"]')?.click(),500);
+            setTimeout(()=>document.querySelector('[data-arx-tab="contracts"]')?.click(),1100);
+            setTimeout(()=>{document.documentElement.dataset.smokeGrant=document.querySelector('[data-arx-action="accept"]')?'yes':'no';},2400);
+            setTimeout(()=>document.querySelector('[data-arx-action="close-port"]')?.click(),2700);
+            setTimeout(()=>{document.documentElement.dataset.smokeWildlife=window.ArcticResearch?.openWildlife?.('POLAR BEAR',{individualId:'smoke-bear',lat:78.2,lon:15.5})?'yes':'no';},3000);
             setTimeout(()=>{
               document.documentElement.dataset.smokeObserved=window.ArcticResearch?.isWildlifeObserved?.('smoke-bear')?'yes':'no';
               document.documentElement.dataset.smokeWildlifeOpen=document.getElementById('arx-wildlife-modal')?.classList.contains('open')?'yes':'no';
-            },5800);
+            },3300);
           })();
           </script>'''
           Path('smoke.html').write_text(s.replace('</body>',inject+'\n</body>'))
@@ -52,7 +48,7 @@ jobs:
           sleep 2
           CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
           test -n "$CHROME"
-          timeout 25s "$CHROME" --headless --no-sandbox --disable-gpu --disable-background-networking --host-resolver-rules="MAP wms.gebco.net 127.0.0.1" --virtual-time-budget=8000 --dump-dom http://127.0.0.1:8765/smoke.html >/tmp/dom.html 2>/tmp/chrome.log || true
+          timeout 20s "$CHROME" --headless --no-sandbox --disable-gpu --disable-background-networking --virtual-time-budget=5000 --dump-dom http://127.0.0.1:8765/smoke.html >/tmp/dom.html 2>/tmp/chrome.log || true
           echo '--- smoke markers ---'
           grep -o 'data-smoke-[a-z-]*="[^"]*"' /tmp/dom.html || true
           echo '--- JS errors ---'
