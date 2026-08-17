@@ -497,9 +497,19 @@
   }
   function openGameMenu(){menuOpen=true;ui.welcome.classList.remove('hidden');showTitlePane('title-main');refreshMenu();analytics.track('game_menu_opened',{menu_context:state.started?'in_game':'title'});}
   function resumeGame(){if(!state.started)return;menuOpen=false;ui.welcome.classList.add('hidden');analytics.track('game_resumed');}
+  function beginFreshNewGame(){
+    try{localStorage.removeItem(SAVE_KEYS.auto);}catch(error){}
+    menuOpen=false;ui.welcome.classList.add('hidden');
+    try{requestExpeditionStart();}
+    catch(error){console.error('NEW GAME START FAILED',error);menuOpen=true;ui.welcome.classList.remove('hidden');showToast('NEW GAME COULD NOT START · RELOAD AND TRY AGAIN',3600);return false;}
+    try{analytics.track('new_game');}catch(error){}
+    return true;
+  }
   function startNewGame(){
-    if(state.started){try{sessionStorage.setItem(AUTO_NEW_KEY,'1');}catch(error){}location.reload();return;}
-    try{localStorage.removeItem(SAVE_KEYS.auto);}catch(error){}menuOpen=false;ui.welcome.classList.add('hidden');analytics.track('new_game');requestExpeditionStart();
+    const params=new URLSearchParams(location.search);
+    if(params.get('new')==='1')return beginFreshNewGame();
+    try{const url=new URL(location.href);url.searchParams.set('new','1');url.searchParams.set('build','23h');location.replace(url.href);}
+    catch(error){beginFreshNewGame();}
   }
   function semanticAnalytics(){
     const next=research?.getState?.();if(!next)return;const prev=lastResearchAnalytics;if(prev){
@@ -1233,8 +1243,8 @@
   function finishMapTouch(e,cancelled=false){if(!mapTouchPointers.has(e.pointerId))return;const tap=mapTouchTap&&mapTouchTap.id===e.pointerId&&!mapTouchTap.moved&&!mapPinchActive&&!cancelled?{x:e.clientX,y:e.clientY}:null;mapTouchPointers.delete(e.pointerId);if(mapTouchPointers.size<2)mapPinchDistance=0;if(mapTouchPointers.size===0){mapPinchActive=false;mapTouchTap=null;}if(tap){analytics.track('map_interaction',{map_area:'main',pointer_x:Math.round(tap.x),pointer_y:Math.round(tap.y)});handleMapPointer(tap.x,tap.y);}}
   canvas.addEventListener('pointerup',e=>finishMapTouch(e,false));
   canvas.addEventListener('pointercancel',e=>finishMapTouch(e,true));
-  document.getElementById('start-button').addEventListener('click',()=>{sound.unlock();startNewGame();});
-  document.getElementById('help-start-button').addEventListener('click',()=>{sound.unlock();state.started?resumeGame():startNewGame();});
+  document.getElementById('start-button').addEventListener('click',()=>{startNewGame();try{sound.unlock();}catch(error){}});
+  document.getElementById('help-start-button').addEventListener('click',()=>{state.started?resumeGame():startNewGame();try{sound.unlock();}catch(error){}});
   document.getElementById('continue-button').addEventListener('click',()=>{sound.unlock();if(state.started){resumeGame();return;}const save=readSave('auto');if(save)restoreGameSave(save,'auto');});
   document.getElementById('load-button').addEventListener('click',()=>{showTitlePane('title-load');refreshMenu();analytics.track('load_menu_opened');});
   document.getElementById('save-button').addEventListener('click',()=>{showTitlePane('title-save');refreshMenu();analytics.track('save_menu_opened');});
@@ -1258,6 +1268,6 @@
   addEventListener('pagehide',()=>{updateActiveClock();if(!autosaveSuspended)saveGame('auto','pagehide');analytics.track('session_summary',{active_seconds:activeSeconds()});});
   setInterval(()=>{if(state.started&&!menuOpen&&!autosaveSuspended)saveGame('auto','interval');},30000);
   addEventListener('resize',resize);resize();lastResearchAnalytics=research?.getState?.()||null;refreshMenu();analytics.track('game_open',{analytics_enabled:analytics.isEnabled()?1:0});
-  try{if(sessionStorage.getItem(AUTO_NEW_KEY)==='1'){sessionStorage.removeItem(AUTO_NEW_KEY);setTimeout(startNewGame,0);}}catch(error){}
+  try{const params=new URLSearchParams(location.search);if(params.get('new')==='1'){setTimeout(()=>{const clean=new URL(location.href);clean.searchParams.delete('new');clean.searchParams.delete('build');history.replaceState(null,'',clean.pathname+clean.search+clean.hash);beginFreshNewGame();},0);}}catch(error){console.error('AUTO NEW GAME START FAILED',error);}
   requestAnimationFrame(frame);
 })();
