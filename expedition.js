@@ -994,7 +994,7 @@ state.offers=[]; const specialtyCount=new Set(state.scientists.map(item=>item.sp
       generateOffers(state.port,{fresh:true});
       if(!state.offers.length){
         const rng=seeded(`${portId}-${state.portVisits}-guaranteed-grant`),fallback=buildTarget(compatibleFallbackTemplate(),state.port,rng,'grant');
-        if(fallback)state.offers=[fallback];
+        if(fallback){giveGrantUniqueMedia(fallback,new Set(),rng);state.offers=[fallback];}
       }
       renderSidebar();
       if(portOpen)renderPort();
@@ -1051,24 +1051,22 @@ state.offers=[]; const specialtyCount=new Set(state.scientists.map(item=>item.sp
     const incomingId=port.id||slug(port.name),previousPortId=state.lastPortId;
     state.port={name:port.name,lat:port.lat,lon:port.lon,id:incomingId,country:port.country||null,countryCode:port.countryCode||null};
     const differentPort=!!previousPortId&&previousPortId!==incomingId;
-    let refreshGrants=false,portId=incomingId,readyAt=0;
-    if (!options.resume) {
-      state.lastPortId=incomingId;
-      state.portVisits++; activePortTab='vessel'; portScrollTop=0; portTabsScrollLeft=0; openStoreDetail=null; state.droppedGrantTemplates=[]; state.bridgeSupportNotice=null;
-      const interrupted=state.targets.filter(target=>target.stations?.some(station=>station.status==='completed')&&target.stations.some(station=>station.status!=='completed'));
-      for (const target of interrupted) { target.stationIndex=0; target.stations.forEach(station=>station.status='pending'); target.lat=target.stations[0].lat; target.lon=target.stations[0].lon; target.selected=false; addLog(`${target.shortTitle||target.title} section was interrupted by a port call and reset to station 1.`); }
-      generateCandidates(state.port); state.offers=[];
-      const resources=callbacks.getResources?.()||{fuel:100,food:100}, quote=resupplyAllQuote(resources,vessel());
-      if (quote>0&&state.money<quote) {
-        const support=fullResupplyCost(vessel())*2; adjustMoney(support);
-        state.bridgeSupportNotice=`Cash reserves could not cover one full resupply. Your home university extended ${cash(support)} in emergency bridge support — enough for two full resupplies of this vessel.`;
-        addLog(`Home university bridge support received · ${cash(support)}.`); toast(`UNIVERSITY BRIDGE SUPPORT · +${cash(support)}`);
-      }
-      portId=normalizedPortId(state.port); readyAt=state.grantMarketReady?.[portId]||0; state.grantOfferCycle=null; refreshGrants=true;
-      if (differentPort||state.elapsedDays>=readyAt) state.grantMarketReady[portId]=state.elapsedDays+3.5;
-    } else if (!state.offers.length) generateCandidates(state.port);
-    if(!options.suppressPortSound)callbacks.onSound?.('port'); renderSidebar(); renderPort();
-    if(refreshGrants) scheduleGrantRefresh(80);
+    if(!options.resume){state.lastPortId=incomingId;state.portVisits++;activePortTab='vessel';portScrollTop=0;portTabsScrollLeft=0;openStoreDetail=null;state.droppedGrantTemplates=[];state.bridgeSupportNotice=null;state.candidates=[];state.offers=[];state.grantOfferCycle=null;}
+    if(!options.suppressPortSound)callbacks.onSound?.('port');
+    renderSidebar();renderPort();
+    const visitAtOpen=state.portVisits;
+    setTimeout(()=>{
+      if(!state.port||normalizedPortId(state.port)!==incomingId||state.portVisits!==visitAtOpen)return;
+      if(!options.resume){
+        const interrupted=state.targets.filter(target=>target.stations?.some(station=>station.status==='completed')&&target.stations.some(station=>station.status!=='completed'));
+        for(const target of interrupted){target.stationIndex=0;target.stations.forEach(station=>station.status='pending');target.lat=target.stations[0].lat;target.lon=target.stations[0].lon;target.selected=false;addLog(`${target.shortTitle||target.title} section was interrupted by a port call and reset to station 1.`);}
+        generateCandidates(state.port);
+        const resources=callbacks.getResources?.()||{fuel:100,food:100},quote=resupplyAllQuote(resources,vessel());
+        if(quote>0&&state.money<quote){const support=fullResupplyCost(vessel())*2;adjustMoney(support);state.bridgeSupportNotice=`Cash reserves could not cover one full resupply. Your home university extended ${cash(support)} in emergency bridge support — enough for two full resupplies of this vessel.`;addLog(`Home university bridge support received · ${cash(support)}.`);toast(`UNIVERSITY BRIDGE SUPPORT · +${cash(support)}`);}
+        const readyAt=state.grantMarketReady?.[incomingId]||0;if(differentPort||state.elapsedDays>=readyAt)state.grantMarketReady[incomingId]=state.elapsedDays+3.5;
+      }else if(!state.candidates.length)generateCandidates(state.port);
+      renderSidebar();if(portOpen)renderPort();if(!state.offers.length)scheduleGrantRefresh(10);
+    },18);
   }
   function closePort() { capturePortView(); root?.querySelector('#arx-port-modal')?.classList.remove('open'); portOpen=false; }
   function leavePort() { state.port=null; closePort(); renderSidebar(); }
@@ -1293,9 +1291,7 @@ state.offers=[]; const specialtyCount=new Set(state.scientists.map(item=>item.sp
     let pool;
     if(!ready.length){const fallback=compatibleFallbackTemplate(),target=buildTarget(fallback,payload.position,rng,'opportunity',{nearby:inIce,iceThickness});if(!target)return null;target.selected=false;state.targets.push(target);toast(`NEW RESEARCH OPPORTUNITY · ${target.shortTitle}`);changed();return target;}
     if (aspirational.length&&rng()<.30) pool=aspirational; else pool=ready;
-    const template=pool[Math.floor(rng()*pool.length)],target=buildTarget(template,payload.position,rng,'opportunity',{nearby:inIce,iceThickness}); if (!target) return null;
-    target.selected=false;
-    state.targets.push(target); toast(`NEW RESEARCH OPPORTUNITY · ${target.shortTitle}`); changed(); return target;
+    const template=pool[Math.floor(rng()*pool.length)];let target=buildTarget(template,payload.position,rng,'opportunity',{nearby:inIce,iceThickness});if(!target){const fallback=compatibleFallbackTemplate();fallback.anywhere=false;fallback.minDistance=12;fallback.distanceRange=45;target=buildTarget(fallback,payload.position,rng,'opportunity',{nearby:true,iceThickness});}if(!target)return null;target.selected=false;state.targets.push(target);toast(`NEW RESEARCH OPPORTUNITY · ${target.shortTitle}`);changed({port:false});return target;
   }
 
   function publishPaper(automatic=false) {
@@ -1327,8 +1323,9 @@ state.offers=[]; const specialtyCount=new Set(state.scientists.map(item=>item.sp
     return {total:species.length,seen:seen.length,complete:species.length>0&&seen.length===species.length};
   }
   function openWildlife(species,context={}) {
-    const key=String(species).replace(/ SCHOOL$/,'').toUpperCase(), item=catalog[key];
-    if (!item) { toast(`FIELD OBSERVATION · ${key}`); return false; }
+    const rawKey=String(species).replace(/ SCHOOL$/,'').trim().toUpperCase(),aliases={'BOWHEAD WHALE':'BOWHEAD','BELUGA WHALE':'BELUGA','HUMPBACK WHALE':'HUMPBACK','GREY WHALE':'GRAY WHALE','POLAR BEAR':'POLAR BEAR'},key=aliases[rawKey]||rawKey;
+    let item=catalog[key];if(!item){const compact=value=>String(value||'').toUpperCase().replace(/[^A-Z0-9]/g,'');item=Object.values(catalog).find(entry=>compact(entry.displayName)===compact(rawKey));}
+    if(!item){item={displayName:String(species||'Arctic wildlife'),scientificName:'Field identification pending',group:'Arctic Wildlife Observation',photo:'assets/wildlife/polar-bear.jpg',credit:'Field observation record',source:'#',facts:['A wildlife observation was recorded from the expedition chart.','The individual has been removed from the active chart after observation.','Species reference details can be expanded in a future field-guide update.']};}
     const individualId=String(context.individualId||context.id||`${key}:${Number(context.lat||0).toFixed(3)}:${Number(context.lon||0).toFixed(3)}`);
     const firstSpecies=!state.observed.includes(key), firstIndividual=!state.observedIndividuals.includes(individualId);
     if (firstSpecies) state.observed.push(key);
@@ -1685,7 +1682,7 @@ state.offers=[]; const specialtyCount=new Set(state.scientists.map(item=>item.sp
     const button=event.target.closest('[data-arx-tab]'); if (!button) return;
     const card=button.closest('.arx-port-card'),tabs=card.querySelector('.arx-tabs');
     activePortTab=button.dataset.arxTab; portScrollTop=0; portTabsScrollLeft=tabs.scrollLeft; openStoreDetail=null;
-    renderPort();
+    renderPort();if(activePortTab==='contracts'&&!state.offers.length)scheduleGrantRefresh(0);if(activePortTab==='crew'&&!state.candidates.length){setTimeout(()=>{if(state.port){generateCandidates(state.port);if(portOpen&&activePortTab==='crew')renderPort();}},0);}
   }
 
   function ensureUI() {

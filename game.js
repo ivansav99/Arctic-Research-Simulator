@@ -1,6 +1,9 @@
 (() => {
   'use strict';
   const canvas=document.getElementById('map'),ctx=canvas.getContext('2d');
+  const worldCacheCanvas=document.createElement('canvas'),worldCacheCtx=worldCacheCanvas.getContext('2d');
+  let worldCacheValid=false,worldCacheX=0,worldCacheY=0,worldCacheScale=0,worldCacheAt=0;
+  const invalidateWorldCache=()=>{worldCacheValid=false;};
   const IS_COARSE_POINTER=typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches;
   const miniCanvas=document.getElementById('minimap'),mini=miniCanvas.getContext('2d');
   const lightCanvas=document.createElement('canvas'),light=lightCanvas.getContext('2d');
@@ -80,7 +83,7 @@
   const state={x:home.x,y:home.y,tx:home.x,ty:home.y,angle:Math.PI,moving:false,commandActive:false,travelled:0,track:[{x:home.x,y:home.y}],seasonDay:0,year:2026,frozen:false,fuel:100,food:100,portDestination:null,dockedPort:null,gameOver:false,fogClearDays:7,ramming:false,ramClock:0,targetOnLand:false,precisionNav:false,started:false};
   let width=0,height=0,dpr=1,baseScale=4.6,zoomLevel=1,scale=4.6,last=performance.now(),lastRender=0,lastFramePaused=false,toastTimer,pendingPortEntryTimer=0,pendingPortEntryCity=null,announcedWeatherEvent=null,oceanPattern=null,brokenIceDriftClock=0,packIceDriftX=0,packIceDriftY=0;
   const KNOT_TO_WORLD_SPEED=14,iceFloes=[],wakeFloes=[],wakeTrail=[],brokenIceChannels=[],brokenIceGrid=new Map(),BROKEN_ICE_CELL=32;
-  let wakeFloeClock=0,wakeTrailClock=0,miniLastDraw=0,miniZoomLevel=1,floeUpdateAccumulator=0,researchEnvCache=null,researchEnvCacheAt=0,researchEnvCacheX=Infinity,researchEnvCacheY=Infinity,packPushToastDay=-1,wildlifeEncounterClock=0,wildlifeEncounterSerial=0;
+  let wakeFloeClock=0,wakeTrailClock=0,miniLastDraw=0,miniZoomLevel=1,floeUpdateAccumulator=0,researchEnvCache=null,researchEnvCacheAt=0,researchEnvCacheX=Infinity,researchEnvCacheY=Infinity,packPushToastDay=-1,wildlifeEncounterClock=0,wildlifeEncounterSerial=0,wildlifeMotionAccumulator=0;
   const CHECKPOINT_KEY='arctic-research-last-port';
   let checkpoint={x:home.x,y:home.y,seasonDay:0,year:2026,travelled:0,angle:Math.PI,portName:'LONGYEARBYEN'};
   let currentPortCity=null,researchOpportunityClock=0,lastResearchNavigation=0,pendingResearchTargetId=null,pendingResearchArrival=null,startFlowPending=false,npcUpdateAccumulator=0,researchGuidanceHit=null,minimapExpanded=false;
@@ -304,7 +307,7 @@
   };
   const featureSizes={RUSSIA:6000,ALASKA:1800,CANADA:5000,GREENLAND:2600,NORWAY:1700,ICELAND:500,SPITSBERGEN:450,NORDAUSTLANDET:170,'EDGE\u00D8YA':100,'FRANZ JOSEF LAND':375,'NOVAYA ZEMLYA':900,'SEVERNAYA ZEMLYA':380,'NEW SIBERIAN ISLANDS':300,'WRANGEL ISLAND':150,'ELLESMERE ISLAND':830,'DEVON ISLAND':520,'BAFFIN ISLAND':1500,'VICTORIA ISLAND':700,'BANKS ISLAND':380};
 
-  function resize(){dpr=Math.min(devicePixelRatio||1,IS_COARSE_POINTER?1.35:2);width=innerWidth;height=innerHeight;canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);lightCanvas.width=Math.round(width*dpr);lightCanvas.height=Math.round(height*dpr);light.setTransform(dpr,0,0,dpr,0,0);oceanCanvas.width=Math.max(1,Math.round(width));oceanCanvas.height=Math.max(1,Math.round(height));oceanPattern=null;baseScale=Math.max(3.4,Math.min(5.2,Math.min(width,height)/145));scale=baseScale*zoomLevel;const s=miniCanvas.clientWidth;miniCanvas.width=Math.round(s*dpr);miniCanvas.height=Math.round(s*dpr);mini.setTransform(dpr,0,0,dpr,0,0);}
+  function resize(){dpr=Math.min(devicePixelRatio||1,IS_COARSE_POINTER?1.25:2);width=innerWidth;height=innerHeight;canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);worldCacheCanvas.width=canvas.width;worldCacheCanvas.height=canvas.height;worldCacheCtx.setTransform(1,0,0,1,0,0);invalidateWorldCache();lightCanvas.width=Math.round(width*dpr);lightCanvas.height=Math.round(height*dpr);light.setTransform(dpr,0,0,dpr,0,0);oceanCanvas.width=Math.max(1,Math.round(width));oceanCanvas.height=Math.max(1,Math.round(height));oceanPattern=null;baseScale=Math.max(3.4,Math.min(5.2,Math.min(width,height)/145));scale=baseScale*zoomLevel;const s=miniCanvas.clientWidth;miniCanvas.width=Math.round(s*dpr);miniCanvas.height=Math.round(s*dpr);mini.setTransform(dpr,0,0,dpr,0,0);}
   const worldToScreen=(x,y)=>({x:width/2+(x-state.x)*scale,y:height/2+(y-state.y)*scale});
   function pathPolygon(c,pts,project){c.beginPath();pts.forEach((p,i)=>{const s=project(p.x,p.y);i?c.lineTo(s.x,s.y):c.moveTo(s.x,s.y);});c.closePath();}
   function pointInPolygon(x,y,pts){let inside=false;for(let i=0,j=pts.length-1;i<pts.length;j=i++){const a=pts[i],b=pts[j];if(((a.y>y)!==(b.y>y))&&x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x)inside=!inside;}return inside;}
@@ -543,8 +546,8 @@
     try{forEachWildlifeVisual((entity,species,category,w)=>{if(Math.hypot(w.x-center.x,w.y-center.y)>screenDistance){const id=ensureWildlifeId(entity);if(id){ids.push(id);observedWildlifeFallback.delete(id);}}});}catch(e){}
     if(ids.length)research?.resetWildlifeObservations?.(ids);
   }
-  function finishPortEntry(city){clearTimeout(pendingPortEntryTimer);pendingPortEntryTimer=0;pendingPortEntryCity=null;if(!city||state.dockedPort!==city.name||currentPortCity!==city)return;state.track=[{x:state.x,y:state.y}];research?.enterPort?.(city,{resources:{fuel:state.fuel,food:state.food},suppressPortSound:true});saveCheckpoint(city);saveGame('auto','port');analytics.track('port_entered',{port_name:city.name||'',port_country:city.countryCode||''});showToast(`PORT CALL — ${city.name} · SERVICES & RESEARCH GRANTS OPEN`,2200);}
-  function enterPort(city,{immediate=false}={}){clearTimeout(pendingPortEntryTimer);pendingPortEntryTimer=0;pendingPortEntryCity=city;state.portDestination=null;state.dockedPort=city.name;state.moving=false;state.commandActive=false;state.ramming=false;state.tx=state.x;state.ty=state.y;currentPortCity=city;if(!state.started){state.track=[{x:state.x,y:state.y}];saveCheckpoint(city);pendingPortEntryCity=null;return;}showToast(`ENTERING PORT — ${city.name}`,1200);sound.play('port');if(immediate){finishPortEntry(city);return;}pendingPortEntryTimer=setTimeout(()=>{if(state.dockedPort===city.name&&currentPortCity===city)finishPortEntry(city);},780);}
+  function finishPortEntry(city){clearTimeout(pendingPortEntryTimer);pendingPortEntryTimer=0;pendingPortEntryCity=null;if(!city||state.dockedPort!==city.name||currentPortCity!==city)return;state.track=[{x:state.x,y:state.y}];invalidateWorldCache();research?.enterPort?.(city,{resources:{fuel:state.fuel,food:state.food},suppressPortSound:true});showToast(`PORT CALL — ${city.name} · SERVICES & RESEARCH GRANTS OPEN`,1800);setTimeout(()=>{if(state.dockedPort!==city.name||currentPortCity!==city)return;saveCheckpoint(city);saveGame('auto','port');analytics.track('port_entered',{port_name:city.name||'',port_country:city.countryCode||''});},0);}
+  function enterPort(city,{immediate=false}={}){clearTimeout(pendingPortEntryTimer);pendingPortEntryTimer=0;pendingPortEntryCity=city;state.portDestination=null;state.dockedPort=city.name;state.moving=false;state.commandActive=false;state.ramming=false;state.tx=state.x;state.ty=state.y;currentPortCity=city;if(!state.started){state.track=[{x:state.x,y:state.y}];saveCheckpoint(city);pendingPortEntryCity=null;return;}showToast(`ENTERING PORT — ${city.name}`,1200);sound.play('port');if(immediate){finishPortEntry(city);return;}pendingPortEntryTimer=setTimeout(()=>{if(state.dockedPort===city.name&&currentPortCity===city)finishPortEntry(city);},140);}
   function refuelAt(city){enterPort(city);}
   function serviceNearbyPort(){if(!currentPortCity)return;const w=polar(currentPortCity.lat,currentPortCity.lon);if(Math.hypot(w.x-state.x,w.y-state.y)<=38)return;research?.leavePort?.();state.dockedPort=null;currentPortCity=null;}
   function endGame(title,message){if(state.gameOver)return;state.gameOver=true;state.moving=false;state.tx=state.x;state.ty=state.y;clearTimeout(toastTimer);ui.toast.classList.remove('show','frozen');ui.gameOverTitle.textContent=title;ui.gameOverMessage.textContent=message;let image=ui.gameOver.querySelector('.failure-scientist');if(!image){image=document.createElement('img');image.className='failure-scientist';image.style.cssText='display:block;width:92px;height:92px;margin:12px auto;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.55);box-shadow:0 8px 24px rgba(0,0,0,.32)';ui.gameOver.insertBefore(image,ui.gameOverMessage);}const rs=research?.getState?.(),chief=rs?.scientists?.find(item=>item.isPlayer)||rs?.scientists?.[0];image.src=chief?.portrait||'assets/scientists/maya-chen.webp';image.alt=title==='OUT OF FOOD'?'Hungry Chief Scientist':'Cold Chief Scientist';image.style.filter=title==='OUT OF FOOD'?'sepia(.35) saturate(.7) brightness(.78)':'grayscale(.35) hue-rotate(145deg) saturate(.75) brightness(.8)';ui.gameOver.classList.remove('hidden');analytics.track('game_over',{game_over_reason:title||'',game_over_message:message||''});}
@@ -590,7 +593,7 @@
   }
   function loadTerrainTile(tile,cors=true,year=2024){
     const image=new Image();if(cors)image.crossOrigin='anonymous';image.decoding='async';
-    image.onload=()=>{tile.image=image;tile.ready=true;tile.failed=false;tile.year=year;if(cors)buildTerrainTileMask(tile);};
+    image.onload=()=>{tile.image=image;tile.ready=true;tile.failed=false;tile.year=year;if(cors)buildTerrainTileMask(tile);invalidateWorldCache();};
     image.onerror=()=>{if(cors){loadTerrainTile(tile,false,year);return;}if(year===2024){loadTerrainTile(tile,false,2022);return;}tile.failed=true;tile.ready=false;};
     image.src=terrainTileUrl(tile,year);
   }
@@ -721,8 +724,8 @@
   }
   function drawVesselTrack(){
     const track=state.track;if(!Array.isArray(track)||!track.length)return;
-    ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.setLineDash([6,5]);ctx.shadowColor='rgba(255,232,112,.92)';ctx.shadowBlur=7;ctx.strokeStyle='rgba(255,235,122,1)';ctx.lineWidth=2.25;ctx.beginPath();
-    let started=false;for(const point of track){const p=worldToScreen(point.x,point.y);if(!started){ctx.moveTo(p.x,p.y);started=true;}else ctx.lineTo(p.x,p.y);}const live=worldToScreen(state.x,state.y);if(started)ctx.lineTo(live.x,live.y);ctx.stroke();ctx.shadowBlur=0;ctx.setLineDash([]);ctx.restore();
+    ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.setLineDash([18,11]);ctx.strokeStyle='rgba(48,55,58,.88)';ctx.lineWidth=2.35;ctx.beginPath();
+    let started=false;for(const point of track){const p=worldToScreen(point.x,point.y);if(!started){ctx.moveTo(p.x,p.y);started=true;}else ctx.lineTo(p.x,p.y);}const live=worldToScreen(state.x,state.y);if(started)ctx.lineTo(live.x,live.y);ctx.stroke();ctx.setLineDash([]);ctx.restore();
   }
   function appendWakeSegment(fromX,fromY,toX,toY){
     if(state.ramming)return;const dx=toX-fromX,dy=toY-fromY,distance=Math.hypot(dx,dy);if(distance<.08)return;
@@ -789,13 +792,25 @@
     const realTerrain=drawTerrainMain();if(!realTerrain)drawBathymetry();
     drawGraticule();drawCurrentArrows();drawChartBoundary();if(brokenIceChannels.length)captureOceanLayer();else oceanPattern=null;
     drawFishSchools();const margin=20/scale,minX=state.x-width/scale/2-margin,maxX=state.x+width/scale/2+margin,minY=state.y-height/scale/2-margin,maxY=state.y+height/scale/2+margin;drawSeasonalIce(minX,maxX,minY,maxY);
-    drawIceThicknessAndCracks();drawMarginalFloes();drawVesselTrack();drawWakeTrail();drawWakeFloes();
+    drawIceThicknessAndCracks();drawMarginalFloes();drawVesselTrack();drawWakeFloes();
     if(realTerrain){/* Continuous terrain only; tile snow overlay intentionally disabled. */}else{const nearSvalbard=(()=>{const pos=unpolar(state.x,state.y);return pos.lat>74.5&&pos.lat<82.5&&pos.lon>-5&&pos.lon<45;})();land.forEach(shape=>{const visible=!(shape.maxX<minX||shape.minX>maxX||shape.maxY<minY||shape.minY>maxY)||nearSvalbard&&svalbardLand.includes(shape);if(!visible)return;pathPolygon(ctx,shape.pts,worldToScreen);ctx.fillStyle=shape.color;ctx.fill();ctx.strokeStyle='rgba(239,247,221,.9)';ctx.lineWidth=2;ctx.stroke();drawLandTopography(shape);});}
     try{window.AR_DRAW_MAIN_GLACIERS?.({ctx,width,height,state,scale,zoomLevel,worldToScreen});}catch(error){console.error('GLACIER DRAW FAILED',error);}
     drawRivers(minX,maxX,minY,maxY);
     chartLabels.forEach(drawChartLabel);
     const pole=worldToScreen(0,0);ctx.strokeStyle='rgba(255,255,255,.88)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(pole.x,pole.y,22,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.moveTo(pole.x-30,pole.y);ctx.lineTo(pole.x+30,pole.y);ctx.moveTo(pole.x,pole.y-30);ctx.lineTo(pole.x,pole.y+30);ctx.stroke();text('NORTH POLE',89.35,180,10,'#efffff');const hp=worldToScreen(port.x,port.y);ctx.fillStyle='#f6d365';ctx.beginPath();ctx.arc(hp.x,hp.y,6,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff5ba';ctx.lineWidth=2;ctx.beginPath();ctx.arc(hp.x,hp.y,12+Math.sin(performance.now()/350)*2,0,Math.PI*2);ctx.stroke();drawWildlifeIcons();
     if(realTerrain){ctx.save();ctx.font='700 7px system-ui';ctx.textAlign='right';ctx.fillStyle='rgba(230,248,250,.58)';ctx.fillText('TERRAIN: IBCAO / GEBCO · HI-RES TILES',width-12,height-10);ctx.restore();}
+  }
+  function captureWorldCache(now){
+    if(worldCacheCanvas.width!==canvas.width||worldCacheCanvas.height!==canvas.height){worldCacheCanvas.width=canvas.width;worldCacheCanvas.height=canvas.height;}
+    worldCacheCtx.setTransform(1,0,0,1,0,0);worldCacheCtx.clearRect(0,0,worldCacheCanvas.width,worldCacheCanvas.height);worldCacheCtx.drawImage(canvas,0,0);
+    worldCacheX=state.x;worldCacheY=state.y;worldCacheScale=scale;worldCacheAt=now;worldCacheValid=true;
+  }
+  function drawWorldCached(now){
+    const scaleMatch=worldCacheValid&&Math.abs(worldCacheScale-scale)<.0001,dx=scaleMatch?(worldCacheX-state.x)*scale:0,dy=scaleMatch?(worldCacheY-state.y)*scale:0;
+    const refreshMs=IS_COARSE_POINTER?260:150,shiftLimit=IS_COARSE_POINTER?120:82;
+    if(!scaleMatch||!worldCacheValid||now-worldCacheAt>=refreshMs||Math.abs(dx)>shiftLimit||Math.abs(dy)>shiftLimit){drawMap();captureWorldCache(now);return;}
+    ctx.save();ctx.fillStyle='#3f91aa';ctx.fillRect(0,0,width,height);try{drawTerrainRaster(ctx,worldToScreen,.96);}catch(error){}
+    ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(worldCacheCanvas,Math.round(dx*dpr),Math.round(dy*dpr));ctx.restore();
   }
 
   function miniMapGeometry(){const zoom=Math.max(.7,minimapExpanded?(miniZoomLevel||zoomLevel||1):(zoomLevel||1)),base=minimapExpanded?1100:1040;return{worldRadius:base/zoom,centerX:state.x,centerY:state.y};}
@@ -1060,11 +1075,10 @@
   function nearbyNpcVesselAt(clientX,clientY){let match=null,best=27;for(const npc of npcVessels){if(!npcActive(npc)||!npc.ready)continue;const p=worldToScreen(npc.x,npc.y),hit=Math.hypot(p.x-clientX,p.y-clientY);if(hit<best){best=hit;match={npc,p,distance:Math.hypot(npc.x-state.x,npc.y-state.y)};}}return match;}
   function openNpcVessel(encounter){if(!encounter?.npc)return false;const npc=encounter.npc;return!!research?.openNpcVessel?.({id:npc.id,name:npc.name,classId:npc.classId,type:npc.kind,typeLabel:npc.typeLabel,mission:npc.mission,description:`${npc.name} is working independently in Arctic waters.`,captainName:npc.captainName,captainRole:npc.captainRole,captainPortrait:npc.captainPortrait,image:npc.image,distanceKm:encounter.distance,canAssist:npc.kind==='research'});}
   function drawVessel(){
-    const x=width/2,y=height/2,item=vesselModifiers(),sprite=vesselSpriteFor(item),size=vesselSpriteMetrics(item),tone=markerSurfaceTone(state.x,state.y);
+    const x=width/2,y=height/2,item=vesselModifiers(),sprite=vesselSpriteFor(item),size=vesselSpriteMetrics(item);
     ctx.save();
     ctx.translate(x,y);
     ctx.rotate(state.angle);
-    drawMarkerBackdrop(size.r,tone);
     ctx.shadowColor='rgba(0,25,40,.32)';
     ctx.shadowBlur=10;
     ctx.shadowOffsetY=3;
@@ -1100,8 +1114,7 @@
     const previousFuel=resourceAlertState.fuel,previousFood=resourceAlertState.food;
     resourceAlertState.fuel=vessel.nuclearFuel?false:previousFuel?state.fuel<24:state.fuel<20;
     resourceAlertState.food=previousFood?state.food<24:state.food<20;
-    if(state.started&&!previousFuel&&resourceAlertState.fuel)showToast('LOW FUEL · LESS THAN 20% REMAINING · RETURN TO PORT',3600);
-    if(state.started&&!previousFood&&resourceAlertState.food){showToast('LOW FOOD · LESS THAN 20% REMAINING',3600);research?.maybeHelicopterFoodReminder?.();}
+    if(state.started&&!previousFood&&resourceAlertState.food)research?.maybeHelicopterFoodReminder?.();
     const warnings=[];if(resourceAlertState.fuel)warnings.push(`LOW FUEL ${Math.ceil(state.fuel)}%`);if(resourceAlertState.food)warnings.push(`LOW FOOD ${Math.ceil(state.food)}%`);
     if(ui.resourceWarning){ui.resourceWarning.textContent=warnings.length?`${warnings.join(' · ')} · RETURN TO PORT`:'';ui.resourceWarning.classList.toggle('show',warnings.length>0&&!state.gameOver);}
     document.querySelector('.fuel-status')?.classList.toggle('low',resourceAlertState.fuel);document.querySelector('.food-status')?.classList.toggle('low',resourceAlertState.food);
@@ -1113,7 +1126,7 @@
   function setDestination(clientX,clientY){pendingResearchTargetId=null;pendingResearchArrival=null;setWorldDestination(state.x+(clientX-width/2)/scale,state.y+(clientY-height/2)/scale);}
   function navigateFromMiniMap(event){const rect=miniCanvas.getBoundingClientRect(),size=miniCanvas.clientWidth,c=size/2,dx=event.clientX-rect.left-c,dy=event.clientY-rect.top-c,radius=size*.45;if(Math.hypot(dx,dy)>radius)return;const geometry=miniMapGeometry();pendingResearchTargetId=null;pendingResearchArrival=null;setWorldDestination(geometry.centerX+dx/radius*geometry.worldRadius,geometry.centerY+dy/radius*geometry.worldRadius);}
   function startPortApproach(portItem){const approach=findPortApproach(portItem.city);if(!approach){showToast('PORT APPROACH BLOCKED BY LAND OR ICE');return;}if(Math.hypot(approach.x-state.x,approach.y-state.y)<=5){enterPort(portItem.city);return;}departWithCheck(()=>{pendingResearchTargetId=null;pendingResearchArrival=null;state.portDestination=portItem.city;state.tx=approach.x;state.ty=approach.y;state.moving=true;state.commandActive=true;state.targetOnLand=false;state.precisionNav=true;state.angle=Math.atan2(approach.y-state.y,approach.x-state.x)+Math.PI/2;state.ramming=false;ui.welcome.classList.add('hidden');showToast(`PORT APPROACH — ${portItem.city.name}`,1800);});}
-  function handleMapPointer(clientX,clientY){const guidance=researchGuidanceAt(clientX,clientY);if(guidance){research?.openNavigationPrompt?.(guidance.targetId);return;}const portItem=nearbyCityAt(clientX,clientY);if(portItem){if(state.dockedPort===portItem.city.name&&currentPortCity){currentPortCity=portItem.city;research?.enterPort?.(portItem.city,{resume:true});}else startPortApproach(portItem);return;}const site=nearbyResearchTargetAt(clientX,clientY);if(site){research?.selectTarget?.(site.target.id);if(site.distance<=RESEARCH_INTERACTION_KM)research?.openTarget?.(site.target.id,{distanceKm:site.distance,atSite:true,target:site.target});else navigateToResearchTarget(site.target);return;}const vesselEncounter=nearbyNpcVesselAt(clientX,clientY);if(vesselEncounter&&openNpcVessel(vesselEncounter))return;const animal=wildlifeAtScreenPoint(clientX,clientY);if(animal&&research?.openWildlife){const pos=unpolar(animal.world.x,animal.world.y);let opened=false;try{opened=research.openWildlife(animal.species,{individualId:animal.individualId,category:animal.category,lat:pos.lat,lon:pos.lon,dataValue:2})===true;}catch(error){console.error('WILDLIFE OPEN FAILED',error);}if(opened){wildlifeEncounterClock=1;return;}showToast(`WILDLIFE OBSERVATION — ${animal.species}`,1800);return;}setDestination(clientX,clientY);}
+  function handleMapPointer(clientX,clientY){const guidance=researchGuidanceAt(clientX,clientY);if(guidance){research?.openNavigationPrompt?.(guidance.targetId);return;}const portItem=nearbyCityAt(clientX,clientY);if(portItem){if(state.dockedPort===portItem.city.name&&currentPortCity){currentPortCity=portItem.city;research?.enterPort?.(portItem.city,{resume:true});}else startPortApproach(portItem);return;}const site=nearbyResearchTargetAt(clientX,clientY);if(site){research?.selectTarget?.(site.target.id);if(site.distance<=RESEARCH_INTERACTION_KM)research?.openTarget?.(site.target.id,{distanceKm:site.distance,atSite:true,target:site.target});else navigateToResearchTarget(site.target);return;}const vesselEncounter=nearbyNpcVesselAt(clientX,clientY);if(vesselEncounter&&openNpcVessel(vesselEncounter))return;const animal=wildlifeAtScreenPoint(clientX,clientY);if(animal&&research?.openWildlife){const pos=unpolar(animal.world.x,animal.world.y);let opened=false;try{opened=research.openWildlife(animal.species,{individualId:animal.individualId,category:animal.category,lat:pos.lat,lon:pos.lon,dataValue:2})===true;}catch(error){console.error('WILDLIFE OPEN FAILED',error);}if(opened){observedWildlifeFallback.add(animal.individualId);wildlifeEncounterClock=1;invalidateWorldCache();return;}showToast(`WILDLIFE OBSERVATION — ${animal.species}`,1800);return;}setDestination(clientX,clientY);}
   function locationName(lat,lon){const river=riverAt(state.x,state.y,5);if(river)return river.name.toUpperCase();if(Math.hypot(state.x-home.x,state.y-home.y)<90)return'SVALBARD';if(lat>88)return'NORTH POLE';if(lon>-30&&lon<20&&lat>72)return'GREENLAND SEA';if(lon>=20&&lon<60&&lat>68)return'BARENTS SEA';if(lon>=60&&lon<140&&lat>70)return'KARA / LAPTEV SEA';if((lon>=140||lon<-160)&&lat>68)return'EAST SIBERIAN SEA';if(lon>=-160&&lon<-120&&lat>68)return'BEAUFORT SEA';return'ARCTIC OCEAN';}
   function courseBlockedAhead(x,y,angle,distance){for(let d=6;d<=distance;d+=6){const cx=x+Math.cos(angle)*d,cy=y+Math.sin(angle)*d,pos=unpolar(cx,cy);if(pos.lat<MIN_LAT||isBlocked(cx,cy)||!iceNavigationProfileAt(cx,cy).allowed)return true;}return false;}
   function coastBlockedAhead(x,y,angle,distance){for(let d=6;d<=distance;d+=6){const cx=x+Math.cos(angle)*d,cy=y+Math.sin(angle)*d,pos=unpolar(cx,cy);if(pos.lat<MIN_LAT||isBlocked(cx,cy))return true;}return false;}
@@ -1153,7 +1166,7 @@
     const elapsedDays=updateCalendar(dt),vessel=vesselModifiers(),weather=currentWeather();
     brandShip.textContent=`${vessel.name.toUpperCase()} · RESEARCH EDITION`;updateVesselButton(vessel);
     state.food=Math.max(0,state.food-elapsedDays*100/vessel.foodEnduranceDays);const opportunityEnv=researchEnvironment(weather);research?.tickDays?.(elapsedDays,{...opportunityEnv,source:'sailing'});
-    researchOpportunityClock+=elapsedDays;const opportunityInterval=opportunityEnv.ramming?.08:opportunityEnv.iceThickness>=3?.09:opportunityEnv.iceThickness>=2?.12:opportunityEnv.iceThickness>=1?.16:opportunityEnv.iceEdge?.22:opportunityEnv.fjord?.38:opportunityEnv.coastal?.55:.85;
+    researchOpportunityClock+=elapsedDays;const opportunityInterval=opportunityEnv.ramming?.08:opportunityEnv.iceThickness>=3?.09:opportunityEnv.iceThickness>=2?.12:opportunityEnv.iceThickness>=1?.16:opportunityEnv.iceEdge?.22:opportunityEnv.fjord?.24:opportunityEnv.coastal?.32:.45;
     if(researchOpportunityClock>=opportunityInterval){researchOpportunityClock=0;research?.maybeSpawnOpportunity?.(opportunityEnv);}
     if(state.food<=0){ui.foodValue.textContent='0%';ui.foodLevel.style.width='0%';endGame('OUT OF FOOD','Oh, no! Your expedition failed because you ran out of food! Restart from last known port.');return;}
     let currentProfile=iceNavigationProfileAt(state.x,state.y,vessel),currentIce=currentProfile.type;
@@ -1178,7 +1191,7 @@
       const obstructionDistance=commanded?Math.min(38,dist):30,directAngle=Math.atan2(groundY,groundX);
       if(!state.targetOnLand&&(isBlocked(nx,ny)||(commanded&&coastBlockedAhead(state.x,state.y,directAngle,obstructionDistance)))&&nextPos.lat>=MIN_LAT&&nextProfile.type!=='fast'){const slip=shorelineSlide(state.x,state.y,groundX,groundY,motionDt,state.tx,state.ty);if(slip){nx=slip.x;ny=slip.y;groundX=slip.vx;groundY=slip.vy;nextPos=unpolar(nx,ny);nextProfile=iceNavigationProfileAt(nx,ny,vessel);groundStep=Math.hypot(nx-state.x,ny-state.y);}}
       if(nextPos.lat<MIN_LAT||isBlocked(nx,ny)||!nextProfile.allowed){if(commanded){state.tx=state.x;state.ty=state.y;state.portDestination=null;if(!nextProfile.allowed)showToast(nextProfile.reason||'SEA ICE · IMPASSABLE',2000);}state.moving=false;state.commandActive=false;state.ramming=false;state.targetOnLand=false;state.precisionNav=false;ui.speed.textContent='0.0 KN';}
-      else{state.x=nx;state.y=ny;if(commanded&&!state.ramming&&groundStep>.05)appendWakeSegment(fromX,fromY,state.x,state.y);appendVesselTrack();const breakingPass=vesselCanBreakNaturalIceAt(state.x,state.y,vessel)||vesselCanBreakNaturalIceAt(fromX,fromY,vessel);if(breakingPass)carveIcebreakerTrack(fromX,fromY,state.x,state.y,vessel);if(commanded){state.travelled+=groundStep;const target=Math.atan2(dy,dx)+Math.PI/2;let da=((target-state.angle+Math.PI*3)%(Math.PI*2))-Math.PI;if(!precisionNav){const turnRate=dist<Math.max(30,arrivalRadius*8)?9:4.8;state.angle+=da*Math.min(1,dt*turnRate);}else state.angle=target;{state.moving=through>.02;ui.speed.textContent=through<.02?'0.0 KN':(through/KNOT_TO_WORLD_SPEED).toFixed(1)+(state.ramming?' KN ICE':' KN');}}else{const driftKnots=Math.hypot(groundX,groundY)/KNOT_TO_WORLD_SPEED;state.moving=false;state.commandActive=false;state.ramming=false;state.precisionNav=false;ui.speed.textContent=driftKnots<.05?'0.0 KN':driftKnots.toFixed(1)+' KN DRIFT';if(state.portDestination)enterPort(state.portDestination);}}
+      else{state.x=nx;state.y=ny;appendVesselTrack();const breakingPass=vesselCanBreakNaturalIceAt(state.x,state.y,vessel)||vesselCanBreakNaturalIceAt(fromX,fromY,vessel);if(breakingPass)carveIcebreakerTrack(fromX,fromY,state.x,state.y,vessel);if(commanded){state.travelled+=groundStep;const target=Math.atan2(dy,dx)+Math.PI/2;let da=((target-state.angle+Math.PI*3)%(Math.PI*2))-Math.PI;if(!precisionNav){const turnRate=dist<Math.max(30,arrivalRadius*8)?9:4.8;state.angle+=da*Math.min(1,dt*turnRate);}else state.angle=target;{state.moving=through>.02;ui.speed.textContent=through<.02?'0.0 KN':(through/KNOT_TO_WORLD_SPEED).toFixed(1)+(state.ramming?' KN ICE':' KN');}}else{const driftKnots=Math.hypot(groundX,groundY)/KNOT_TO_WORLD_SPEED;state.moving=false;state.commandActive=false;state.ramming=false;state.precisionNav=false;ui.speed.textContent=driftKnots<.05?'0.0 KN':driftKnots.toFixed(1)+' KN DRIFT';if(state.portDestination)enterPort(state.portDestination);}}
     }
     const pos=unpolar(state.x,state.y),ew=pos.lon<0?'W':'E';ui.position.textContent=`${pos.lat.toFixed(2)}°N ${Math.abs(pos.lon).toFixed(2)}°${ew}`;ui.miniLocation.textContent=locationName(pos.lat,pos.lon);ui.progress.style.width=Math.min(100,8+state.travelled/18)+'%';
   }
@@ -1195,11 +1208,11 @@
       while(remaining>.00001){const step=Math.min(.033,remaining);update(step);remaining-=step;if(state.gameOver||menuOpen||minimapExpanded||research?.isBusy?.())break;}
       weather=updateWeatherAnnouncement();updateIceReadout();updateCompass();if(now-lastResearchNavigation>250){lastResearchNavigation=now;updateResearchNavigation();}
       paused=state.gameOver||menuOpen||minimapExpanded||!!research?.isBusy?.();
-      if(!paused){const margin=60/scale,minX=state.x-width/scale/2-margin,maxX=state.x+width/scale/2+margin,minY=state.y-height/scale/2-margin,maxY=state.y+height/scale/2+margin;floeUpdateAccumulator+=dt/zoomLevel;if(floeUpdateAccumulator>=.075){updateFloes(Math.min(.18,floeUpdateAccumulator),minX,maxX,minY,maxY);floeUpdateAccumulator=0;}updateWakeFloes(dt/zoomLevel);updateWakeTrail(dt/zoomLevel);updateWildlifeEncounters(dt);updateFishSchools(dt/zoomLevel);updateWildlife(dt/zoomLevel);updateNpcVessels(dt/zoomLevel);}
+      if(!paused){const margin=60/scale,minX=state.x-width/scale/2-margin,maxX=state.x+width/scale/2+margin,minY=state.y-height/scale/2-margin,maxY=state.y+height/scale/2+margin;floeUpdateAccumulator+=dt/zoomLevel;if(floeUpdateAccumulator>=.075){updateFloes(Math.min(.18,floeUpdateAccumulator),minX,maxX,minY,maxY);floeUpdateAccumulator=0;}updateWakeFloes(dt/zoomLevel);updateWildlifeEncounters(dt);wildlifeMotionAccumulator+=dt/zoomLevel;if(wildlifeMotionAccumulator>=.12){const wildlifeStep=Math.min(.25,wildlifeMotionAccumulator);wildlifeMotionAccumulator=0;updateFishSchools(wildlifeStep);updateWildlife(wildlifeStep);}updateNpcVessels(dt/zoomLevel);}
     }else{updateCalendar(0);weather=currentWeather();ui.weatherValue.textContent=weather.type==='clear'?'CLEAR':`${weather.label} ${weather.rating}/10 · ${weather.visibilityKm} KM`;updateIceReadout();updateCompass();}
     updateResourceWarning();
     const renderDue=!IS_COARSE_POINTER||now-lastRender>=32||paused!==lastFramePaused;
-    if(!paused&&renderDue){lastRender=now;drawMap();drawResearchTargets();drawNpcVessels();drawSeasonalLighting();drawWeather(weather);drawPortMarkers();drawWildlifeObservationRings();drawFog(weather);drawResearchTargets(true);drawResearchGuidance();drawVessel();}
+    if(!paused&&renderDue){lastRender=now;drawWorldCached(now);drawResearchTargets();drawNpcVessels();drawSeasonalLighting();drawWeather(weather);drawPortMarkers();drawWildlifeObservationRings();drawFog(weather);drawResearchTargets(true);drawResearchGuidance();drawVessel();}
     if(minimapExpanded&&now-miniLastDraw>45){miniLastDraw=now;try{drawMiniMap();}catch(error){console.error('MINIMAP DRAW FAILED',error);}}
     else if(!minimapExpanded&&renderDue&&now-miniLastDraw>260){miniLastDraw=now;try{drawMiniMap();}catch(error){console.error('MINIMAP DRAW FAILED',error);}}
     lastFramePaused=paused;requestAnimationFrame(frame);
@@ -1225,12 +1238,12 @@
     onSound:type=>sound.play(type),
     onStateChange:()=>{if(currentPortCity)saveCheckpoint(currentPortCity);semanticAnalytics();if(!autosaveSuspended)scheduleAutosave();}
   });
-  if(research?.maybeSpawnOpportunity){const spawnOpportunity=research.maybeSpawnOpportunity.bind(research);research.maybeSpawnOpportunity=payload=>spawnOpportunity({...researchEnvironment(payload?.weather),...payload});}
+  if(research?.maybeSpawnOpportunity){const spawnOpportunity=research.maybeSpawnOpportunity.bind(research);research.maybeSpawnOpportunity=payload=>{const target=spawnOpportunity({...researchEnvironment(payload?.weather),...payload});if(target?.id)setTimeout(()=>{if(!currentPortCity)research?.openNavigationPrompt?.(target.id);},0);return target;};}
   setZoom(0,true);
   function clampResource(value){return Math.max(0,Math.min(100,value));}
   function openMinimap(){if(!minimapPanel||minimapExpanded)return;minimapExpanded=true;miniZoomLevel=zoomLevel;syncMiniZoomControls();minimapPanel.classList.add('expanded');document.body.classList.add('nav-chart-open');miniLastDraw=0;drawMiniMap();}
   function closeMinimap(){if(!minimapPanel)return;minimapExpanded=false;minimapPanel.classList.remove('expanded');document.body.classList.remove('nav-chart-open');drawMiniMap();}
-  function beginExpedition(){if(state.started)return;startFlowPending=false;state.started=true;menuOpen=false;ui.welcome.classList.add('hidden');if(currentPortCity)enterPort(currentPortCity);analytics.track('game_started');scheduleAutosave(800);}
+  function beginExpedition(){if(state.started)return;startFlowPending=false;state.started=true;menuOpen=false;ui.welcome.classList.add('hidden');if(currentPortCity){const berth=findPortTeleportPosition(currentPortCity)||findPortApproach(currentPortCity);if(berth){state.x=berth.x;state.y=berth.y;state.tx=berth.x;state.ty=berth.y;state.track=[{x:berth.x,y:berth.y}];invalidateWorldCache();}enterPort(currentPortCity,{immediate:true});}analytics.track('game_started');scheduleAutosave(800);}
   function requestExpeditionStart(){menuOpen=false;ui.welcome.classList.add('hidden');if(research?.openCharacterSetup){startFlowPending=true;const opened=research.openCharacterSetup();if(opened)return;}beginExpedition();}
   const mapTouchPointers=new Map();let mapTouchTap=null,mapPinchDistance=0,mapPinchActive=false;
   function mapPinchStep(){if(mapTouchPointers.size<2)return;const points=[...mapTouchPointers.values()],distance=Math.hypot(points[0].x-points[1].x,points[0].y-points[1].y);if(!mapPinchDistance){mapPinchDistance=distance;return;}const ratio=distance/Math.max(1,mapPinchDistance);if(ratio>1.16){setZoom(1);mapPinchDistance=distance;analytics.track('zoom_changed',{zoom_direction:'pinch-in-detail'});}else if(ratio<.86){setZoom(-1);mapPinchDistance=distance;analytics.track('zoom_changed',{zoom_direction:'pinch-out-overview'});}}
