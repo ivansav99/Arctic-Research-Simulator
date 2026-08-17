@@ -8,35 +8,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inject automatic New Game click
+      - name: Build startup test pages
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('index.html')
-          s=p.read_text()
-          inject='''<script>
-          setTimeout(() => {
-            const b=document.getElementById('start-button');
-            if(b) b.click();
-          }, 700);
-          </script>'''
-          p.write_text(s.replace('</body>',inject+'\n</body>'))
+          source=Path('index.html').read_text()
+          click='''<script>setTimeout(()=>document.getElementById('start-button')?.click(),700);</script>'''
+          Path('startup-click.html').write_text(source.replace('</body>',click+'\n</body>'))
+          auto='''<script>sessionStorage.setItem('arctic-research-start-new-v1','1');</script>'''
+          Path('startup-auto.html').write_text(source.replace('<script src="coast-data.js"></script>',auto+'\n  <script src="coast-data.js"></script>'))
           PY
       - name: Start local site
         run: |
           python3 -m http.server 8765 >/tmp/server.log 2>&1 &
           sleep 2
-      - name: Exercise New Game in Chromium
+      - name: Exercise startup paths in Chromium
         run: |
           CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
-          echo "Chrome: $CHROME"
           test -n "$CHROME"
-          "$CHROME" --headless --no-sandbox --disable-gpu --enable-logging=stderr --v=1 --virtual-time-budget=5000 --dump-dom http://127.0.0.1:8765/ >/tmp/dom.html 2>/tmp/chrome.log || true
-          echo '--- Chrome console/log tail ---'
-          tail -n 160 /tmp/chrome.log || true
-          echo '--- Startup DOM markers ---'
-          grep -o 'id="arx-character-modal"[^>]*' /tmp/dom.html || true
-          grep -o 'id="welcome"[^>]*' /tmp/dom.html || true
-          echo '--- JS error-looking lines ---'
-          grep -Ei 'Uncaught|ReferenceError|TypeError|SyntaxError|ERROR.*javascript|CONSOLE' /tmp/chrome.log | tail -n 80 || true
-          grep -q 'id="arx-character-modal"[^>]*class="[^"]*open' /tmp/dom.html
+          for TEST in click auto; do
+            "$CHROME" --headless --no-sandbox --disable-gpu --enable-logging=stderr --v=1 --user-data-dir="/tmp/chrome-$TEST" --virtual-time-budget=5000 --dump-dom "http://127.0.0.1:8765/startup-$TEST.html" >"/tmp/dom-$TEST.html" 2>"/tmp/chrome-$TEST.log" || true
+            echo "--- $TEST DOM markers ---"
+            grep -o 'id="arx-character-modal"[^>]*' "/tmp/dom-$TEST.html" || true
+            grep -o 'id="welcome"[^>]*' "/tmp/dom-$TEST.html" || true
+            echo "--- $TEST JS errors ---"
+            grep -Ei 'Uncaught|ReferenceError|TypeError|SyntaxError|ERROR.*javascript|CONSOLE' "/tmp/chrome-$TEST.log" | tail -n 80 || true
+            grep -q 'id="arx-character-modal"[^>]*class="[^"]*open' "/tmp/dom-$TEST.html"
+          done
