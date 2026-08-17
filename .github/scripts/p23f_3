@@ -1,0 +1,62 @@
+
+# Add track point whenever vessel motion actually advances.
+g = replace_once(g,
+    "else{state.x=nx;state.y=ny;const breakingPass=",
+    "else{state.x=nx;state.y=ny;appendVesselTrack();const breakingPass=",
+    'append voyage track')
+
+# Reset track at each port and defer expensive save serialization until after the port paints.
+old_enter_game = """  function enterPort(city){state.portDestination=null;state.dockedPort=city.name;state.moving=false;state.commandActive=false;state.tx=state.x;state.ty=state.y;currentPortCity=city;if(state.started)research?.enterPort?.(city,{resources:{fuel:state.fuel,food:state.food}});saveCheckpoint(city);if(state.started){saveGame('auto','port');analytics.track('port_entered',{port_name:city.name||'',port_country:city.countryCode||''});showToast(`PORT CALL — ${city.name} · SERVICES & RESEARCH GRANTS OPEN`,2600);}}\n"""
+new_enter_game = """  function enterPort(city){state.portDestination=null;state.dockedPort=city.name;state.moving=false;state.commandActive=false;state.tx=state.x;state.ty=state.y;currentPortCity=city;state.track=[{x:state.x,y:state.y}];if(state.started)research?.enterPort?.(city,{resources:{fuel:state.fuel,food:state.food}});if(state.started){setTimeout(()=>{if(state.dockedPort===city.name){saveCheckpoint(city);saveGame('auto','port');}},320);analytics.track('port_entered',{port_name:city.name||'',port_country:city.countryCode||''});showToast(`PORT CALL — ${city.name} · SERVICES & RESEARCH GRANTS OPEN`,2600);}else saveCheckpoint(city);}\n"""
+g = replace_once(g, old_enter_game, new_enter_game, 'fast game port entry')
+
+# Ferry horn immediately when the vessel actually departs a port.
+g = replace_once(g,
+    "function departWithCheck(proceed){const depart=()=>{if(currentPortCity){research?.leavePort?.();state.dockedPort=null;currentPortCity=null;}proceed();};",
+    "function departWithCheck(proceed){const depart=()=>{if(currentPortCity){sound.play('depart');research?.leavePort?.();state.dockedPort=null;currentPortCity=null;}proceed();};",
+    'departure horn')
+
+# Old saves get a sane track; checkpoint restores restart track at that port.
+g = replace_once(g,
+    "const nav=safeJson(payload.navigation)||{};Object.assign(state,nav,{started:true,gameOver:false,moving:false,commandActive:false,ramming:false,ramClock:0});\n      state.tx=Number.isFinite(nav.tx)?nav.tx:state.x;",
+    "const nav=safeJson(payload.navigation)||{};Object.assign(state,nav,{started:true,gameOver:false,moving:false,commandActive:false,ramming:false,ramClock:0});state.track=Array.isArray(nav.track)&&nav.track.length?nav.track:[{x:state.x,y:state.y}];\n      state.tx=Number.isFinite(nav.tx)?nav.tx:state.x;",
+    'restore track')
+g = replace_once(g,
+    "targetOnLand:false,started:true});currentPortCity=city;",
+    "targetOnLand:false,started:true,track:[{x:cp.x,y:cp.y}]});currentPortCity=city;",
+    'checkpoint track reset')
+
+# Correct real-time vessel speed on slow devices, cap map rendering to 30fps on touch,
+# and do not repaint the whole map behind an open modal/port.
+frame_new = '''  function frame(now){
+    const dt=Math.max(0,Math.min(.18,(now-last)/1000));last=now;
+    let paused=state.gameOver||menuOpen||minimapExpanded||!!research?.isBusy?.();sound.update(paused);let weather;
+    if(!paused){
+      updateBrokenIceDrift(dt/zoomLevel);updatePackIceTextureDrift(dt/zoomLevel);serviceNearbyPort();
+      let remaining=dt;
+      while(remaining>.00001){const step=Math.min(.033,remaining);update(step);remaining-=step;if(state.gameOver||menuOpen||minimapExpanded||research?.isBusy?.())break;}
+      weather=updateWeatherAnnouncement();updateIceReadout();updateCompass();if(now-lastResearchNavigation>250){lastResearchNavigation=now;updateResearchNavigation();}
+      paused=state.gameOver||menuOpen||minimapExpanded||!!research?.isBusy?.();
+      if(!paused){const margin=60/scale,minX=state.x-width/scale/2-margin,maxX=state.x+width/scale/2+margin,minY=state.y-height/scale/2-margin,maxY=state.y+height/scale/2+margin;floeUpdateAccumulator+=dt/zoomLevel;if(floeUpdateAccumulator>=.075){updateFloes(Math.min(.18,floeUpdateAccumulator),minX,maxX,minY,maxY);floeUpdateAccumulator=0;}updateWakeFloes(dt/zoomLevel);updateWakeTrail(dt/zoomLevel);updateWildlifeEncounters(dt);updateFishSchools(dt/zoomLevel);updateWildlife(dt/zoomLevel);updateNpcVessels(dt/zoomLevel);}
+    }else{updateCalendar(0);weather=currentWeather();ui.weatherValue.textContent=weather.type==='clear'?'CLEAR':`${weather.label} ${weather.rating}/10 · ${weather.visibilityKm} KM`;updateIceReadout();updateCompass();}
+    updateResourceWarning();
+    const renderDue=!IS_COARSE_POINTER||now-lastRender>=32||paused!==lastFramePaused;
+    if(!paused&&renderDue){lastRender=now;drawMap();drawResearchTargets();drawNpcVessels();drawSeasonalLighting();drawWeather(weather);drawPortMarkers();drawWildlifeObservationRings();drawFog(weather);drawResearchTargets(true);drawResearchGuidance();drawVessel();}
+    if(minimapExpanded&&now-miniLastDraw>45){miniLastDraw=now;try{drawMiniMap();}catch(error){console.error('MINIMAP DRAW FAILED',error);}}
+    else if(!minimapExpanded&&renderDue&&now-miniLastDraw>260){miniLastDraw=now;try{drawMiniMap();}catch(error){console.error('MINIMAP DRAW FAILED',error);}}
+    lastFramePaused=paused;requestAnimationFrame(frame);
+  }
+'''
+g = replace_between(g, '  function frame(now){', '  research?.initialize?.({', frame_new, 'frame loop')
+
+p.write_text(g)
+
+# ---------------- index.html ----------------
+p = Path('index.html')
+h = p.read_text()
+h = h.replace('style.css?v=expedition-23e-polish','style.css?v=expedition-23f-speed-economy')
+h = h.replace('expedition.js?v=expedition-23e-polish','expedition.js?v=expedition-23f-speed-economy')
+h = h.replace('game.js?v=expedition-23e-perf2','game.js?v=expedition-23f-speed-economy')
+p.write_text(h)
+
+print('patched expedition.js, game.js, index.html')
