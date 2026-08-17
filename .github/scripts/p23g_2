@@ -1,5 +1,0 @@
-# Normalize generated runtime text so the validation also catches accidental
-# whitespace regressions in the patch itself.
-for path in (exp_path,game_path,index_path):
-    text=path.read_text()
-    path.write_text('\n'.join(line.rstrip() for line in text.splitlines())+'\n')
