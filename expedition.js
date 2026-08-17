@@ -643,7 +643,7 @@
     const spacing=options.nearby?18:targetSpacingKm(),context=()=>({template,origin,kind,distanceKm:distance,bearingDeg:bearing,avoidPoints,minimumSpacingKm:spacing,preferred:template.fixedDestination||null,...options});
     if (point) {
       distance=geoDistance(origin,point);
-      if ((!template.anywhere&&!pointIsSpaced(point,avoidPoints,spacing)) || (validator&&!validator(point,context()))) point=null;
+      if ((!template.anywhere&&!pointIsSpaced(point,avoidPoints,spacing)) || (!template.anywhere&&validator&&!validator(point,context()))) point=null;
     }
     if (!point && template.fixedDestination) {
       for (let radius=3; radius<=30&&!point; radius+=3) for (let angle=0; angle<360; angle+=20) {
@@ -743,7 +743,7 @@
     for(let i=weighted.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[weighted[i],weighted[j]]=[weighted[j],weighted[i]];} const pool=[],seen=new Set(); for(const item of weighted)if(!seen.has(item.id)){seen.add(item.id);pool.push(item);}
     if(state.completed.length===0){const harbor=pool.find(item=>item.id==='harbor-soundings');if(harbor){pool.splice(pool.indexOf(harbor),1);pool.unshift(harbor);}}
 state.offers=[]; const specialtyCount=new Set(state.scientists.map(item=>item.specialty)).size,seniorBonus=hiredCareerCount('postdoc')+hiredCareerCount('professor')*2,offerLimit=Math.min(9,Math.max(3,2+specialtyCount+seniorBonus)),usedPictures=new Set();
-    let attempts=0;for(const template of pool){if(state.offers.length>=offerLimit||attempts>=offerLimit*3)break;attempts++;const target=buildTarget(template,port,rng,'grant');if(!target)continue;if(!giveGrantUniqueMedia(target,usedPictures,rng))continue;state.offers.push(target);} if(!state.offers.length&&playerCareerLevel()<2){const fallback=buildTarget(compatibleFallbackTemplate(),port,rng,'grant');if(fallback){giveGrantUniqueMedia(fallback,usedPictures,rng);state.offers.push(fallback);}}
+    let attempts=0;for(const template of pool){if(state.offers.length>=offerLimit||attempts>=offerLimit*3)break;attempts++;const target=buildTarget(template,port,rng,'grant');if(!target)continue;if(!giveGrantUniqueMedia(target,usedPictures,rng))continue;state.offers.push(target);} if(!state.offers.length){const fallback=buildTarget(compatibleFallbackTemplate(),port,rng,'grant');if(fallback){giveGrantUniqueMedia(fallback,usedPictures,rng);state.offers.push(fallback);}}
   }
 
   function mediaMarkup(item, className='') {
@@ -992,6 +992,10 @@ state.offers=[]; const specialtyCount=new Set(state.scientists.map(item=>item.sp
       if(!state.port||normalizedPortId(state.port)!==portId)return;
       state.grantOfferCycle=null;
       generateOffers(state.port,{fresh:true});
+      if(!state.offers.length){
+        const rng=seeded(`${portId}-${state.portVisits}-guaranteed-grant`),fallback=buildTarget(compatibleFallbackTemplate(),state.port,rng,'grant');
+        if(fallback)state.offers=[fallback];
+      }
       renderSidebar();
       if(portOpen)renderPort();
       callbacks.onStateChange?.();
@@ -1063,8 +1067,8 @@ state.offers=[]; const specialtyCount=new Set(state.scientists.map(item=>item.sp
       portId=normalizedPortId(state.port); readyAt=state.grantMarketReady?.[portId]||0; state.grantOfferCycle=null; refreshGrants=true;
       if (differentPort||state.elapsedDays>=readyAt) state.grantMarketReady[portId]=state.elapsedDays+3.5;
     } else if (!state.offers.length) generateCandidates(state.port);
-    callbacks.onSound?.('port'); renderSidebar(); renderPort();
-    if(refreshGrants) scheduleGrantRefresh(140);
+    if(!options.suppressPortSound)callbacks.onSound?.('port'); renderSidebar(); renderPort();
+    if(refreshGrants) scheduleGrantRefresh(80);
   }
   function closePort() { capturePortView(); root?.querySelector('#arx-port-modal')?.classList.remove('open'); portOpen=false; }
   function leavePort() { state.port=null; closePort(); renderSidebar(); }
@@ -1280,7 +1284,10 @@ state.offers=[]; const specialtyCount=new Set(state.scientists.map(item=>item.sp
     const opportunityCap=4;if(state.targets.filter(item=>item.kind==='opportunity'||item.kind==='weather-opportunity').length>=opportunityCap)return null;
     const rng=seeded(`${payload.position.lat.toFixed(2)}-${payload.position.lon.toFixed(2)}-${state.portVisits}-${state.completed.length}-${Math.floor(state.elapsedDays*4)}`),recent=new Set(state.recentGrantTemplates||[]),unlockCredit=teamLevel>=3?8:teamLevel>=2?3:0;
     let possible=TEMPLATES.filter(item=>!item.weather&&templateSupportedByVessel(item)&&(playerCareerLevel()<2||templateCareerLevel(item)>=playerCareerLevel())&&(item.unlockAfter||0)<=state.completed.length+unlockCredit&&!recent.has(item.id));
-    if(inIce){const icePossible=possible.filter(item=>item.iceAllowed);if(icePossible.length)possible=icePossible;}if(!possible.length)return null;
+    if(inIce){const icePossible=possible.filter(item=>item.iceAllowed);if(icePossible.length)possible=icePossible;}if(!possible.length){
+      const fallback=compatibleFallbackTemplate(),target=buildTarget(fallback,payload.position,rng,'opportunity',{nearby:inIce,iceThickness});
+      if(!target)return null;target.selected=false;state.targets.push(target);toast(`NEW RESEARCH OPPORTUNITY · ${target.shortTitle}`);changed({port:false});return target;
+    }
     const weighted=possible.flatMap(template=>{let weight=1,level=templateCareerLevel(template);if(coastal&&(template.coastal||template.fjordPreferred||template.tier==='local'))weight+=payload.fjord?14:7;if(iceEdge&&template.iceAllowed)weight+=18;if(deepIce&&template.iceAllowed)weight+=30+iceThickness*18;if(inIce&&!template.iceAllowed)weight=1;if(teamLevel===2)weight+=level===2?18:level===1?2:0;if(teamLevel>=3)weight+=level===3?42:level===2?12:1;if(level===2)weight+=postdocCount*4+professorCount*3;if(level===3)weight+=professorCount*12;if(payload.ramming&&template.iceAllowed)weight+=25;if(!coastal&&template.tier!=='local')weight+=2;return Array(Math.max(1,Math.round(weight))).fill(template);});
     const ready=weighted.filter(item=>eligible(item)), aspirational=weighted.filter(item=>teamCouldDoWithEquipment(item)||teamCouldDoWithMoreCrew(item)), otherMissing=weighted.filter(item=>!eligible(item));
     let pool;
@@ -1321,7 +1328,7 @@ state.offers=[]; const specialtyCount=new Set(state.scientists.map(item=>item.sp
   }
   function openWildlife(species,context={}) {
     const key=String(species).replace(/ SCHOOL$/,'').toUpperCase(), item=catalog[key];
-    if (!item) { toast(`FIELD OBSERVATION · ${key}`); return; }
+    if (!item) { toast(`FIELD OBSERVATION · ${key}`); return false; }
     const individualId=String(context.individualId||context.id||`${key}:${Number(context.lat||0).toFixed(3)}:${Number(context.lon||0).toFixed(3)}`);
     const firstSpecies=!state.observed.includes(key), firstIndividual=!state.observedIndividuals.includes(individualId);
     if (firstSpecies) state.observed.push(key);
@@ -1333,9 +1340,9 @@ state.offers=[]; const specialtyCount=new Set(state.scientists.map(item=>item.sp
       toast(`${item.group.toUpperCase()} COMPLETE · NORTHERN FIELD NOTES PUBLISHED`);
     }
     const tone=item.photoTone==='dark'?'dark':'';
-    const modal=root.querySelector('#arx-wildlife-modal');
+    const modal=root?.querySelector('#arx-wildlife-modal'); if(!modal)return false;
     modal.innerHTML=`<div class="arx-modal-card arx-wildlife-card"><button class="arx-close" data-arx-action="close-wildlife">×</button><div class="arx-photo ${item.photoFit==='contain'?'contain':''} ${tone}"><img src="${escapeHtml(item.photo)}" alt="${escapeHtml(item.displayName)}"><span>${firstIndividual?`OBSERVATION ARCHIVED · +${wildlifeObservationData()} DATA`:'THIS INDIVIDUAL ALREADY OBSERVED · +0 DATA'}</span></div><div class="arx-species"><small>${escapeHtml(item.group)} · ${progress.seen}/${progress.total}</small><h2>${escapeHtml(item.displayName)}</h2><em>${escapeHtml(item.scientificName)}</em>${firstIndividual?'':`<p class="arx-observation-note">This is the same animal or school already recorded during this expedition, so no additional data were added.</p>`}<ul>${item.facts.map(fact=>`<li>${escapeHtml(fact)}</li>`).join('')}</ul><a href="${escapeHtml(item.source)}" target="_blank" rel="noopener">${escapeHtml(item.credit)}</a><div class="arx-modal-actions"><button data-arx-action="field-guide">OPEN FIELD GUIDE</button><button class="ghost" data-arx-action="close-wildlife">DISMISS</button></div></div></div>`;
-    modal.classList.add('open'); changed();
+    modal.classList.add('open'); changed({port:false}); return true;
   }
   function openFieldGuide() {
     const groups=[...new Set(Object.values(catalog).map(item=>item.group))], modal=root.querySelector('#arx-guide-modal');
