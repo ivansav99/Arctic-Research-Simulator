@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build patch script
-        run: cat .github/scripts/p23g_0 .github/scripts/p23g_1 > /tmp/patch.py
+        run: cat .github/scripts/p23g_0 .github/scripts/p23g_1 .github/scripts/p23g_2 > /tmp/patch.py
       - name: Validate patch script
         run: python -m py_compile /tmp/patch.py
       - name: Apply patch
