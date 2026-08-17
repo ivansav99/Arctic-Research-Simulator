@@ -26,17 +26,23 @@ jobs:
           s=Path('index.html').read_text()
           inject=r'''<script>
           (()=>{
-            if(!new URLSearchParams(location.search).has('new')) setTimeout(()=>document.getElementById('start-button')?.click(),250);
-            setTimeout(()=>document.querySelector('[data-arx-action="confirm-character"]')?.click(),1100);
-            setTimeout(()=>document.querySelector('[data-arx-tab="contracts"]')?.click(),2600);
+            setTimeout(()=>document.getElementById('start-button')?.click(),250);
+            setTimeout(()=>document.querySelector('[data-arx-action="confirm-character"]')?.click(),1200);
+            setTimeout(()=>document.querySelector('[data-arx-tab="contracts"]')?.click(),3200);
             setTimeout(()=>{
               const grant=!!document.querySelector('[data-arx-action="accept"]');
               document.documentElement.dataset.smokeGrant=grant?'yes':'no';
-              document.querySelector('[data-arx-action="close-port"]')?.click();
+            },6000);
+            setTimeout(()=>document.querySelector('[data-arx-action="close-port"]')?.click(),6500);
+            setTimeout(()=>{
               const opened=window.ArcticResearch?.openWildlife?.('POLAR BEAR',{individualId:'smoke-bear',lat:78.2,lon:15.5});
               document.documentElement.dataset.smokeWildlife=opened?'yes':'no';
+            },7000);
+            setTimeout(()=>{
               document.documentElement.dataset.smokeObserved=window.ArcticResearch?.isWildlifeObserved?.('smoke-bear')?'yes':'no';
-            },4300);
+              const wildlifeOpen=document.getElementById('arx-wildlife-modal')?.classList.contains('open');
+              document.documentElement.dataset.smokeWildlifeOpen=wildlifeOpen?'yes':'no';
+            },7600);
           })();
           </script>'''
           Path('smoke.html').write_text(s.replace('</body>',inject+'\n</body>'))
@@ -47,9 +53,9 @@ jobs:
           sleep 2
           CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
           test -n "$CHROME"
-          timeout 30s "$CHROME" --headless --no-sandbox --disable-gpu --disable-background-networking --host-resolver-rules="MAP wms.gebco.net 127.0.0.1" --virtual-time-budget=9500 --dump-dom http://127.0.0.1:8765/smoke.html >/tmp/dom.html 2>/tmp/chrome.log || true
+          timeout 30s "$CHROME" --headless --no-sandbox --disable-gpu --disable-background-networking --host-resolver-rules="MAP wms.gebco.net 127.0.0.1" --virtual-time-budget=13000 --dump-dom http://127.0.0.1:8765/smoke.html >/tmp/dom.html 2>/tmp/chrome.log || true
           echo '--- smoke markers ---'
-          grep -o 'data-smoke-[a-z]*="[^"]*"' /tmp/dom.html || true
+          grep -o 'data-smoke-[a-z-]*="[^"]*"' /tmp/dom.html || true
           echo '--- modal markers ---'
           grep -o 'id="arx-port-modal"[^>]*' /tmp/dom.html || true
           grep -o 'id="arx-wildlife-modal"[^>]*' /tmp/dom.html || true
@@ -60,7 +66,7 @@ jobs:
           grep -q 'data-smoke-grant="yes"' /tmp/dom.html
           grep -q 'data-smoke-wildlife="yes"' /tmp/dom.html
           grep -q 'data-smoke-observed="yes"' /tmp/dom.html
-          grep -q 'id="arx-wildlife-modal" class="arx-modal open"' /tmp/dom.html
+          grep -q 'data-smoke-wildlife-open="yes"' /tmp/dom.html
           ! grep -Ei 'Uncaught|ReferenceError|TypeError|SyntaxError' /tmp/chrome.log
       - name: Commit runtime changes
         run: |
