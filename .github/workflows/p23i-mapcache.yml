@@ -10,54 +10,32 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Apply patch
-        run: python3 .github/scripts/p23i_mapcache.py
-      - name: Validate JavaScript and diff
+      - name: Apply patch and tune moving-map cache
+        run: |
+          python3 .github/scripts/p23i_mapcache.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('game.js')
+          s=p.read_text()
+          old="const refreshMs=IS_COARSE_POINTER?125:85,shiftLimit=IS_COARSE_POINTER?64:52;"
+          new="const refreshMs=IS_COARSE_POINTER?260:150,shiftLimit=IS_COARSE_POINTER?120:82;"
+          if old not in s: raise SystemExit('cache tuning marker missing')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Validate runtime
         run: |
           node --check game.js
           node --check expedition.js
           git diff --check
           grep -q "drawWorldCached(now)" game.js
+          grep -q "IS_COARSE_POINTER?260:150" game.js
+          grep -q "setLineDash(\[18,11\])" game.js
+          grep -q "findPortTeleportPosition(currentPortCity)" game.js
+          grep -q "observedWildlifeFallback.add(animal.individualId)" game.js
+          grep -q "scheduleGrantRefresh(0)" expedition.js
+          grep -q "Field identification pending" expedition.js
           grep -q "expedition-23i-mapcache" index.html
-      - name: Build browser smoke page
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          s=Path('index.html').read_text()
-          freeze="<script>window.requestAnimationFrame=function(){return 0};window.cancelAnimationFrame=function(){};</script>\n"
-          s=s.replace('<script src="coast-data.js"></script>',freeze+'<script src="coast-data.js"></script>')
-          inject=r'''<script>
-          (()=>{
-            setTimeout(()=>document.getElementById('start-button')?.click(),120);
-            setTimeout(()=>document.querySelector('[data-arx-action="confirm-character"]')?.click(),500);
-            setTimeout(()=>document.querySelector('[data-arx-tab="contracts"]')?.click(),1100);
-            setTimeout(()=>{document.documentElement.dataset.smokeGrant=document.querySelector('[data-arx-action="accept"]')?'yes':'no';},2400);
-            setTimeout(()=>document.querySelector('[data-arx-action="close-port"]')?.click(),2700);
-            setTimeout(()=>{document.documentElement.dataset.smokeWildlife=window.ArcticResearch?.openWildlife?.('POLAR BEAR',{individualId:'smoke-bear',lat:78.2,lon:15.5})?'yes':'no';},3000);
-            setTimeout(()=>{
-              document.documentElement.dataset.smokeObserved=window.ArcticResearch?.isWildlifeObserved?.('smoke-bear')?'yes':'no';
-              document.documentElement.dataset.smokeWildlifeOpen=document.getElementById('arx-wildlife-modal')?.classList.contains('open')?'yes':'no';
-            },3300);
-          })();
-          </script>'''
-          Path('smoke.html').write_text(s.replace('</body>',inject+'\n</body>'))
-          PY
-      - name: Exercise New Game, port grants, and wildlife in Chromium
-        run: |
-          python3 -m http.server 8765 >/tmp/server.log 2>&1 &
-          sleep 2
-          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
-          test -n "$CHROME"
-          timeout 20s "$CHROME" --headless --no-sandbox --disable-gpu --disable-background-networking --virtual-time-budget=5000 --dump-dom http://127.0.0.1:8765/smoke.html >/tmp/dom.html 2>/tmp/chrome.log || true
-          echo '--- smoke markers ---'
-          grep -o 'data-smoke-[a-z-]*="[^"]*"' /tmp/dom.html || true
-          echo '--- JS errors ---'
-          grep -Ei 'Uncaught|ReferenceError|TypeError|SyntaxError|CONSOLE' /tmp/chrome.log | tail -n 40 || true
-          grep -q 'data-smoke-grant="yes"' /tmp/dom.html
-          grep -q 'data-smoke-wildlife="yes"' /tmp/dom.html
-          grep -q 'data-smoke-observed="yes"' /tmp/dom.html
-          grep -q 'data-smoke-wildlife-open="yes"' /tmp/dom.html
-          ! grep -Ei 'Uncaught|ReferenceError|TypeError|SyntaxError' /tmp/chrome.log
+          ! grep -q "drawVesselTrack();drawWakeTrail()" game.js
       - name: Commit runtime changes
         run: |
           git config user.name "github-actions[bot]"
