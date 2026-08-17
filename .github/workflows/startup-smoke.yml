@@ -1,0 +1,42 @@
+name: Startup smoke test
+on:
+  push:
+    paths:
+      - '.github/workflows/startup-smoke.yml'
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inject automatic New Game click
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          inject='''<script>
+          setTimeout(() => {
+            const b=document.getElementById('start-button');
+            if(b) b.click();
+          }, 700);
+          </script>'''
+          p.write_text(s.replace('</body>',inject+'\n</body>'))
+          PY
+      - name: Start local site
+        run: |
+          python3 -m http.server 8765 >/tmp/server.log 2>&1 &
+          sleep 2
+      - name: Exercise New Game in Chromium
+        run: |
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          echo "Chrome: $CHROME"
+          test -n "$CHROME"
+          "$CHROME" --headless --no-sandbox --disable-gpu --enable-logging=stderr --v=1 --virtual-time-budget=5000 --dump-dom http://127.0.0.1:8765/ >/tmp/dom.html 2>/tmp/chrome.log || true
+          echo '--- Chrome console/log tail ---'
+          tail -n 160 /tmp/chrome.log || true
+          echo '--- Startup DOM markers ---'
+          grep -o 'id="arx-character-modal"[^>]*' /tmp/dom.html || true
+          grep -o 'id="welcome"[^>]*' /tmp/dom.html || true
+          echo '--- JS error-looking lines ---'
+          grep -Ei 'Uncaught|ReferenceError|TypeError|SyntaxError|ERROR.*javascript|CONSOLE' /tmp/chrome.log | tail -n 80 || true
+          grep -q 'id="arx-character-modal"[^>]*class="[^"]*open' /tmp/dom.html
