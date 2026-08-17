@@ -1,0 +1,64 @@
+name: Expedition 23i map cache and gameplay polish
+on:
+  push:
+    paths:
+      - '.github/workflows/p23i-mapcache.yml'
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply patch
+        run: python3 .github/scripts/p23i_mapcache.py
+      - name: Validate JavaScript and diff
+        run: |
+          node --check game.js
+          node --check expedition.js
+          git diff --check
+          grep -q "drawWorldCached(now)" game.js
+          grep -q "expedition-23i-mapcache" index.html
+      - name: Build browser smoke page
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          inject=r'''<script>
+          (()=>{
+            if(!new URLSearchParams(location.search).has('new')) setTimeout(()=>document.getElementById('start-button')?.click(),250);
+            setTimeout(()=>document.querySelector('[data-arx-action="confirm-character"]')?.click(),1000);
+            setTimeout(()=>document.querySelector('[data-arx-tab="contracts"]')?.click(),2200);
+            setTimeout(()=>{
+              const grant=!!document.querySelector('[data-arx-action="accept"]');
+              document.documentElement.dataset.smokeGrant=grant?'yes':'no';
+              document.querySelector('[data-arx-action="close-port"]')?.click();
+              const opened=window.ArcticResearch?.openWildlife?.('POLAR BEAR',{individualId:'smoke-bear',lat:78.2,lon:15.5});
+              document.documentElement.dataset.smokeWildlife=opened?'yes':'no';
+              document.documentElement.dataset.smokeObserved=window.ArcticResearch?.isWildlifeObserved?.('smoke-bear')?'yes':'no';
+            },3600);
+          })();
+          </script>'''
+          Path('smoke.html').write_text(s.replace('</body>',inject+'\n</body>'))
+          PY
+      - name: Exercise New Game, port grants, and wildlife in Chromium
+        run: |
+          python3 -m http.server 8765 >/tmp/server.log 2>&1 &
+          sleep 2
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          test -n "$CHROME"
+          "$CHROME" --headless --no-sandbox --disable-gpu --virtual-time-budget=7500 --dump-dom http://127.0.0.1:8765/smoke.html >/tmp/dom.html 2>/tmp/chrome.log || true
+          grep -q 'data-smoke-grant="yes"' /tmp/dom.html
+          grep -q 'data-smoke-wildlife="yes"' /tmp/dom.html
+          grep -q 'data-smoke-observed="yes"' /tmp/dom.html
+          grep -q 'id="arx-wildlife-modal" class="arx-modal open"' /tmp/dom.html
+          ! grep -Ei 'Uncaught|ReferenceError|TypeError|SyntaxError' /tmp/chrome.log
+      - name: Commit runtime changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add game.js expedition.js style.css index.html
+          git diff --cached --quiet && { echo 'No runtime changes'; exit 1; }
+          git commit -m "Cache moving map and restore gameplay feedback"
+          git push
