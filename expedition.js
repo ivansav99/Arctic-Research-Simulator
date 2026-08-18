@@ -634,7 +634,7 @@
   }
   function buildTarget(template, origin, rng, kind='grant', options={}) {
     if(!missionFitsCurrentVessel(template))return null;
-    const scale=.88+rng()*.26, vesselScale=DATA_SCALE_BY_VESSEL[state.currentVessel]||3, crewScale=1+Math.min(.5,Math.max(0,state.scientists.length-1)*.03), rewardScale=vesselRewardScale();
+    const scale=.88+rng()*.26, vesselScale=DATA_SCALE_BY_VESSEL[state.currentVessel]||3, crewScale=1+Math.min(.5,Math.max(0,state.scientists.length-1)*.03);
     const window=researchDistanceWindow(template,kind,options);
     const validator=callbacks.isResearchSiteSuitable;
     const avoidPoints=[...state.targets,...state.offers,...(state.recentGrantSites||[])].filter(item=>item.status!=='completed');
@@ -671,7 +671,7 @@
       specialties:[...(template.specialties || [])], anyScientist:!!template.anyScientist,
       equipment:[...(template.equipment || [])], consumables:[...(template.consumables || [])], minCrew:missionMinCrew(template), specialistRequirements:missionSpecialistRequirements(template),
       steps:[...(template.steps || [])], media:clone(template.media), lat:point.lat, lon:point.lon,
-      data:Math.max(1,Math.round(template.data*scale*vesselScale*crewScale*iceValueMultiplier)), reward:Math.round(template.reward*scale*(kind === 'opportunity'||kind==='weather-opportunity' ? 1.6 : 2)*iceValueMultiplier*rewardScale),
+      data:Math.max(1,Math.round(template.data*scale*vesselScale*crewScale*iceValueMultiplier)), reward:Math.round(template.reward*scale*(kind === 'opportunity'||kind==='weather-opportunity' ? 1.6 : 2)*iceValueMultiplier),
       supplies:Math.max(1,Math.round(template.supplies*scale)), workHours:Math.max(4,Math.round(template.workHours*scale)),
       missionMode:template.missionMode || 'immediate', deploymentDays:template.deploymentDays || 0,
       recoveryAfterDays:template.recoveryAfterDays || 0, weather:template.weather || null,

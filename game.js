@@ -536,13 +536,22 @@
   function cityScreenPosition(city){const w=polar(city.lat,city.lon),p=worldToScreen(w.x,w.y);return{city,w,p};}
   function nearbyCityAt(clientX,clientY){let match=null,best=24;for(const city of cityLabels){const item=cityScreenPosition(city),distance=Math.hypot(item.w.x-state.x,item.w.y-state.y),hit=Math.hypot(item.p.x-clientX,item.p.y-clientY);if(hit<best){match=item;match.distance=distance;best=hit;}}return match;}
   function findPortApproach(city){
-    const center=polar(city.lat,city.lon);let reachable=null,reachableScore=Infinity,fallback=null,fallbackScore=Infinity;
-    for(let radius=3;radius<=420;radius+=3)for(let i=0;i<72;i++){
-      const a=i*Math.PI/36,x=center.x+Math.cos(a)*radius,y=center.y+Math.sin(a)*radius,pos=unpolar(x,y);if(pos.lat<MIN_LAT||isLand(x,y))continue;const profile=iceNavigationProfileAt(x,y);if(!profile.allowed)continue;
-      const shipDistance=Math.hypot(x-state.x,y-state.y),score=radius+shipDistance*.025;if(score<fallbackScore){fallback={x,y,shoreDistance:radius};fallbackScore=score;}
-      if(clearDisplacement(state.x,state.y,x,y)&&score<reachableScore){reachable={x,y,shoreDistance:radius};reachableScore=score;}
-    }
-    return reachable||fallback;
+    const center=polar(city.lat,city.lon),toward=Math.atan2(state.y-center.y,state.x-center.x);
+    let fallback=null,fallbackScore=Infinity;
+    const scan=(startRadius,maxRadius,radiusStep,angles)=>{
+      const turn=Math.PI*2/angles,offsets=[0];
+      for(let step=1;step<=Math.floor(angles/2);step++){offsets.push(step);if(step<angles/2)offsets.push(-step);}
+      for(let radius=startRadius;radius<=maxRadius;radius+=radiusStep)for(const offset of offsets){
+        const a=toward+offset*turn,x=center.x+Math.cos(a)*radius,y=center.y+Math.sin(a)*radius,pos=unpolar(x,y);
+        if(pos.lat<MIN_LAT||isLand(x,y))continue;
+        const profile=iceNavigationProfileAt(x,y);if(!profile.allowed)continue;
+        const shipDistance=Math.hypot(x-state.x,y-state.y),score=radius+shipDistance*.025;
+        if(score<fallbackScore){fallback={x,y,shoreDistance:radius};fallbackScore=score;}
+        if(clearDisplacement(state.x,state.y,x,y))return{x,y,shoreDistance:radius};
+      }
+      return null;
+    };
+    return scan(3,72,3,24)||scan(78,180,6,24)||scan(192,420,12,18)||fallback;
   }
   function resetDistantWildlifeFromPort(city){
     const center=polar(city.lat,city.lon),screenDistance=Math.max(width,height)/Math.max(.1,scale),ids=[];
@@ -550,7 +559,7 @@
     if(ids.length)research?.resetWildlifeObservations?.(ids);
   }
   function finishPortEntry(city){clearTimeout(pendingPortEntryTimer);pendingPortEntryTimer=0;pendingPortEntryCity=null;if(!city||state.dockedPort!==city.name||currentPortCity!==city)return;state.track=[{x:state.x,y:state.y}];invalidateWorldCache();research?.enterPort?.(city,{resources:{fuel:state.fuel,food:state.food},suppressPortSound:true});showToast(`PORT CALL — ${city.name} · SERVICES & RESEARCH GRANTS OPEN`,1800);setTimeout(()=>{if(state.dockedPort!==city.name||currentPortCity!==city)return;saveCheckpoint(city);saveGame('auto','port');analytics.track('port_entered',{port_name:city.name||'',port_country:city.countryCode||''});},0);}
-  function enterPort(city,{immediate=false}={}){clearTimeout(pendingPortEntryTimer);pendingPortEntryTimer=0;pendingPortEntryCity=city;state.portDestination=null;state.dockedPort=city.name;state.moving=false;state.commandActive=false;state.ramming=false;state.tx=state.x;state.ty=state.y;currentPortCity=city;if(!state.started){state.track=[{x:state.x,y:state.y}];saveCheckpoint(city);pendingPortEntryCity=null;return;}showToast(`ENTERING PORT — ${city.name}`,1200);sound.play('port');if(immediate){finishPortEntry(city);return;}pendingPortEntryTimer=setTimeout(()=>{if(state.dockedPort===city.name&&currentPortCity===city)finishPortEntry(city);},140);}
+  function enterPort(city,{immediate=false}={}){clearTimeout(pendingPortEntryTimer);pendingPortEntryTimer=0;pendingPortEntryCity=city;state.portDestination=null;state.dockedPort=city.name;state.moving=false;state.commandActive=false;state.ramming=false;state.tx=state.x;state.ty=state.y;currentPortCity=city;if(!state.started){state.track=[{x:state.x,y:state.y}];saveCheckpoint(city);pendingPortEntryCity=null;return;}showToast(`ENTERING PORT — ${city.name}`,1200);sound.play('port');if(immediate){finishPortEntry(city);return;}pendingPortEntryTimer=setTimeout(()=>{if(state.dockedPort===city.name&&currentPortCity===city)finishPortEntry(city);},24);}
   function refuelAt(city){enterPort(city);}
   function serviceNearbyPort(){if(!currentPortCity)return;const w=polar(currentPortCity.lat,currentPortCity.lon);if(Math.hypot(w.x-state.x,w.y-state.y)<=38)return;research?.leavePort?.();state.dockedPort=null;currentPortCity=null;}
   function endGame(title,message){if(state.gameOver)return;state.gameOver=true;state.moving=false;state.tx=state.x;state.ty=state.y;clearTimeout(toastTimer);ui.toast.classList.remove('show','frozen');ui.gameOverTitle.textContent=title;ui.gameOverMessage.textContent=message;let image=ui.gameOver.querySelector('.failure-scientist');if(!image){image=document.createElement('img');image.className='failure-scientist';image.style.cssText='display:block;width:92px;height:92px;margin:12px auto;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.55);box-shadow:0 8px 24px rgba(0,0,0,.32)';ui.gameOver.insertBefore(image,ui.gameOverMessage);}const rs=research?.getState?.(),chief=rs?.scientists?.find(item=>item.isPlayer)||rs?.scientists?.[0];image.src=chief?.portrait||'assets/scientists/maya-chen.webp';image.alt=title==='OUT OF FOOD'?'Hungry Chief Scientist':'Cold Chief Scientist';image.style.filter=title==='OUT OF FOOD'?'sepia(.35) saturate(.7) brightness(.78)':'grayscale(.35) hue-rotate(145deg) saturate(.75) brightness(.8)';ui.gameOver.classList.remove('hidden');analytics.track('game_over',{game_over_reason:title||'',game_over_message:message||''});}
