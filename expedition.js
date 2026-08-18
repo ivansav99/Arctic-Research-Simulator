@@ -984,22 +984,19 @@ state.offers=[]; const specialtyCount=new Set(state.scientists.map(item=>item.sp
   }
 
   let grantRefreshTimer=0;
+  function refreshGrantOffersNow({render=true}={}){
+    if(!state.port)return false;
+    const portId=normalizedPortId(state.port);state.grantOfferCycle=null;
+    try{generateOffers(state.port,{fresh:true});}catch(error){console.error('GRANT GENERATION FAILED',error);state.offers=[];}
+    if(!state.offers.length){
+      try{const rng=seeded(`${portId}-${state.portVisits}-guaranteed-grant`),fallback=buildTarget(compatibleFallbackTemplate(),state.port,rng,'grant');if(fallback){giveGrantUniqueMedia(fallback,new Set(),rng);state.offers=[fallback];}}catch(error){console.error('FALLBACK GRANT FAILED',error);}
+    }
+    renderSidebar();if(render&&portOpen)renderPort();callbacks.onStateChange?.();return state.offers.length>0;
+  }
   function scheduleGrantRefresh(delay=120){
     if(!state.port)return;
-    clearTimeout(grantRefreshTimer);
-    const portId=normalizedPortId(state.port);
-    grantRefreshTimer=setTimeout(()=>{
-      if(!state.port||normalizedPortId(state.port)!==portId)return;
-      state.grantOfferCycle=null;
-      generateOffers(state.port,{fresh:true});
-      if(!state.offers.length){
-        const rng=seeded(`${portId}-${state.portVisits}-guaranteed-grant`),fallback=buildTarget(compatibleFallbackTemplate(),state.port,rng,'grant');
-        if(fallback){giveGrantUniqueMedia(fallback,new Set(),rng);state.offers=[fallback];}
-      }
-      renderSidebar();
-      if(portOpen)renderPort();
-      callbacks.onStateChange?.();
-    },delay);
+    clearTimeout(grantRefreshTimer);const portId=normalizedPortId(state.port);
+    grantRefreshTimer=setTimeout(()=>{if(!state.port||normalizedPortId(state.port)!==portId)return;refreshGrantOffersNow();},delay);
   }
 
   function portPanelMarkup(tab,resources,ship,quote,usage,collecting){
@@ -1326,10 +1323,11 @@ state.offers=[]; const specialtyCount=new Set(state.scientists.map(item=>item.sp
     const rawKey=String(species).replace(/ SCHOOL$/,'').trim().toUpperCase(),aliases={'BOWHEAD WHALE':'BOWHEAD','BELUGA WHALE':'BELUGA','HUMPBACK WHALE':'HUMPBACK','GREY WHALE':'GRAY WHALE','POLAR BEAR':'POLAR BEAR'},key=aliases[rawKey]||rawKey;
     let item=catalog[key];if(!item){const compact=value=>String(value||'').toUpperCase().replace(/[^A-Z0-9]/g,'');item=Object.values(catalog).find(entry=>compact(entry.displayName)===compact(rawKey));}
     if(!item){item={displayName:String(species||'Arctic wildlife'),scientificName:'Field identification pending',group:'Arctic Wildlife Observation',photo:'assets/wildlife/polar-bear.jpg',credit:'Field observation record',source:'#',facts:['A wildlife observation was recorded from the expedition chart.','The individual has been removed from the active chart after observation.','Species reference details can be expanded in a future field-guide update.']};}
+    const dataValue=Math.max(1,Math.round(Number(context.dataValue)||2));
     const individualId=String(context.individualId||context.id||`${key}:${Number(context.lat||0).toFixed(3)}:${Number(context.lon||0).toFixed(3)}`);
-    const firstSpecies=!state.observed.includes(key), firstIndividual=!state.observedIndividuals.includes(individualId);
+    const firstSpecies=!state.observed.includes(key), firstIndividual=!(state.observedIndividuals||[]).includes(individualId);
     if (firstSpecies) state.observed.push(key);
-    if (firstIndividual) { const wildlifeData=wildlifeObservationData(); state.observedIndividuals.push(individualId); addData(wildlifeData); addLog(`${item.displayName} observation archived · +${wildlifeData} data.`); }
+    if (firstIndividual) { state.observedIndividuals=state.observedIndividuals||[]; state.observedIndividuals.push(individualId); addData(dataValue); addLog(`${item.displayName} observation archived · +${dataValue} data.`); }
     const progress=groupProgress(item.group);
     if (progress.complete&&!state.claimedGroups.includes(item.group)) {
       state.claimedGroups.push(item.group); adjustMoney(GROUP_REWARDS[item.group]||30000); state.citations+=5;
@@ -1338,7 +1336,7 @@ state.offers=[]; const specialtyCount=new Set(state.scientists.map(item=>item.sp
     }
     const tone=item.photoTone==='dark'?'dark':'';
     const modal=root?.querySelector('#arx-wildlife-modal'); if(!modal)return false;
-    modal.innerHTML=`<div class="arx-modal-card arx-wildlife-card"><button class="arx-close" data-arx-action="close-wildlife">×</button><div class="arx-photo ${item.photoFit==='contain'?'contain':''} ${tone}"><img src="${escapeHtml(item.photo)}" alt="${escapeHtml(item.displayName)}"><span>${firstIndividual?`OBSERVATION ARCHIVED · +${wildlifeObservationData()} DATA`:'THIS INDIVIDUAL ALREADY OBSERVED · +0 DATA'}</span></div><div class="arx-species"><small>${escapeHtml(item.group)} · ${progress.seen}/${progress.total}</small><h2>${escapeHtml(item.displayName)}</h2><em>${escapeHtml(item.scientificName)}</em>${firstIndividual?'':`<p class="arx-observation-note">This is the same animal or school already recorded during this expedition, so no additional data were added.</p>`}<ul>${item.facts.map(fact=>`<li>${escapeHtml(fact)}</li>`).join('')}</ul><a href="${escapeHtml(item.source)}" target="_blank" rel="noopener">${escapeHtml(item.credit)}</a><div class="arx-modal-actions"><button data-arx-action="field-guide">OPEN FIELD GUIDE</button><button class="ghost" data-arx-action="close-wildlife">DISMISS</button></div></div></div>`;
+    modal.innerHTML=`<div class="arx-modal-card arx-wildlife-card"><button class="arx-close" data-arx-action="close-wildlife">×</button><div class="arx-photo ${item.photoFit==='contain'?'contain':''} ${tone}"><img src="${escapeHtml(item.photo)}" alt="${escapeHtml(item.displayName)}"><span>${firstIndividual?`OBSERVATION ARCHIVED · +${dataValue} DATA`:'THIS INDIVIDUAL ALREADY OBSERVED · +0 DATA'}</span></div><div class="arx-species"><small>${escapeHtml(item.group)} · ${progress.seen}/${progress.total}</small><h2>${escapeHtml(item.displayName)}</h2><em>${escapeHtml(item.scientificName)}</em>${firstIndividual?'':`<p class="arx-observation-note">This is the same animal or school already recorded during this expedition, so no additional data were added.</p>`}<ul>${item.facts.map(fact=>`<li>${escapeHtml(fact)}</li>`).join('')}</ul><a href="${escapeHtml(item.source)}" target="_blank" rel="noopener">${escapeHtml(item.credit)}</a><div class="arx-modal-actions"><button data-arx-action="field-guide">OPEN FIELD GUIDE</button><button class="ghost" data-arx-action="close-wildlife">DISMISS</button></div></div></div>`;
     modal.classList.add('open'); changed({port:false}); return true;
   }
   function openFieldGuide() {
@@ -1682,7 +1680,9 @@ state.offers=[]; const specialtyCount=new Set(state.scientists.map(item=>item.sp
     const button=event.target.closest('[data-arx-tab]'); if (!button) return;
     const card=button.closest('.arx-port-card'),tabs=card.querySelector('.arx-tabs');
     activePortTab=button.dataset.arxTab; portScrollTop=0; portTabsScrollLeft=tabs.scrollLeft; openStoreDetail=null;
-    renderPort();if(activePortTab==='contracts'&&!state.offers.length)scheduleGrantRefresh(0);if(activePortTab==='crew'&&!state.candidates.length){setTimeout(()=>{if(state.port){generateCandidates(state.port);if(portOpen&&activePortTab==='crew')renderPort();}},0);}
+    if(activePortTab==='contracts'&&!state.offers.length)refreshGrantOffersNow({render:false});
+    if(activePortTab==='crew'&&!state.candidates.length)generateCandidates(state.port);
+    renderPort();
   }
 
   function ensureUI() {
@@ -1767,7 +1767,7 @@ state.offers=[]; const specialtyCount=new Set(state.scientists.map(item=>item.sp
   const api={
     initialize,enterPort,leavePort,tickDays,getVesselModifiers,getMapTargets,selectTarget,updateNavigation,openTarget,openNavigationPrompt,
     completeTarget,openWildlife,openVessel,openNpcVessel,openCharacterSetup,confirmDeparture,getState,createCheckpoint,restoreCheckpoint,
-    restoreSnapshot:restoreCheckpoint,ensureMinimumSupplies,maybeSpawnOpportunity,maybeHelicopterFoodReminder,isWildlifeObserved:id=>state.observedIndividuals.includes(String(id)),resetWildlifeObservations,
+    restoreSnapshot:restoreCheckpoint,ensureMinimumSupplies,maybeSpawnOpportunity,maybeHelicopterFoodReminder,isWildlifeObserved:id=>(state.observedIndividuals||[]).includes(String(id)),resetWildlifeObservations,
     isBusy:()=>!!activeOperation||!!root?.querySelector('.arx-modal.open')||!!root?.querySelector('.arx-sidebar.open')
   };
   window.ArcticResearch=api;

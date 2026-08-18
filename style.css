@@ -22,6 +22,7 @@ body { overscroll-behavior: none; touch-action: none; }
 .season-telemetry { display: none; }
 .fuel-status > i { display: block; width: 58px; height: 3px; margin-top: 4px; overflow: hidden; border-radius: 3px; background: #315e70; }
 .fuel-status > i em { display: block; width: 100%; height: 100%; background: #f6d365; transition: width .2s, background .2s; }
+.food-status { position: relative; }
 .food-status > i { display: block; width: 58px; height: 3px; margin-top: 4px; overflow: hidden; border-radius: 3px; background: #315e70; }
 .food-status > i em { display: block; width: 100%; height: 100%; background: #73d6a1; transition: width .2s, background .2s; }
 .mission-card { position: fixed; z-index: 3; top: 96px; left: 16px; width: 210px; border-radius: 12px; padding: 14px; }
@@ -75,13 +76,13 @@ body { overscroll-behavior: none; touch-action: none; }
 .toast { position: fixed; z-index: 5; left: 50%; bottom: 85px; transform: translate(-50%, 15px); padding: 8px 13px; border-radius: 6px; background: rgba(6,35,51,.86); color: #9fe8fa; font: 800 9px/1 sans-serif; letter-spacing: .16em; opacity: 0; transition: .25s; pointer-events: none; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .toast.frozen { padding: 11px 16px; border: 1px solid rgba(224,247,250,.55); background: rgba(23,58,73,.94); color: #fff4bd; box-shadow: 0 0 28px rgba(210,240,246,.3); }
-.resource-warning { position: fixed; z-index: 6; top: max(78px, calc(env(safe-area-inset-top) + 66px)); right: 105px; left: auto; max-width: 240px; transform: none; padding: 5px 8px; border: 1px solid rgba(255,196,117,.58); border-radius: 6px; background: rgba(87,31,35,.88); color: #fff0d0; font: 900 8px/1.2 system-ui,sans-serif; letter-spacing: .08em; text-align: right; opacity: 0; pointer-events: none; transition: opacity .16s; }
+.resource-warning { position: absolute; z-index: 8; top: calc(100% + 5px); right: 0; left: auto; width: max-content; max-width: 190px; transform: none; padding: 4px 7px; border: 1px solid rgba(255,196,117,.58); border-radius: 5px; background: rgba(87,31,35,.9); color: #fff0d0; font: 900 7px/1.2 system-ui,sans-serif; letter-spacing: .07em; text-align: right; white-space: normal; opacity: 0; pointer-events: none; transition: opacity .16s; }
 .resource-warning.show { opacity: 1; transform: none; }
 .fuel-status.low,.food-status.low { animation: resource-readout .72s ease-in-out infinite alternate; }
 @keyframes resource-alert { from { filter: brightness(.88); } to { filter: brightness(1.18); box-shadow: 0 0 0 2px rgba(255,116,98,.48),0 8px 31px rgba(255,83,69,.28); } }
 @keyframes resource-readout { from { opacity:.62; } to { opacity:1; text-shadow:0 0 8px rgba(255,95,79,.9); } }
 @media (max-width: 640px) {
-  .resource-warning { top: max(64px, calc(env(safe-area-inset-top) + 54px)); right: 72px; left: auto; max-width: 170px; padding: 4px 6px; font-size: 7px; text-align:right; }
+  .resource-warning { top: calc(100% + 4px); right: 0; left: auto; max-width: 148px; padding: 3px 5px; font-size: 6px; line-height: 1.15; text-align: right; }
   .top-hud { min-height: 55px; padding: 8px 10px; }
   .brand-mark { width: 32px; height: 32px; }
   .brand strong { font-size: 10px; }
