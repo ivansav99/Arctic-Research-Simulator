@@ -1,0 +1,33 @@
+name: Expedition 23j overscan and gameplay fixes
+on:
+  push:
+    paths:
+      - '.github/workflows/p23j-overscan.yml'
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply patch
+        run: python3 .github/scripts/p23j_overscan_gameplay.py
+      - name: Validate runtime
+        run: |
+          node --check game.js
+          node --check expedition.js
+          git diff --check
+          grep -q "WORLD_CACHE_OVERSCAN=1.5" game.js
+          grep -q "dt\*.07" game.js
+          grep -q "refreshGrantOffersNow" expedition.js
+          grep -q "dataValue" expedition.js
+          ! grep -q "wildlifeObservationData" expedition.js
+          grep -q "expedition-23j-overscan" index.html
+      - name: Commit runtime changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add game.js expedition.js style.css index.html
+          git diff --cached --quiet && { echo 'No runtime changes'; exit 1; }
+          git commit -m "Add overscan cache and restore gameplay timing"
+          git push
