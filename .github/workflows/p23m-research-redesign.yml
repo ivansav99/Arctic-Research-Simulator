@@ -10,18 +10,47 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Diagnose patch
+      - name: Apply research redesign with verified deployment fields
         run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('.github/scripts/p23m_research_redesign.py')
+          s=p.read_text()
+          old='exp=once(exp,"reward:target.reward,equipment:[...target.equipment]","reward:target.reward,upfront:target.upfront||0,advancePaid:target.advancePaid||0,equipment:[...target.equipment]",\'deployment advance copy\')'
+          new='needle="reward:target.reward,equipment:[...target.equipment]"\nreplacement="reward:target.reward,upfront:target.upfront||0,advancePaid:target.advancePaid||0,equipment:[...target.equipment]"\nif exp.count(needle)!=2: raise SystemExit(f"deployment advance copy: expected two matches, got {exp.count(needle)}")\nexp=exp.replace(needle,replacement)'
+          if old not in s: raise SystemExit('deployment patch line not found')
+          p.write_text(s.replace(old,new,1))
+          PY
           set +e
-          python3 .github/scripts/p23m_research_redesign.py > /tmp/p23m.log 2>&1
+          python3 .github/scripts/p23m_research_redesign.py > p23m-diagnostic.txt 2>&1
           status=$?
-          echo "exit=$status" >> /tmp/p23m.log
-          cat /tmp/p23m.log
-          cp /tmp/p23m.log p23m-diagnostic.txt
-      - name: Commit diagnostic
+          echo "patch_exit=$status" >> p23m-diagnostic.txt
+          if [ "$status" -eq 0 ]; then
+            node --check expedition.js >> p23m-diagnostic.txt 2>&1
+            s1=$?
+            node --check game.js >> p23m-diagnostic.txt 2>&1
+            s2=$?
+            git diff --check >> p23m-diagnostic.txt 2>&1
+            s3=$?
+            grep -q "Long-Range Fixed-Wing Survey UAS" expedition.js; s4=$?
+            grep -q "PAID UPFRONT ON ACCEPTANCE" expedition.js; s5=$?
+            grep -q "renderResearchWindow" expedition.js; s6=$?
+            grep -q "postdoc-frontogenesis" expedition.js; s7=$?
+            grep -q "researchGuidanceHit=hits" game.js; s8=$?
+            grep -q "expedition-23m-research-program" index.html; s9=$?
+            echo "validation=$s1,$s2,$s3,$s4,$s5,$s6,$s7,$s8,$s9" >> p23m-diagnostic.txt
+            if [ "$s1$s2$s3$s4$s5$s6$s7$s8$s9" = "000000000" ]; then touch p23m-success; fi
+          fi
+          cat p23m-diagnostic.txt
+      - name: Commit result
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add p23m-diagnostic.txt
-          git commit -m "Record research redesign diagnostic"
+          if [ -f p23m-success ]; then
+            git add expedition.js game.js index.html p23m-diagnostic.txt
+            git commit -m "Redesign grants and field research workflow"
+          else
+            git add p23m-diagnostic.txt
+            git commit -m "Record research redesign retry diagnostic"
+          fi
           git push
