@@ -1,0 +1,49 @@
+name: Expedition 23m research redesign retry 2
+on:
+  push:
+    paths:
+      - '.github/workflows/p23m-retry2.yml'
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Correct patch anchors and apply
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('.github/scripts/p23m_research_redesign.py')
+          s=p.read_text()
+          old='exp=once(exp,"reward:target.reward,equipment:[...target.equipment]","reward:target.reward,upfront:target.upfront||0,advancePaid:target.advancePaid||0,equipment:[...target.equipment]",\'deployment advance copy\')'
+          new='needle="reward:target.reward,equipment:[...target.equipment]"\nreplacement="reward:target.reward,upfront:target.upfront||0,advancePaid:target.advancePaid||0,equipment:[...target.equipment]"\nif exp.count(needle)!=2: raise SystemExit(f"deployment advance copy: expected two matches, got {exp.count(needle)}")\nexp=exp.replace(needle,replacement)'
+          if old not in s:
+              raise SystemExit('deployment patch line not found')
+          s=s.replace(old,new,1)
+          if s.count('function chooseVessel') != 2:
+              raise SystemExit(f"chooseVessel patch anchors: expected 2, got {s.count('function chooseVessel')}")
+          s=s.replace('function chooseVessel','function vesselOverlay')
+          p.write_text(s)
+          PY
+          python3 .github/scripts/p23m_research_redesign.py
+      - name: Validate runtime
+        run: |
+          node --check expedition.js
+          node --check game.js
+          git diff --check
+          grep -q "Long-Range Fixed-Wing Survey UAS" expedition.js
+          grep -q "PAID UPFRONT ON ACCEPTANCE" expedition.js
+          grep -q "renderResearchWindow" expedition.js
+          grep -q "postdoc-frontogenesis" expedition.js
+          grep -q "researchGuidanceHit=hits" game.js
+          grep -q "expedition-23m-research-program" index.html
+          ! grep -q "openNavigationPrompt?.(target.id)" game.js
+      - name: Commit runtime changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add expedition.js game.js index.html
+          git diff --cached --quiet && { echo 'No runtime changes'; exit 1; }
+          git commit -m "Redesign grants and field research workflow"
+          git push
