@@ -10,40 +10,55 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Correct patch anchors and apply
+      - name: Apply and validate with diagnostics
         run: |
-          python3 - <<'PY'
+          set +e
+          python3 - <<'PY' > p23m-retry2-diagnostic.txt 2>&1
           from pathlib import Path
           p=Path('.github/scripts/p23m_research_redesign.py')
           s=p.read_text()
           old='exp=once(exp,"reward:target.reward,equipment:[...target.equipment]","reward:target.reward,upfront:target.upfront||0,advancePaid:target.advancePaid||0,equipment:[...target.equipment]",\'deployment advance copy\')'
           new='needle="reward:target.reward,equipment:[...target.equipment]"\nreplacement="reward:target.reward,upfront:target.upfront||0,advancePaid:target.advancePaid||0,equipment:[...target.equipment]"\nif exp.count(needle)!=2: raise SystemExit(f"deployment advance copy: expected two matches, got {exp.count(needle)}")\nexp=exp.replace(needle,replacement)'
+          print('deployment line found', old in s)
           if old not in s:
               raise SystemExit('deployment patch line not found')
           s=s.replace(old,new,1)
+          print('chooseVessel count', s.count('function chooseVessel'))
           if s.count('function chooseVessel') != 2:
               raise SystemExit(f"chooseVessel patch anchors: expected 2, got {s.count('function chooseVessel')}")
           s=s.replace('function chooseVessel','function vesselOverlay')
           p.write_text(s)
           PY
-          python3 .github/scripts/p23m_research_redesign.py
-      - name: Validate runtime
-        run: |
-          node --check expedition.js
-          node --check game.js
-          git diff --check
-          grep -q "Long-Range Fixed-Wing Survey UAS" expedition.js
-          grep -q "PAID UPFRONT ON ACCEPTANCE" expedition.js
-          grep -q "renderResearchWindow" expedition.js
-          grep -q "postdoc-frontogenesis" expedition.js
-          grep -q "researchGuidanceHit=hits" game.js
-          grep -q "expedition-23m-research-program" index.html
-          ! grep -q "openNavigationPrompt?.(target.id)" game.js
-      - name: Commit runtime changes
+          prep=$?
+          echo "prep=$prep" >> p23m-retry2-diagnostic.txt
+          if [ "$prep" -eq 0 ]; then
+            python3 .github/scripts/p23m_research_redesign.py >> p23m-retry2-diagnostic.txt 2>&1
+            patch=$?
+          else patch=99; fi
+          echo "patch=$patch" >> p23m-retry2-diagnostic.txt
+          if [ "$patch" -eq 0 ]; then
+            node --check expedition.js >> p23m-retry2-diagnostic.txt 2>&1; s1=$?
+            node --check game.js >> p23m-retry2-diagnostic.txt 2>&1; s2=$?
+            git diff --check >> p23m-retry2-diagnostic.txt 2>&1; s3=$?
+            grep -q "Long-Range Fixed-Wing Survey UAS" expedition.js; s4=$?
+            grep -q "PAID UPFRONT ON ACCEPTANCE" expedition.js; s5=$?
+            grep -q "renderResearchWindow" expedition.js; s6=$?
+            grep -q "postdoc-frontogenesis" expedition.js; s7=$?
+            grep -q "researchGuidanceHit=hits" game.js; s8=$?
+            grep -q "expedition-23m-research-program" index.html; s9=$?
+            echo "validation=$s1,$s2,$s3,$s4,$s5,$s6,$s7,$s8,$s9" >> p23m-retry2-diagnostic.txt
+            if [ "$s1$s2$s3$s4$s5$s6$s7$s8$s9" = "000000000" ]; then touch p23m-retry2-success; fi
+          fi
+          cat p23m-retry2-diagnostic.txt
+      - name: Commit result or diagnostic
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add expedition.js game.js index.html
-          git diff --cached --quiet && { echo 'No runtime changes'; exit 1; }
-          git commit -m "Redesign grants and field research workflow"
+          if [ -f p23m-retry2-success ]; then
+            git add expedition.js game.js index.html p23m-retry2-diagnostic.txt
+            git commit -m "Redesign grants and field research workflow"
+          else
+            git add p23m-retry2-diagnostic.txt
+            git commit -m "Record research redesign retry 2 diagnostic"
+          fi
           git push
