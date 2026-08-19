@@ -10,25 +10,18 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Apply research redesign
-        run: python3 .github/scripts/p23m_research_redesign.py
-      - name: Validate runtime
+      - name: Diagnose patch
         run: |
-          node --check expedition.js
-          node --check game.js
-          git diff --check
-          grep -q "Long-Range Fixed-Wing Survey UAS" expedition.js
-          grep -q "PAID UPFRONT ON ACCEPTANCE" expedition.js
-          grep -q "renderResearchWindow" expedition.js
-          grep -q "postdoc-frontogenesis" expedition.js
-          grep -q "researchGuidanceHit=hits" game.js
-          grep -q "expedition-23m-research-program" index.html
-          ! grep -q "openNavigationPrompt?.(target.id)" game.js
-      - name: Commit runtime changes
+          set +e
+          python3 .github/scripts/p23m_research_redesign.py > /tmp/p23m.log 2>&1
+          status=$?
+          echo "exit=$status" >> /tmp/p23m.log
+          cat /tmp/p23m.log
+          cp /tmp/p23m.log p23m-diagnostic.txt
+      - name: Commit diagnostic
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add expedition.js game.js index.html
-          git diff --cached --quiet && { echo 'No runtime changes'; exit 1; }
-          git commit -m "Redesign grants and field research workflow"
+          git add p23m-diagnostic.txt
+          git commit -m "Record research redesign diagnostic"
           git push
