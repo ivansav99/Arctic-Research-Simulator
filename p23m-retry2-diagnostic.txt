@@ -1,5 +1,7 @@
 deployment line found True
-chooseVessel count 2
+removing fragile pickup patch section 1817
 prep=0
-droppable team pickup: expected one regex match, got 0
-patch=1
+main_patch=0
+dropGrant exact matches 0
+dropGrant exact patch expected 1, got 0
+pickup_patch=1
