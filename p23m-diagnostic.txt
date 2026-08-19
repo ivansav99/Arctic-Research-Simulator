@@ -1,2 +1,0 @@
-droppable team pickup: expected one regex match, got 0
-patch_exit=1
