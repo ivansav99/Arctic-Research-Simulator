@@ -10,45 +10,56 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Patch final research media details
+      - name: Patch and validate canonical media
         run: |
-          python3 - <<'PY'
+          set +e
+          python3 - <<'PY' > p23m-polish-diagnostic.txt 2>&1
           from pathlib import Path
+          import re
           p=Path('expedition.js');s=p.read_text()
-          old="""  function mediaMarkup(item, className='') {
-            const media=item?.media;
-            if (!media?.src) return '';
-          """
-          new="""  function mediaMarkup(item, className='') {
-            const media=item?.templateId?canonicalMissionMedia(item):item?.media;
-            if (!media?.src) return '';
-          """
-          if s.count(old)!=1: raise SystemExit(f'mediaMarkup patch: {s.count(old)}')
-          s=s.replace(old,new,1)
-          old="mission({id:'duck-count', tier:'local', title:'Spitsbergen Duck Count', shortTitle:'DUCK COUNT', anyScientist:true, equipment:['field-optics'], data:4, reward:3000, supplies:1, workHours:12, minDistance:8, distanceRange:25, coastal:true, transect:true, stationCounts:{fishing:3,trawler:4,coastal:5,global:6,icebreaker:7,nuclear:8}, stationSpacingKm:4, media:MEDIA.aerial,"
-          new="mission({id:'duck-count', tier:'local', title:'Spitsbergen Duck Count', shortTitle:'DUCK COUNT', anyScientist:true, equipment:['field-optics'], data:4, reward:3000, supplies:1, workHours:12, minDistance:8, distanceRange:25, coastal:true, transect:true, stationCounts:{fishing:3,trawler:4,coastal:5,global:6,icebreaker:7,nuclear:8}, stationSpacingKm:4, media:MEDIA.cameraTelephoto,"
+          patterns=[
+            (r"function mediaMarkup\(item, className=' '\)",''),
+          ]
+          old="const media=item?.media;"
+          print('media assignment matches',s.count(old))
+          if s.count(old)!=1: raise SystemExit(f'media assignment patch: {s.count(old)}')
+          s=s.replace(old,"const media=item?.templateId?canonicalMissionMedia(item):item?.media;",1)
+          old="stationSpacingKm:4, media:MEDIA.aerial, description:'Count summer waterfowl"
+          print('duck media matches',s.count(old))
           if s.count(old)!=1: raise SystemExit(f'duck media patch: {s.count(old)}')
-          s=s.replace(old,new,1)
-          old="'edna-lab': equipment({id:'edna-lab', name:'eDNA & Coastal Ecology Lab', price:65000, slotType:'medium', slots:1, tier:2, specialties:['coastal-ecology','sea-ice-ecology'], crew:[{specialties:['coastal-ecology','sea-ice-ecology'], minCareer:'postdoc', count:1}], description:'Filtration and preservation system for biodiversity surveys.', specs:['Sterile filtration bench','Field blanks and freezer','Postdoc-level lab lead'], media:MEDIA.local})"
-          new="'edna-lab': equipment({id:'edna-lab', name:'eDNA & Coastal Ecology Lab', price:65000, slotType:'medium', slots:1, tier:2, specialties:['coastal-ecology','sea-ice-ecology'], crew:[{specialties:['coastal-ecology','sea-ice-ecology'], minCareer:'postdoc', count:1}], description:'Filtration and preservation system for biodiversity surveys.', specs:['Sterile filtration bench','Field blanks and freezer','Postdoc-level lab lead'], media:MEDIA.ednaKit})"
+          s=s.replace(old,"stationSpacingKm:4, media:MEDIA.cameraTelephoto, description:'Count summer waterfowl",1)
+          old="name:'eDNA & Coastal Ecology Lab', price:65000, slotType:'medium', slots:1, tier:2, specialties:['coastal-ecology','sea-ice-ecology'], crew:[{specialties:['coastal-ecology','sea-ice-ecology'], minCareer:'postdoc', count:1}], description:'Filtration and preservation system for biodiversity surveys.', specs:['Sterile filtration bench','Field blanks and freezer','Postdoc-level lab lead'], media:MEDIA.local"
+          print('edna lab matches',s.count(old))
           if s.count(old)!=1: raise SystemExit(f'edna lab media patch: {s.count(old)}')
-          s=s.replace(old,new,1)
+          s=s.replace(old,old[:-len('MEDIA.local')]+'MEDIA.ednaKit',1)
           old="steps:['File the survey corridor','Check aircraft and payload','Launch from the helideck','Fly the thermal-image leg','Recover before the next corridor']"
-          new="steps:['File the survey corridor','Check aircraft and payload','Launch from the deck cradle','Fly the thermal-image leg','Recover to the deck system']"
+          print('fixed wing steps matches',s.count(old))
           if s.count(old)!=1: raise SystemExit(f'fixed wing steps patch: {s.count(old)}')
-          s=s.replace(old,new,1)
+          s=s.replace(old,"steps:['File the survey corridor','Check aircraft and payload','Launch from the deck cradle','Fly the thermal-image leg','Recover to the deck system']",1)
           p.write_text(s)
           PY
-          node --check expedition.js
-          git diff --check
-          grep -q "item?.templateId?canonicalMissionMedia(item):item?.media" expedition.js
-          grep -q "stationSpacingKm:4, media:MEDIA.cameraTelephoto" expedition.js
-          grep -q "eDNA & Coastal Ecology Lab.*media:MEDIA.ednaKit" expedition.js
-          grep -q "Launch from the deck cradle" expedition.js
-      - name: Commit polish
+          patch=$?
+          echo "patch=$patch" >> p23m-polish-diagnostic.txt
+          if [ "$patch" -eq 0 ]; then
+            node --check expedition.js >> p23m-polish-diagnostic.txt 2>&1; s1=$?
+            git diff --check >> p23m-polish-diagnostic.txt 2>&1; s2=$?
+            grep -Fq "item?.templateId?canonicalMissionMedia(item):item?.media" expedition.js; s3=$?
+            grep -Fq "media:MEDIA.cameraTelephoto, description:'Count summer waterfowl" expedition.js; s4=$?
+            grep -Fq "Postdoc-level lab lead'], media:MEDIA.ednaKit" expedition.js; s5=$?
+            grep -Fq "Launch from the deck cradle" expedition.js; s6=$?
+            echo "validation=$s1,$s2,$s3,$s4,$s5,$s6" >> p23m-polish-diagnostic.txt
+            if [ "$s1$s2$s3$s4$s5$s6" = "000000" ]; then touch p23m-polish-success; fi
+          fi
+          cat p23m-polish-diagnostic.txt
+      - name: Commit result
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add expedition.js
-          git commit -m "Use canonical media across research missions"
+          if [ -f p23m-polish-success ]; then
+            git add expedition.js p23m-polish-diagnostic.txt
+            git commit -m "Use canonical media across research missions"
+          else
+            git add p23m-polish-diagnostic.txt
+            git commit -m "Record canonical media polish diagnostic"
+          fi
           git push
