@@ -1,0 +1,40 @@
+name: Expedition 23n polish
+on:
+  push:
+    paths:
+      - '.github/workflows/p23n-polish.yml'
+jobs:
+  polish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply and validate polish
+        run: |
+          set +e
+          python3 .github/scripts/p23n_polish.py > p23n-polish-diagnostic.txt 2>&1
+          patch=$?
+          echo "patch=$patch" >> p23n-polish-diagnostic.txt
+          if [ "$patch" -eq 0 ]; then
+            node --check expedition.js >> p23n-polish-diagnostic.txt 2>&1; e1=$?
+            git diff --check >> p23n-polish-diagnostic.txt 2>&1; e2=$?
+            grep -q "template.workHours\*scale" expedition.js; e3=$?
+            ! grep -q "ICE PREMIUM" expedition.js; e4=$?
+            grep -q "ICE DATA VALUE" expedition.js; e5=$?
+            echo "validation=$e1,$e2,$e3,$e4,$e5" >> p23n-polish-diagnostic.txt
+            if [ "$e1$e2$e3$e4$e5" = "00000" ]; then touch p23n-polish-success; fi
+          fi
+          cat p23n-polish-diagnostic.txt
+      - name: Commit result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -f p23n-polish-success ]; then
+            git add expedition.js p23n-polish-diagnostic.txt
+            git commit -m "Refine grant reward scoring"
+          else
+            git add p23n-polish-diagnostic.txt
+            git commit -m "Record p23n polish diagnostic"
+          fi
+          git push
