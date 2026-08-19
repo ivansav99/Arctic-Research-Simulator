@@ -24,7 +24,7 @@ jobs:
           s=s.replace(old,new,1)
           start=s.index('# Team return visits can be dropped; mooring/equipment recovery remains protected.')
           end=s.index('# Navigation prompt is now just the stable research card.',start)
-          print('removing fragile pickup patch section', end-start)
+          print('removing fragile pickup patch section',end-start)
           s=s[:start]+s[end:]
           p.write_text(s)
           PY
@@ -38,19 +38,9 @@ jobs:
           if [ "$patch" -eq 0 ]; then
             python3 - <<'PY' >> p23m-retry2-diagnostic.txt 2>&1
           from pathlib import Path
-          p=Path('expedition.js')
-          s=p.read_text()
-          old="""  function dropGrant(id) {
-            const grant=state.targets.find(item=>item.id===id&&(item.kind==='grant'||item.kind==='contract'));
-            if (!grant||activeOperation?.targetId===id) return;
-            if (grant.deploymentId) { toast('THIS RETURN VISIT IS REQUIRED TO RECOVER DEPLOYED EQUIPMENT'); return; }
-            state.targets=state.targets.filter(item=>item.id!==id); state.droppedGrantTemplates.push(grant.templateId);
-            if (state.navigation?.id===id) state.navigation=null;
-            if (state.lastTargetContext?.id===id) state.lastTargetContext=null;
-            addLog(`Research grant dropped: ${grant.title}.`); generateOffers(state.port,{fresh:true}); toast('RESEARCH GRANT DROPPED'); changed();
-          }
-          """
-          new="""  function abandonDeployment(id){
+          import re
+          p=Path('expedition.js');s=p.read_text()
+          replacement="""  function abandonDeployment(id){
             const deployment=state.deployments.find(item=>item.id===id);if(!deployment||deployment.recoveryMode!=='staged-recovery')return;
             deployment.status='abandoned';if(deployment.recoveryTargetId)state.targets=state.targets.filter(item=>item.id!==deployment.recoveryTargetId);deployment.recoveryTargetId=null;
             addLog(`Return pickup dropped for ${deployment.title}; local logistics assumed responsibility for the field party.`);toast('RETURN PICKUP DROPPED · LOCAL LOGISTICS WILL RECOVER THE TEAM');changed();
@@ -65,10 +55,13 @@ jobs:
             state.targets=state.targets.filter(item=>item.id!==id);if(state.navigation?.id===id)state.navigation=null;if(state.lastTargetContext?.id===id)state.lastTargetContext=null;
             root?.querySelector('#arx-target-modal')?.classList.remove('open');toast(grant.missionMode==='staged-recovery'?'RETURN PICKUP DROPPED':'RESEARCH GRANT DROPPED');changed();
           }
-          """
-          print('dropGrant exact matches',s.count(old))
-          if s.count(old)!=1: raise SystemExit(f'dropGrant exact patch expected 1, got {s.count(old)}')
-          p.write_text(s.replace(old,new,1))
+
+          function vesselOverlay()"""
+          pattern=r"  function dropGrant\(id\) \{.*?\n  \}\s*\n  function vesselOverlay\(\)"
+          s,n=re.subn(pattern,replacement,s,count=1,flags=re.S)
+          print('dropGrant regex matches',n)
+          if n!=1: raise SystemExit(f'dropGrant regex patch expected 1, got {n}')
+          p.write_text(s)
           PY
             pickup=$?
           else pickup=99; fi
