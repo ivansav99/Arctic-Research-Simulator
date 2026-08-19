@@ -1,0 +1,54 @@
+name: Expedition 23m canonical media polish
+on:
+  push:
+    paths:
+      - '.github/workflows/p23m-polish.yml'
+jobs:
+  polish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch final research media details
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('expedition.js');s=p.read_text()
+          old="""  function mediaMarkup(item, className='') {
+            const media=item?.media;
+            if (!media?.src) return '';
+          """
+          new="""  function mediaMarkup(item, className='') {
+            const media=item?.templateId?canonicalMissionMedia(item):item?.media;
+            if (!media?.src) return '';
+          """
+          if s.count(old)!=1: raise SystemExit(f'mediaMarkup patch: {s.count(old)}')
+          s=s.replace(old,new,1)
+          old="mission({id:'duck-count', tier:'local', title:'Spitsbergen Duck Count', shortTitle:'DUCK COUNT', anyScientist:true, equipment:['field-optics'], data:4, reward:3000, supplies:1, workHours:12, minDistance:8, distanceRange:25, coastal:true, transect:true, stationCounts:{fishing:3,trawler:4,coastal:5,global:6,icebreaker:7,nuclear:8}, stationSpacingKm:4, media:MEDIA.aerial,"
+          new="mission({id:'duck-count', tier:'local', title:'Spitsbergen Duck Count', shortTitle:'DUCK COUNT', anyScientist:true, equipment:['field-optics'], data:4, reward:3000, supplies:1, workHours:12, minDistance:8, distanceRange:25, coastal:true, transect:true, stationCounts:{fishing:3,trawler:4,coastal:5,global:6,icebreaker:7,nuclear:8}, stationSpacingKm:4, media:MEDIA.cameraTelephoto,"
+          if s.count(old)!=1: raise SystemExit(f'duck media patch: {s.count(old)}')
+          s=s.replace(old,new,1)
+          old="'edna-lab': equipment({id:'edna-lab', name:'eDNA & Coastal Ecology Lab', price:65000, slotType:'medium', slots:1, tier:2, specialties:['coastal-ecology','sea-ice-ecology'], crew:[{specialties:['coastal-ecology','sea-ice-ecology'], minCareer:'postdoc', count:1}], description:'Filtration and preservation system for biodiversity surveys.', specs:['Sterile filtration bench','Field blanks and freezer','Postdoc-level lab lead'], media:MEDIA.local})"
+          new="'edna-lab': equipment({id:'edna-lab', name:'eDNA & Coastal Ecology Lab', price:65000, slotType:'medium', slots:1, tier:2, specialties:['coastal-ecology','sea-ice-ecology'], crew:[{specialties:['coastal-ecology','sea-ice-ecology'], minCareer:'postdoc', count:1}], description:'Filtration and preservation system for biodiversity surveys.', specs:['Sterile filtration bench','Field blanks and freezer','Postdoc-level lab lead'], media:MEDIA.ednaKit})"
+          if s.count(old)!=1: raise SystemExit(f'edna lab media patch: {s.count(old)}')
+          s=s.replace(old,new,1)
+          old="steps:['File the survey corridor','Check aircraft and payload','Launch from the helideck','Fly the thermal-image leg','Recover before the next corridor']"
+          new="steps:['File the survey corridor','Check aircraft and payload','Launch from the deck cradle','Fly the thermal-image leg','Recover to the deck system']"
+          if s.count(old)!=1: raise SystemExit(f'fixed wing steps patch: {s.count(old)}')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+          node --check expedition.js
+          git diff --check
+          grep -q "item?.templateId?canonicalMissionMedia(item):item?.media" expedition.js
+          grep -q "stationSpacingKm:4, media:MEDIA.cameraTelephoto" expedition.js
+          grep -q "eDNA & Coastal Ecology Lab.*media:MEDIA.ednaKit" expedition.js
+          grep -q "Launch from the deck cradle" expedition.js
+      - name: Commit polish
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add expedition.js
+          git commit -m "Use canonical media across research missions"
+          git push
