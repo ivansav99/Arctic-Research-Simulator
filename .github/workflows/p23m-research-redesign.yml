@@ -10,7 +10,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Apply research redesign with verified deployment fields
+      - name: Apply research redesign with verified source fixes
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -19,19 +19,19 @@ jobs:
           old='exp=once(exp,"reward:target.reward,equipment:[...target.equipment]","reward:target.reward,upfront:target.upfront||0,advancePaid:target.advancePaid||0,equipment:[...target.equipment]",\'deployment advance copy\')'
           new='needle="reward:target.reward,equipment:[...target.equipment]"\nreplacement="reward:target.reward,upfront:target.upfront||0,advancePaid:target.advancePaid||0,equipment:[...target.equipment]"\nif exp.count(needle)!=2: raise SystemExit(f"deployment advance copy: expected two matches, got {exp.count(needle)}")\nexp=exp.replace(needle,replacement)'
           if old not in s: raise SystemExit('deployment patch line not found')
-          p.write_text(s.replace(old,new,1))
+          s=s.replace(old,new,1)
+          s=s.replace(r'r"  function dropGrant\\(id\\) \\{.*?\\n  \\}\\n  function chooseVessel"',r'r"  function dropGrant\\(id\\) \\{.*?\\n  \\}\\n\\n  function vesselOverlay"',1)
+          s=s.replace("  function chooseVessel''','droppable team pickup')","  function vesselOverlay''','droppable team pickup')",1)
+          p.write_text(s)
           PY
           set +e
           python3 .github/scripts/p23m_research_redesign.py > p23m-diagnostic.txt 2>&1
           status=$?
           echo "patch_exit=$status" >> p23m-diagnostic.txt
           if [ "$status" -eq 0 ]; then
-            node --check expedition.js >> p23m-diagnostic.txt 2>&1
-            s1=$?
-            node --check game.js >> p23m-diagnostic.txt 2>&1
-            s2=$?
-            git diff --check >> p23m-diagnostic.txt 2>&1
-            s3=$?
+            node --check expedition.js >> p23m-diagnostic.txt 2>&1; s1=$?
+            node --check game.js >> p23m-diagnostic.txt 2>&1; s2=$?
+            git diff --check >> p23m-diagnostic.txt 2>&1; s3=$?
             grep -q "Long-Range Fixed-Wing Survey UAS" expedition.js; s4=$?
             grep -q "PAID UPFRONT ON ACCEPTANCE" expedition.js; s5=$?
             grep -q "renderResearchWindow" expedition.js; s6=$?
