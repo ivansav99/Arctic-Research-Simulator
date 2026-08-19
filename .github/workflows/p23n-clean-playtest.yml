@@ -1,0 +1,51 @@
+name: Expedition 23n clean playtest
+on:
+  push:
+    paths:
+      - '.github/workflows/p23n-clean-playtest.yml'
+jobs:
+  patch-test-commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply clean playtest patch
+        run: |
+          set +e
+          python3 .github/scripts/p23n_clean_playtest.py > p23n-diagnostic.txt 2>&1
+          patch=$?
+          echo "patch=$patch" >> p23n-diagnostic.txt
+          if [ "$patch" -eq 0 ]; then
+            node --check expedition.js >> p23n-diagnostic.txt 2>&1; e1=$?
+            node --check game.js >> p23n-diagnostic.txt 2>&1; e2=$?
+            git diff --check >> p23n-diagnostic.txt 2>&1; e3=$?
+            grep -q "range=official?\[40000,60000\]:\[10000,15000\]" expedition.js; e4=$?
+            ! grep -q "PAID UPFRONT ON ACCEPTANCE" expedition.js; e5=$?
+            ! grep -q "LOCATE / NAVIGATE" expedition.js; e6=$?
+            ! grep -q "NAVIGATE TO SITE" expedition.js; e7=$?
+            grep -q "publicationIntroShown:false" expedition.js; e8=$?
+            grep -q "<span>LETTER</span><span>ARTICLE</span><span>BOOK</span>" expedition.js; e9=$?
+            grep -q "PLAYTEST_BUILD_KEY" game.js; e10=$?
+            grep -q "parsed?.gameVersion===GAME_VERSION" game.js; e11=$?
+            grep -q "researchTargets().filter(target=>target.kind==='grant'||target.kind==='contract'||target.kind==='recovery')" game.js; e12=$?
+            grep -q "else navigateToResearchTarget(target)" game.js; e13=$?
+            grep -q "else navigateToResearchTarget(site.target)" game.js; e14=$?
+            grep -q "expedition-23n-clean-playtest" index.html; e15=$?
+            ! sed -n '/const MEDIA = {/,/const SPECIALTIES =/p' expedition.js | grep -Eq "data:image/svg|\.svg'"; e16=$?
+            echo "validation=$e1,$e2,$e3,$e4,$e5,$e6,$e7,$e8,$e9,$e10,$e11,$e12,$e13,$e14,$e15,$e16" >> p23n-diagnostic.txt
+            if [ "$e1$e2$e3$e4$e5$e6$e7$e8$e9$e10$e11$e12$e13$e14$e15$e16" = "0000000000000000" ]; then touch p23n-success; fi
+          fi
+          cat p23n-diagnostic.txt
+      - name: Commit runtime or diagnostic
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -f p23n-success ]; then
+            git add expedition.js game.js index.html p23n-diagnostic.txt
+            git commit -m "Reset playtests and simplify research navigation"
+          else
+            git add p23n-diagnostic.txt
+            git commit -m "Record p23n patch diagnostic"
+          fi
+          git push
