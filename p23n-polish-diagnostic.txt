@@ -1,3 +1,0 @@
-p23n polish applied
-patch=0
-validation=0,0,0,0,0
