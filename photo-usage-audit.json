@@ -1,0 +1,757 @@
+{
+  "local": [
+    {
+      "asset": "box-corer.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "sedimentCorer: {src:'assets/equipment/box-corer.webp', alt:'Oceanographic box corer with open sampling jaws on a vessel deck', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "sedimentCorer: {src:'assets/equipment/box-corer.webp', alt:'Oceanographic box corer with open sampling jaws on a vessel deck', credit:'Original face-free equipment illustration', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "coastal-a-frame.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "coastalAFrame: {src:'assets/equipment/coastal-a-frame.webp', alt:'Compact stern A-frame and shallow mooring handling rig', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "coastalAFrame: {src:'assets/equipment/coastal-a-frame.webp', alt:'Compact stern A-frame and shallow mooring handling rig', credit:'Original face-free equipment illustration', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "deep-adcp.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "deepAdcp: {src:'assets/equipment/deep-adcp.webp', alt:'Low-frequency deep-water ADCP transducer and electronics', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "deepAdcp: {src:'assets/equipment/deep-adcp.webp', alt:'Low-frequency deep-water ADCP transducer and electronics', credit:'Original face-free equipment illustration', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "ek80-scientific-echosounder.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "ek80: {src:'assets/equipment/ek80-scientific-echosounder.webp', alt:'Portable multi-frequency scientific echosounder transceivers and split-beam sensors', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "ek80: {src:'assets/equipment/ek80-scientific-echosounder.webp', alt:'Portable multi-frequency scientific echosounder transceivers and split-beam sensors', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "expedition.js",
+          "line": "ek80: {src:'assets/equipment/ek80-scientific-echosounder.webp', alt:'Scientific echosounder system used for fisheries and water-column acoustics', credit:'Scientific echosounder equipment photograph', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "mini-rov.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "miniRov: {src:'assets/equipment/mini-rov.webp', alt:'Compact observation ROV with tether reel and control case', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "miniRov: {src:'assets/equipment/mini-rov.webp', alt:'Compact observation ROV with tether reel and control case', credit:'Original face-free equipment illustration', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "shallow-adcp.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "shallowAdcp: {src:'assets/equipment/shallow-adcp.webp', alt:'Compact high-frequency four-beam ADCP in a small boat deployment frame', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "shallowAdcp: {src:'assets/equipment/shallow-adcp.webp', alt:'Compact high-frequency four-beam ADCP in a small boat deployment frame', credit:'Original face-free equipment illustration', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "shelf-adcp.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "shelfAdcp: {src:'assets/equipment/shelf-adcp.webp', alt:'Vessel-mounted shelf-depth acoustic Doppler current profiler transducer', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "shelfAdcp: {src:'assets/equipment/shelf-adcp.webp', alt:'Vessel-mounted shelf-depth acoustic Doppler current profiler transducer', credit:'Original face-free equipment illustration', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "coastal-service-toolkit.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "serviceTools: {src:'assets/equipment/coastal-service-toolkit.webp', alt:'Coastal service hand tools, deck hook, calibration case and replacement hardware', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "serviceTools: {src:'assets/equipment/coastal-service-toolkit.webp', alt:'Coastal service hand tools, deck hook, calibration case and replacement hardware', credit:'Original face-free equipment illustration', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "handheld-water-lab.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "handheldWater: {src:'assets/equipment/handheld-water-lab.webp', alt:'Rugged handheld multiparameter water-quality meter, probe and sample bottles', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "handheldWater: {src:'assets/equipment/handheld-water-lab.webp', alt:'Rugged handheld multiparameter water-quality meter, probe and sample bottles', credit:'Original face-free equipment illustration', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "ice-corer-auger.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "iceCorer: {src:'assets/equipment/ice-corer-auger.webp', alt:'Portable sea-ice corer and powered auger laid out on a sled', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "iceCorer: {src:'assets/equipment/ice-corer-auger.webp', alt:'Portable sea-ice corer and powered auger laid out on a sled', credit:'Original face-free equipment illustration', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "hull-echosounder-sensor.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "hullSensor: {src:'assets/equipment/hull-echosounder-sensor.webp', alt:'Compact through-hull scientific echosounder transducer and interface', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "hullSensor: {src:'assets/equipment/hull-echosounder-sensor.webp', alt:'Compact through-hull scientific echosounder transducer and interface', credit:'Original face-free equipment illustration', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "aerostat-face-free.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "aerostat: {src:'assets/equipment/aerostat-face-free.webp', alt:'Tethered atmospheric profiling aerostat, instrument pod and winch on an Arctic vessel', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "aerostat: {src:'assets/equipment/aerostat-face-free.webp', alt:'Tethered atmospheric profiling aerostat, instrument pod and winch on an Arctic vessel', credit:'Original face-free equipment illustration', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "large-drone-face-free.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "drone: {src:'assets/equipment/large-drone-face-free.webp', alt:'Large fixed-wing scientific drone secured in its Arctic vessel launch cradle', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "drone: {src:'assets/equipment/large-drone-face-free.webp', alt:'Large fixed-wing scientific drone secured in its Arctic vessel launch cradle', credit:'Original face-free equipment illustration', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "hydrophone-array-face-free.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "hydrophone: {src:'assets/equipment/hydrophone-array-face-free.webp', alt:'Towed hydrophone array, cable reel and acquisition case', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "hydrophone: {src:'assets/equipment/hydrophone-array-face-free.webp', alt:'Towed hydrophone array, cable reel and acquisition case', credit:'Original face-free equipment illustration', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "sonobuoy-pack.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "sonobuoy: {src:'assets/equipment/sonobuoy-pack.webp', alt:'Four scientific sonobuoys and receiver in a rugged case', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "sonobuoy: {src:'assets/equipment/sonobuoy-pack.webp', alt:'Four scientific sonobuoys and receiver in a rugged case', credit:'Original face-free equipment illustration', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "polar-float.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "argo: {src:'assets/equipment/polar-float.webp', alt:'Polar profiling float secured in a deck cradle', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "argo: {src:'assets/equipment/polar-float.webp', alt:'Polar profiling float secured in a deck cradle', credit:'Original face-free equipment illustration', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "xbt-kit.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "xbt: {src:'assets/equipment/xbt-kit.webp', alt:'XBT launcher and expendable probe case', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "xbt: {src:'assets/equipment/xbt-kit.webp', alt:'XBT launcher and expendable probe case', credit:'Original face-free equipment illustration', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "medium-science-winch.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "winch: {src:'assets/equipment/medium-science-winch.webp', alt:'Medium oceanographic winch with a drum of steel instrument wire', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "winch: {src:'assets/equipment/medium-science-winch.webp', alt:'Medium oceanographic winch with a drum of steel instrument wire', credit:'Original face-free equipment illustration', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "starlink-terminal.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "starlink: {src:'assets/equipment/starlink-terminal.webp', alt:'Flat-panel satellite internet terminal on an Arctic vessel', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "starlink: {src:'assets/equipment/starlink-terminal.webp', alt:'Flat-panel satellite internet terminal on an Arctic vessel', credit:'Original face-free equipment illustration', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "surface-drifter-pair.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "drifter: {src:'assets/equipment/surface-drifter-pair.webp', alt:'Pair of autonomous surface drifters secured for deployment', credit:'Original face-free equipment illustration', source:''},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "drifter: {src:'assets/equipment/surface-drifter-pair.webp', alt:'Pair of autonomous surface drifters secured for deployment', credit:'Original face-free equipment illustration', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "cloud-radar.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "radar: {src:'assets/equipment/cloud-radar.webp', alt:'NOAA W-band research radar', credit:'Ken Moran / NOAA CIRES', source:'https://psl.noaa.gov/technology/w-band-radar/'},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "radar: {src:'assets/equipment/cloud-radar.webp', alt:'NOAA W-band research radar', credit:'Ken Moran / NOAA CIRES', source:'https://psl.noaa.gov/technology/w-band-radar/'},"
+        },
+        {
+          "file": "expedition.js",
+          "line": "radar: {src:'assets/equipment/cloud-radar.webp', alt:'NOAA W-band research radar', credit:'Ken Moran / NOAA CIRES', source:'https://psl.noaa.gov/technology/w-band-radar/'},"
+        }
+      ]
+    },
+    {
+      "asset": "swift-buoy.webp",
+      "hits": []
+    },
+    {
+      "asset": "large-drone.webp",
+      "hits": [
+        {
+          "file": "expedition.js",
+          "line": "drone: {src:'assets/equipment/large-drone.webp', alt:'Large fixed-wing scientific drone prepared for shipboard operations', credit:'Research aircraft photograph', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "aerostat.webp",
+      "hits": [
+        {
+          "file": "expedition.js",
+          "line": "aerostat: {src:'assets/equipment/aerostat.webp', alt:'Research aerostat field system', credit:'Research equipment photograph', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "radiosonde.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "balloon: {src:'assets/equipment/radiosonde.webp', alt:'Weather balloon carrying atmospheric instruments', credit:'NOAA NCEI', source:'https://www.ncei.noaa.gov/products/weather-balloon'},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "balloon: {src:'assets/equipment/radiosonde.webp', alt:'Weather balloon carrying atmospheric instruments', credit:'NOAA NCEI', source:'https://www.ncei.noaa.gov/products/weather-balloon'},"
+        },
+        {
+          "file": "expedition.js",
+          "line": "balloon: {src:'assets/equipment/radiosonde.webp', alt:'Weather balloon carrying atmospheric instruments', credit:'NOAA NCEI', source:'https://www.ncei.noaa.gov/products/weather-balloon'},"
+        }
+      ]
+    },
+    {
+      "asset": "work-rov.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "rov: {src:'assets/equipment/work-rov.webp', alt:'ROV Deep Discoverer on a research vessel deck', credit:'NOAA Ocean Exploration', source:'https://oceanexplorer.noaa.gov/multimedia/rov-deep-discoverer/'},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "rov: {src:'assets/equipment/work-rov.webp', alt:'ROV Deep Discoverer on a research vessel deck', credit:'NOAA Ocean Exploration', source:'https://oceanexplorer.noaa.gov/multimedia/rov-deep-discoverer/'},"
+        },
+        {
+          "file": "expedition.js",
+          "line": "rov: {src:'assets/equipment/work-rov.webp', alt:'ROV Deep Discoverer on a research vessel deck', credit:'NOAA Ocean Exploration', source:'https://oceanexplorer.noaa.gov/multimedia/rov-deep-discoverer/'},"
+        },
+        {
+          "file": "expedition.js",
+          "line": "miniRov: {src:'assets/equipment/work-rov.webp', alt:'Scientific ROV on a research vessel deck', credit:'NOAA Ocean Exploration', source:'https://oceanexplorer.noaa.gov/multimedia/rov-deep-discoverer/'},"
+        }
+      ]
+    },
+    {
+      "asset": "ctd-rosette.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "ctd: {src:'assets/equipment/ctd-rosette.webp', alt:'CTD rosette aboard NOAA Ship Okeanos Explorer', credit:'NOAA Ocean Exploration', source:'https://oceanexplorer.noaa.gov/multimedia/okeanos-explorations-ex2101-features-ctd-media-rosette/'},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "ctd: {src:'assets/equipment/ctd-rosette.webp', alt:'CTD rosette aboard NOAA Ship Okeanos Explorer', credit:'NOAA Ocean Exploration', source:'https://oceanexplorer.noaa.gov/multimedia/okeanos-explorations-ex2101-features-ctd-media-rosette/'},"
+        },
+        {
+          "file": "expedition.js",
+          "line": "ctd: {src:'assets/equipment/ctd-rosette.webp', alt:'CTD rosette aboard NOAA Ship Okeanos Explorer', credit:'NOAA Ocean Exploration', source:'https://oceanexplorer.noaa.gov/multimedia/okeanos-explorations-ex2101-features-ctd-media-rosette/'},"
+        }
+      ]
+    },
+    {
+      "asset": "sonobuoy.webp",
+      "hits": [
+        {
+          "file": "expedition.js",
+          "line": "sonobuoy: {src:'assets/equipment/sonobuoy.webp', alt:'Oceanographic sonobuoy equipment', credit:'Oceanographic equipment photograph', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "hydrophone-array.webp",
+      "hits": []
+    },
+    {
+      "asset": "argo-float.webp",
+      "hits": []
+    },
+    {
+      "asset": "xbt.webp",
+      "hits": [
+        {
+          "file": "expedition.js",
+          "line": "xbt: {src:'assets/equipment/xbt.webp', alt:'XBT oceanographic field equipment', credit:'Oceanographic equipment photograph', source:''},"
+        }
+      ]
+    },
+    {
+      "asset": "argo-float.jpg",
+      "hits": []
+    },
+    {
+      "asset": "sea-ice-station.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "ice: {src:'assets/research/sea-ice-station.webp', alt:'Researchers working on Arctic sea ice', credit:'NOAA', source:'https://response.restoration.noaa.gov/evaluating-oil-spill-response-technologies-arctic'},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "ice: {src:'assets/research/sea-ice-station.webp', alt:'Researchers working on Arctic sea ice', credit:'NOAA', source:'https://response.restoration.noaa.gov/evaluating-oil-spill-response-technologies-arctic'},"
+        },
+        {
+          "file": "expedition.js",
+          "line": "ice: {src:'assets/research/sea-ice-station.webp', alt:'Researchers working on Arctic sea ice', credit:'NOAA', source:'https://response.restoration.noaa.gov/evaluating-oil-spill-response-technologies-arctic'},"
+        }
+      ]
+    },
+    {
+      "asset": "storm-sea.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "storm: {src:'assets/research/storm-sea.webp', alt:'Icebreaker in high Arctic seas', credit:'NOAA', source:'https://response.restoration.noaa.gov/evaluating-oil-spill-response-technologies-arctic'},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "storm: {src:'assets/research/storm-sea.webp', alt:'Icebreaker in high Arctic seas', credit:'NOAA', source:'https://response.restoration.noaa.gov/evaluating-oil-spill-response-technologies-arctic'},"
+        },
+        {
+          "file": "expedition.js",
+          "line": "storm: {src:'assets/research/storm-sea.webp', alt:'Research vessel in high Arctic seas', credit:'NOAA', source:'https://response.restoration.noaa.gov/evaluating-oil-spill-response-technologies-arctic'},"
+        }
+      ]
+    },
+    {
+      "asset": "aerial-survey.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "aerial: {src:'assets/research/aerial-survey.webp', alt:'Aerial survey image of a polar bear on Chukchi Sea ice', credit:'NOAA Fisheries', source:'https://www.fisheries.noaa.gov/feature-story/us-and-russian-scientists-partner-study-polar-bear-and-seal-populations'},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "aerial: {src:'assets/research/aerial-survey.webp', alt:'Aerial survey image of a polar bear on Chukchi Sea ice', credit:'NOAA Fisheries', source:'https://www.fisheries.noaa.gov/feature-story/us-and-russian-scientists-partner-study-polar-bear-and-seal-populations'},"
+        },
+        {
+          "file": "expedition.js",
+          "line": "aerial: {src:'assets/research/aerial-survey.webp', alt:'Aerial survey over Arctic sea ice', credit:'NOAA Fisheries', source:'https://www.fisheries.noaa.gov/feature-story/us-and-russian-scientists-partner-study-polar-bear-and-seal-populations'},"
+        }
+      ]
+    },
+    {
+      "asset": "arctic-small-boat.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "local: {src:'assets/research/arctic-small-boat.webp', alt:'Small survey boat operating in Arctic water', credit:'NOAA', source:'https://response.restoration.noaa.gov/evaluating-oil-spill-response-technologies-arctic'},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "local: {src:'assets/research/arctic-small-boat.webp', alt:'Small survey boat operating in Arctic water', credit:'NOAA', source:'https://response.restoration.noaa.gov/evaluating-oil-spill-response-technologies-arctic'},"
+        },
+        {
+          "file": "expedition.js",
+          "line": "local: {src:'assets/research/arctic-small-boat.webp', alt:'Small survey boat operating in Arctic water', credit:'NOAA', source:'https://response.restoration.noaa.gov/evaluating-oil-spill-response-technologies-arctic'},"
+        },
+        {
+          "file": "expedition.js",
+          "line": "serviceTools: {src:'assets/research/arctic-small-boat.webp', alt:'Small Arctic field boat prepared for coastal servicing', credit:'NOAA', source:'https://response.restoration.noaa.gov/evaluating-oil-spill-response-technologies-arctic'},"
+        }
+      ]
+    },
+    {
+      "asset": "river-plume.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "river: {src:'assets/research/river-plume.webp', alt:'Sediment-rich Mackenzie River water entering the Beaufort Sea', credit:'NASA Earth Observatory / Lauren Dauphin', source:'https://earthobservatory.nasa.gov/images/146813/breakup-along-the-mackenzie-river'},"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "river: {src:'assets/research/river-plume.webp', alt:'Sediment-rich Mackenzie River water entering the Beaufort Sea', credit:'NASA Earth Observatory / Lauren Dauphin', source:'https://earthobservatory.nasa.gov/images/146813/breakup-along-the-mackenzie-river'},"
+        },
+        {
+          "file": "expedition.js",
+          "line": "river: {src:'assets/research/river-plume.webp', alt:'Sediment-rich Mackenzie River water entering the Beaufort Sea', credit:'NASA Earth Observatory / Lauren Dauphin', source:'https://earthobservatory.nasa.gov/images/146813/breakup-along-the-mackenzie-river'},"
+        }
+      ]
+    },
+    {
+      "asset": "fishing-trawler.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "id:'trawler', name:'Larger Fishing Trawler', shipName:'F/V Nordlys', className:'EXPEDITION TRAWLER', price:280000, berths:5, image:'assets/vessels/fishing-trawler.webp',"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "id:'trawler', name:'Larger Fishing Trawler', shipName:'F/V Nordlys', className:'EXPEDITION TRAWLER', price:280000, berths:5, image:'assets/vessels/fishing-trawler.webp',"
+        },
+        {
+          "file": "expedition.js",
+          "line": "coastal:'assets/vessels/fishing-trawler.webp',"
+        },
+        {
+          "file": "expedition.js",
+          "line": "id:'trawler', name:'Larger Fishing Trawler', shipName:'F/V Nordlys', className:'EXPEDITION TRAWLER', price:350000, berths:5, image:'assets/vessels/fishing-trawler.webp',"
+        },
+        {
+          "file": "game.js",
+          "line": "const SMALL_PASSENGER_SVG='assets/vessels/fishing-trawler.webp';"
+        },
+        {
+          "file": "game.js",
+          "line": "{id:'fv-havglimt',name:'F/V Havglimt',classId:'trawler',kind:'fishing',typeLabel:'Barents Sea fishing trawler',speed:9,mission:'Tracking capelin and herring aggregations',captainName:'Captain Erik Lund',captainRole:'Master',captainPortrait:'assets/scientists/erik-johansen.webp',image:'assets/vessels/fishing-trawler.webp',route:[[72.2,18],[73.4,27],[72.6,41],[71.5,31]]},"
+        },
+        {
+          "file": "game.js",
+          "line": "{id:'fv-beaufort-rose',name:'F/V Beaufort Rose',classId:'trawler',kind:'fishing',typeLabel:'Beaufort Sea fishing trawler',speed:8,mission:'Nearshore fish and invertebrate survey',captainName:'Captain Ariq Kalluk',captainRole:'Master',captainPortrait:'assets/scientists/ariq-kalluk.webp',image:'assets/vessels/fishing-trawler.webp',route:[[70.6,-155],[71.5,-149],[71.2,-141],[70.4,-147]]},"
+        }
+      ]
+    },
+    {
+      "asset": "fishing-vessel.webp",
+      "hits": [
+        {
+          "file": "index.html",
+          "line": "<button id=\"vessel-button\" class=\"vessel-button\" type=\"button\" aria-label=\"Open current vessel information\"><img id=\"vessel-button-image\" src=\"assets/vessels/fishing-vessel.webp\" alt=\"\"></button>"
+        },
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "id:'fishing', name:'Small Fishing Vessel', shipName:'F/V Isfjord', className:'LOCAL CLASS', price:0, berths:3, image:'assets/vessels/fishing-vessel.webp',"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "id:'fishing', name:'Small Fishing Vessel', shipName:'F/V Isfjord', className:'LOCAL CLASS', price:0, berths:3, image:'assets/vessels/fishing-vessel.webp',"
+        },
+        {
+          "file": "_ARS_HANDOFF_TEST.html",
+          "line": "<button id=\"vessel-button\" class=\"vessel-button\" type=\"button\" aria-label=\"Open current vessel information\"><img id=\"vessel-button-image\" src=\"assets/vessels/fishing-vessel.webp\" alt=\"\"></button>"
+        },
+        {
+          "file": "expedition.js",
+          "line": "id:'fishing', name:'Small Fishing Vessel', shipName:'F/V Isfjord', className:'LOCAL CLASS', price:0, marketPrice:120000, berths:3, image:'assets/vessels/fishing-vessel.webp',"
+        },
+        {
+          "file": "game.js",
+          "line": "{id:'fv-kvitungen',name:'F/V Kvitungen',classId:'fishing',kind:'fishing',typeLabel:'Barents Sea fishing vessel',speed:8.2,mission:'Longline survey and commercial cod fishing',captainName:'Captain Liv Arnesen',captainRole:'Master',captainPortrait:'assets/scientists/ingrid-nilsen.webp',image:'assets/vessels/fishing-vessel.webp',route:[[74.3,22],[74.8,34],[73.7,46],[72.8,30]]},"
+        },
+        {
+          "file": "game.js",
+          "line": "{id:'fv-varanger',name:'F/V Varanger',classId:'fishing',kind:'fishing',typeLabel:'Norwegian fishing vessel',speed:7.6,mission:'Weather-window trawling east of Svalbard',captainName:'Captain Jukka Mikkelsen',captainRole:'Master',captainPortrait:'assets/scientists/jukka-laine.webp',image:'assets/vessels/fishing-vessel.webp',route:[[75.2,18],[76.1,31],[74.8,45],[73.9,29]]},"
+        },
+        {
+          "file": "game.js",
+          "line": "{id:'fv-chukchi-dawn',name:'F/V Chukchi Dawn',classId:'fishing',kind:'fishing',typeLabel:'Bering Strait fishing vessel',speed:7.4,mission:'Seasonal crab and pollock grounds transit',captainName:'Captain Aputi Kalluk',captainRole:'Master',captainPortrait:'assets/scientists/aputi-ivalu.webp',image:'assets/vessels/fishing-vessel.webp',route:[[65.7,-168.5],[67.1,-172.2],[68.5,-168.7],[66.8,-165.2]]},"
+        }
+      ]
+    },
+    {
+      "asset": "noaa-rv-brown.webp",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "vessel: {src:'assets/vessels/noaa-rv-brown.webp', alt:'NOAA Ship Ronald H. Brown underway', credit:'Wade Blake / NOAA', source:'https://oceanexplorer.noaa.gov/technology/noaa-ship-brown/'}"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "vessel: {src:'assets/vessels/noaa-rv-brown.webp', alt:'NOAA Ship Ronald H. Brown underway', credit:'Wade Blake / NOAA', source:'https://oceanexplorer.noaa.gov/technology/noaa-ship-brown/'}"
+        },
+        {
+          "file": "expedition.js",
+          "line": "vessel: {src:'assets/vessels/noaa-rv-brown.webp', alt:'NOAA Ship Ronald H. Brown underway', credit:'Wade Blake / NOAA', source:'https://oceanexplorer.noaa.gov/technology/noaa-ship-brown/'}"
+        },
+        {
+          "file": "expedition.js",
+          "line": "global:'assets/vessels/noaa-rv-brown.webp',"
+        },
+        {
+          "file": "game.js",
+          "line": "{id:'rv-nansen-fjord',name:'R/V Nansen Fjord',classId:'coastal',kind:'research',typeLabel:'Coastal-class research vessel',speed:10.5,mission:'Fram Strait hydrography and plankton stations',captainName:'Dr. Hana Suzuki',captainRole:'Chief Scientist',captainPortrait:'assets/scientists/hana-suzuki.webp',image:'assets/vessels/noaa-rv-brown.webp',route:[[76,-6],[78,-4],[79,2],[77,8],[75,2]]},"
+        },
+        {
+          "file": "game.js",
+          "line": "{id:'rv-meridian-ice',name:'R/V Meridian Ice',classId:'global',kind:'research',typeLabel:'Global-class research vessel',speed:13,mission:'Pan-Arctic mooring service expedition',captainName:'Prof. Elena Morozova',captainRole:'Chief Scientist',captainPortrait:'assets/scientists/elena-morozova.webp',image:'assets/vessels/noaa-rv-brown.webp',route:[[75,38],[77,52],[79,63],[78,31],[76,22]]}"
+        }
+      ]
+    },
+    {
+      "asset": "base-vessel.png",
+      "hits": [
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "const disabled=active||checks.some(check=>!check.ok), image=item.image||'assets/vessels/base-vessel.png';"
+        },
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "return `<div class=\"arx-port-vessel-dashboard\"><section class=\"crew-orbit\"><h3>Team \u00b7 ${state.scientists.length}/${ship.berths}</h3><div class=\"arx-dashboard-thumbs\">${scientistTiles}${emptyBerths}</div></section><div class=\"arx-dashboard-ship\"><small>${escapeHtml(ship.className)}</small><h2>${escapeHtml(ship.shipName||ship.name)}</h2><img src=\"${escapeHtml(ship.image||'assets/vessels/base-vessel.png')}\" alt=\"\"><div class=\"arx-dashboard-stats\"><span>${slotSummary(ship,usage)}</span><span>Payroll ${cash(payroll())}/day</span></div></div><section class=\"equipment-orbit\"><h3>Equipment</h3><div class=\"arx-dashboard-thumbs\">${equipmentTiles}${emptySlotMarkup(ship)}</div></section><section class=\""
+        },
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "const installed=[...ship.standardEquipment,...state.installedEquipment].map(id=>EQUIPMENT[id]).filter(Boolean), visibility=getVesselModifiers().visibilityBonusKm, image=ship.image||'assets/vessels/base-vessel.png';"
+        },
+        {
+          "file": "_ARS_PY_MUTABLE_TEST.js",
+          "line": "return {name:ship.shipName||ship.name,modelName:ship.name,className:ship.className,image:ship.image||'assets/vessels/base-vessel.png',cruiseKnots:ship.cruiseKnots,maxKnots:ship.maxKnots,crackedIceFactor:ship.crackedIceFactor||.1,berths:ship.berths,slots:{...ship.slots},helidecks:ship.helidecks,minZoom:ship.minZoom,fuelCapacity:ship.fuelCapacity,foodCapacity:ship.foodCapacity,fuelEnduranceDays:ship.fuelEnduranceDays,foodEnduranceDays:ship.foodEnduranceDays,nuclearFuel:!!ship.nuclearFuel,visibilityBonusKm};"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "const disabled=active||checks.some(check=>!check.ok), image=item.image||'assets/vessels/base-vessel.png';"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "return `<div class=\"arx-port-vessel-dashboard\"><section class=\"crew-orbit\"><h3>Team \u00b7 ${state.scientists.length}/${ship.berths}</h3><div class=\"arx-dashboard-thumbs\">${scientistTiles}${emptyBerths}</div></section><div class=\"arx-dashboard-ship\"><small>${escapeHtml(ship.className)}</small><h2>${escapeHtml(ship.shipName||ship.name)}</h2><img src=\"${escapeHtml(ship.image||'assets/vessels/base-vessel.png')}\" alt=\"\"><div class=\"arx-dashboard-stats\"><span>${slotSummary(ship,usage)}</span><span>Payroll ${cash(payroll())}/day</span></div></div><section class=\"equipment-orbit\"><h3>Equipment</h3><div class=\"arx-dashboard-thumbs\">${equipmentTiles}${emptySlotMarkup(ship)}</div></section><section class=\""
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "const installed=[...ship.standardEquipment,...state.installedEquipment].map(id=>EQUIPMENT[id]).filter(Boolean), visibility=getVesselModifiers().visibilityBonusKm, image=ship.image||'assets/vessels/base-vessel.png';"
+        },
+        {
+          "file": "_ARS_UPLOAD_TEST.js",
+          "line": "return {name:ship.shipName||ship.name,modelName:ship.name,className:ship.className,image:ship.image||'assets/vessels/base-vessel.png',cruiseKnots:ship.cruiseKnots,maxKnots:ship.maxKnots,crackedIceFactor:ship.crackedIceFactor||.1,berths:ship.berths,slots:{...ship.slots},helidecks:ship.helidecks,minZoom:ship.minZoom,fuelCapacity:ship.fuelCapacity,foodCapacity:ship.foodCapacity,fuelEnduranceDays:ship.fuelEnduranceDays,foodEnduranceDays:ship.foodEnduranceDays,nuclearFuel:!!ship.nuclearFuel,visibilityBonusKm};"
+        },
+        {
+          "file": "expedition.js",
+          "line": "const disabled=active||checks.some(check=>!check.ok),image=item.image||'assets/vessels/base-vessel.png',reason=active?'EQUIPPED':disabled?'PURCHASE UNAVAILABLE':refund>0?`PURCHASE VESSEL \u00b7 RECEIVE ${cash(refund)} CREDIT`:`PURCHASE VESSEL \u00b7 ${cash(due)}`,badge=active?'EQUIPPED':(listPrice?cash(listPrice):'STARTER VESSEL'),tradeName=vessel().shipName||vessel().name;"
+        },
+        {
+          "file": "expedition.js",
+          "line": "return `<div class=\"arx-resupply-block arx-resupply-top\"><h3>Consumables & stores</h3><button class=\"arx-resupply-all\" data-arx-action=\"resupply-all\" ${quote<=0||state.money<quote?'disabled':''}>RESUPPLY ALL \u00b7 ${cash(quote)}</button><div class=\"arx-resupply\"><article><small>FUEL \u00b7 ${Math.ceil(resources.fuel)}%</small><b>${fuelAmount}</b><span>${ship.nuclearFuel?'Indefinite reactor endurance':`${ship.fuelEnduranceDays} days at 50% cruise`}</span><button data-arx-action=\"fuel\" ${ship.nuclearFuel||resources.fuel>=99||state.money<fCost?'disabled':''}>${ship.nuclearFuel?'NO REFUELING NEEDED':`+10% \u00b7 ${cash(fCost)}`}</button></article><article><small>FOOD \u00b7 ${Math.ceil(resources.food)}%</small><b>"
+        },
+        {
+          "file": "expedition.js",
+          "line": "const installed=[...ship.standardEquipment,...state.installedEquipment].map(id=>EQUIPMENT[id]).filter(Boolean), visibility=getVesselModifiers().visibilityBonusKm, image=ship.image||'assets/vessels/base-vessel.png';"
+        },
+        {
+          "file": "expedition.js",
+          "line": "return {id:ship.id,classId:ship.id,name:ship.shipName||ship.name,modelName:ship.name,className:ship.className,image:ship.image||'assets/vessels/base-vessel.png',cruiseKnots:ship.cruiseKnots,maxKnots:ship.maxKnots,crackedIceFactor:ship.crackedIceFactor||.1,berths:ship.berths,slots:{...ship.slots},helidecks:ship.helidecks,minZoom:ship.minZoom,fuelCapacity:ship.fuelCapacity,foodCapacity:ship.foodCapacity,fuelEnduranceDays:ship.fuelEnduranceDays,foodEnduranceDays:ship.foodEnduranceDays,nuclearFuel:!!ship.nuclearFuel,visibilityBonusKm};"
+        },
+        {
+          "file": "game.js",
+          "line": "{id:'mv-spitsbergen-star',name:'M/V Spitsbergen Star',classId:'coastal',kind:'cruise',typeLabel:'Small passenger cruise vessel',speed:8.5,seasonal:true,mission:'Tourist landing circuit around Spitsbergen',captainName:'Captain Jonas Berg',captainRole:'Master',captainPortrait:'assets/scientists/jonas-berg.webp',image:'assets/vessels/base-vessel.png',route:[[77.1,13],[77.7,6],[79.1,8],[80,15],[78.7,25]]},"
+        },
+        {
+          "file": "game.js",
+          "line": "function vesselModifiers(){const item=research?.getVesselModifiers?.()||{};return{id:item.id??item.classId??null,classId:item.classId??item.id??null,cruiseKnots:item.cruiseKnots??item.speedKnots??8,maxKnots:item.maxKnots??item.cruiseKnots??item.speedKnots??8,fuelEnduranceDays:item.fuelEnduranceDays??5,foodEnduranceDays:item.foodEnduranceDays??5,nuclearFuel:!!item.nuclearFuel,crackedIceFactor:item.crackedIceFactor??.1,minZoom:item.minZoom??.3,visibilityBonusKm:item.visibilityBonusKm??0,name:item.name??'RV AURORA',image:item.image??'assets/vessels/base-vessel.png'};}"
+        }
+      ]
+    },
+    {
+      "asset": "base-vessel-source.png",
+      "hits": []
+    }
+  ],
+  "remote": [
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Argo%20float%20deployed%20from%20research%20vessel.jpg",
+      "line": "argo: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Argo%20float%20deployed%20from%20research%20vessel.jpg', alt:'Argo profiling float being deployed from a research vessel', credit:'NOAA GOMO / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Argo_float_deployed_from_research_vessel.jpg'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Hydrophone%20arrays%20on%20the%20deck%20of%20the%20USNS%20Kane.jpg",
+      "line": "hydrophone: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Hydrophone%20arrays%20on%20the%20deck%20of%20the%20USNS%20Kane.jpg', alt:'Hydrophone arrays laid out on a research vessel deck', credit:'NOAA / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Hydrophone_arrays_on_the_deck_of_the_USNS_Kane.jpg'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Argo%20float%20deployed%20from%20research%20vessel.jpg",
+      "line": "drifter: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Argo%20float%20deployed%20from%20research%20vessel.jpg', alt:'Autonomous ocean observing float during deployment', credit:'NOAA GOMO / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Argo_float_deployed_from_research_vessel.jpg'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Starlink%20Dish%2020250111%20101122.jpg",
+      "line": "starlink: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Starlink%20Dish%2020250111%20101122.jpg', alt:'Flat Starlink terminal installed on a ship', credit:'Ka23 13 / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Starlink_Dish_20250111_101122.jpg'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/1991%20windenleitstand%20hg.jpg",
+      "line": "winch: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/1991%20windenleitstand%20hg.jpg', alt:'Oceanographic winch operations on the research vessel Polarstern', credit:'Hannes Grobe / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:1991_windenleitstand_hg.jpg'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Sondeur%20transducteur.jpg",
+      "line": "hullSensor: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Sondeur%20transducteur.jpg', alt:'Echo sounder transducer', credit:'Clipper / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Sondeur_transducteur.jpg'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Researchers%20using%20Niskin%20bottle%20to%20collect%20water%20sample%20%C2%B7%20DN-SD-01-00282.JPEG",
+      "line": "handheldWater: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Researchers%20using%20Niskin%20bottle%20to%20collect%20water%20sample%20%C2%B7%20DN-SD-01-00282.JPEG', alt:'Researchers collecting an Arctic water sample with oceanographic equipment', credit:'U.S. Navy / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Researchers_using_Niskin_bottle_to_collect_water_sample_%C2%B7_DN-SD-01-00282.JPEG'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/ACFEL%20ice%20auger%20in%20test%20block%20of%20ice.jpg",
+      "line": "iceCorer: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/ACFEL%20ice%20auger%20in%20test%20block%20of%20ice.jpg', alt:'Scientific ice auger drilling into ice', credit:'U.S. Government / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:ACFEL_ice_auger_in_test_block_of_ice.jpg'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Deployment%20of%20acoustic%20doppler%20current%20profiler.jpg",
+      "line": "shallowAdcp: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Deployment%20of%20acoustic%20doppler%20current%20profiler.jpg', alt:'Acoustic Doppler current profiler being deployed', credit:'USGS / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Deployment_of_acoustic_doppler_current_profiler.jpg'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Mission%20AWA%20-%20Mise%20en%20%C5%93uvre%20de%20l%27ADCP%20%28Acoustic%20Doppler%20Current%20Profiler%29%20depuis%20la%20Thalassa%20%28Ifremer%2000562-67430%20-%2041954%29.jpg",
+      "line": "shelfAdcp: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Mission%20AWA%20-%20Mise%20en%20%C5%93uvre%20de%20l%27ADCP%20%28Acoustic%20Doppler%20Current%20Profiler%29%20depuis%20la%20Thalassa%20%28Ifremer%2000562-67430%20-%2041954%29.jpg', alt:'ADCP being deployed from an oceanographic vessel', credit:'Ifremer / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Mission_AWA_-_Mise_en_%C5%93uvre_de_l%27ADCP_(Acoustic_Doppler_Current_Profiler)_depuis_la_Thalassa_(Ifremer_00562-67430_-_41954).jpg'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Acoustic%20Doppler%20Current%20Profiler.jpg",
+      "line": "deepAdcp: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Acoustic%20Doppler%20Current%20Profiler.jpg', alt:'Deep-ocean acoustic Doppler current profiler', credit:'Wusel007 / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Acoustic_Doppler_Current_Profiler.jpg'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Sigma%20150-500mm%2002.jpg",
+      "line": "cameraTelephoto: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Sigma%20150-500mm%2002.jpg', alt:'DSLR camera fitted with an extra-large telephoto lens', credit:'Gerwin Sturm / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Sigma_150-500mm_02.jpg'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Projet%20BioCotEs%20-%20Filet%20%C3%A0%20plancton%20%22Bongo%22%20%28Ifremer%2000810-92149%29.jpg",
+      "line": "bongoDetailed: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Projet%20BioCotEs%20-%20Filet%20%C3%A0%20plancton%20%22Bongo%22%20%28Ifremer%2000810-92149%29.jpg', alt:'Paired Bongo plankton net system', credit:'Ifremer / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Projet_BioCotEs_-_Filet_%C3%A0_plancton_%22Bongo%22_(Ifremer_00810-92149).jpg'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Manual%20pump%20used%20to%20move%20water%20through%20a%20filter%20for%20eDNA%20testing.%20%28c0fad0b1-d569-4d79-9fb7-1edcfb989389%29.JPG",
+      "line": "ednaKit: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Manual%20pump%20used%20to%20move%20water%20through%20a%20filter%20for%20eDNA%20testing.%20%28c0fad0b1-d569-4d79-9fb7-1edcfb989389%29.JPG', alt:'Manual filtration pump used for eDNA field sampling', credit:'National Park Service / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Manual_pump_used_to_move_water_through_a_filter_for_eDNA_testing._(c0fad0b1-d569-4d79-9fb7-1edcfb989389).JPG'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Arthropod%20field%20collection%20kit.png",
+      "line": "fieldKit: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Arthropod%20field%20collection%20kit.png', alt:'Scientific field collection kit with GPS, notebook and sample containers', credit:'Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Arthropod_field_collection_kit.png'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Collected%20Beach%20Litter%20at%20Scabbacombe%20Sands.jpg",
+      "line": "shoreDebris: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Collected%20Beach%20Litter%20at%20Scabbacombe%20Sands.jpg', alt:'Marine debris collected during a shoreline survey', credit:'Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Collected_Beach_Litter_at_Scabbacombe_Sands.jpg'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Giant-box-corer%20hg.jpg",
+      "line": "shallowCorer: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Giant-box-corer%20hg.jpg', alt:'Scientific sediment corer being deployed from a research vessel', credit:'Hannes Grobe / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Giant-box-corer_hg.jpg'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Plankton%20Net%20%2808010639%29%20%2846940308932%29.jpg",
+      "line": "surfaceNet: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Plankton%20Net%20%2808010639%29%20%2846940308932%29.jpg', alt:'Scientific plankton net', credit:'Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Plankton_Net_(08010639)_(46940308932).jpg'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Plankton%20Net%20%2808010639%29%20%2846940308932%29.jpg",
+      "line": "verticalNet: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Plankton%20Net%20%2808010639%29%20%2846940308932%29.jpg', alt:'Scientific plankton net prepared for sampling', credit:'Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Plankton_Net_(08010639)_(46940308932).jpg'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Projet%20BioCotEs%20-%20Filet%20%C3%A0%20plancton%20%22Bongo%22%20%28Ifremer%2000810-92149%29.jpg",
+      "line": "bongoNet: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Projet%20BioCotEs%20-%20Filet%20%C3%A0%20plancton%20%22Bongo%22%20%28Ifremer%2000810-92149%29.jpg', alt:'Paired Bongo plankton net system', credit:'Ifremer / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Projet_BioCotEs_-_Filet_%C3%A0_plancton_%22Bongo%22_(Ifremer_00810-92149).jpg'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Giant-box-corer%20hg.jpg",
+      "line": "sedimentCorer: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Giant-box-corer%20hg.jpg', alt:'Large scientific box corer during research-vessel operations', credit:'Hannes Grobe / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Giant-box-corer_hg.jpg'},"
+    },
+    {
+      "file": "expedition.js",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Stern%20of%20the%20Kilo%20Moana.jpg",
+      "line": "coastalAFrame: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Stern%20of%20the%20Kilo%20Moana.jpg', alt:'Research vessel stern with a large oceanographic A-frame', credit:'NOAA / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Stern_of_the_Kilo_Moana.jpg'},"
+    }
+  ]
+}
