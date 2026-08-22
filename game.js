@@ -91,6 +91,7 @@
   let checkpoint={x:home.x,y:home.y,seasonDay:0,year:2026,travelled:0,angle:Math.PI,portName:'LONGYEARBYEN'};
   let currentPortCity=null,researchOpportunityClock=0,lastResearchNavigation=0,pendingResearchTargetId=null,pendingResearchArrival=null,startFlowPending=false,npcUpdateAccumulator=0,researchGuidanceHit=null,minimapExpanded=false;
   const RESEARCH_INTERACTION_KM=10,observedWildlifeFallback=new Set(),resourceAlertState={fuel:false,food:false};
+  function updateResourceBarColors(){const color=value=>value<=20?'#ef5a5a':value<=40?'#f6d365':'#73d6a1';if(ui.fuelLevel)ui.fuelLevel.style.background=color(state.fuel);if(ui.foodLevel)ui.foodLevel.style.background=color(state.food);}
   const GLACIER_SITES=[
     {name:'Nordenskiöldbreen',lat:78.666667,lon:17.116667},{name:'Tunabreen',lat:78.50411,lon:17.46552},{name:'Negribreen',lat:78.56382,lon:19.14997},
     {name:'Monacobreen',lat:79.4,lon:12.5667},{name:'Fjortende Julibreen',lat:79.1122,lon:11.9775},{name:'Blomstrandbreen',lat:79.0319,lon:12.1764},
@@ -425,7 +426,7 @@
   if(currentPortCity)state.dockedPort=currentPortCity.name;
 
   // Expedition 13: local saves, title/pause menu, and analytics instrumentation.
-  const GAME_VERSION='expedition-23n-clean-playtest',SAVE_VERSION=1;
+  const GAME_VERSION='expedition-23o-review-split',SAVE_VERSION=1;
   const SAVE_KEYS={auto:'arctic-research-save-auto-v1',slot1:'arctic-research-save-slot-1-v1',slot2:'arctic-research-save-slot-2-v1',slot3:'arctic-research-save-slot-3-v1'};
   const AUTO_NEW_KEY='arctic-research-start-new-v1';
   const PLAYTEST_BUILD_KEY='arctic-research-playtest-build';
@@ -485,7 +486,7 @@
       state.tx=Number.isFinite(nav.tx)?nav.tx:state.x;state.ty=Number.isFinite(nav.ty)?nav.ty:state.y;
       checkpoint=payload.checkpoint||checkpoint;currentPortCity=payload.currentPortName?cityLabels.find(item=>item.name===payload.currentPortName)||null:null;
       research?.restoreCheckpoint?.(payload.research);pendingResearchTargetId=null;announcedWeatherEvent=null;iceFloes.length=0;wakeFloes.length=0;wakeTrail.length=0;brokenIceChannels.length=0;brokenIceGrid.clear();
-      ui.gameOver.classList.add('hidden');ui.fuelLevel.style.width=state.fuel+'%';ui.foodLevel.style.width=state.food+'%';updateResourceWarning();
+      ui.gameOver.classList.add('hidden');ui.fuelLevel.style.width=state.fuel+'%';ui.foodLevel.style.width=state.food+'%';updateResourceBarColors();updateResourceWarning();
       updateVesselButton(research?.getVesselModifiers?.()||vesselModifiers());zoomLevel=(research?.getVesselModifiers?.()||vesselModifiers()).minZoom||zoomLevel;setZoom(0,true);
       if(currentPortCity&&state.dockedPort)research?.enterPort?.(currentPortCity,{resume:true});else research?.leavePort?.();
       menuOpen=false;ui.welcome.classList.add('hidden');lastResearchAnalytics=research?.getState?.()||null;showToast(`EXPEDITION LOADED — ${payload.meta?.location||'ARCTIC OCEAN'}`,2400);
@@ -1236,7 +1237,7 @@
       paused=state.gameOver||menuOpen||minimapExpanded||!!research?.isBusy?.();
       if(!paused){const margin=60/scale,minX=state.x-width/scale/2-margin,maxX=state.x+width/scale/2+margin,minY=state.y-height/scale/2-margin,maxY=state.y+height/scale/2+margin;floeUpdateAccumulator+=dt/zoomLevel;if(floeUpdateAccumulator>=.075){updateFloes(Math.min(.18,floeUpdateAccumulator),minX,maxX,minY,maxY);floeUpdateAccumulator=0;}updateWakeFloes(dt/zoomLevel);updateWildlifeEncounters(dt);wildlifeMotionAccumulator+=dt/zoomLevel;if(wildlifeMotionAccumulator>=.12){const wildlifeStep=Math.min(.25,wildlifeMotionAccumulator);wildlifeMotionAccumulator=0;updateFishSchools(wildlifeStep);updateWildlife(wildlifeStep);}updateNpcVessels(dt/zoomLevel);}
     }else{updateCalendar(0);weather=currentWeather();ui.weatherValue.textContent=weather.type==='clear'?'CLEAR':`${weather.label} ${weather.rating}/10 · ${weather.visibilityKm} KM`;updateIceReadout();updateCompass();}
-    updateResourceWarning();
+    updateResourceBarColors();updateResourceWarning();
     const renderDue=!IS_COARSE_POINTER||now-lastRender>=32||paused!==lastFramePaused;
     if(!paused&&renderDue){lastRender=now;drawWorldCached(now);drawResearchTargets();drawNpcVessels();drawSeasonalLighting();drawWeather(weather);drawPortMarkers();drawWildlifeObservationRings();drawFog(weather);drawResearchTargets(true);drawResearchGuidance();drawVessel();}
     if(minimapExpanded&&now-miniLastDraw>45){miniLastDraw=now;try{drawMiniMap();}catch(error){console.error('MINIMAP DRAW FAILED',error);}}
@@ -1251,7 +1252,7 @@
     getRelocationPorts,
     relocateToPort,
     getResources:()=>({fuel:state.fuel,food:state.food}),
-    setResources:resources=>{if(Number.isFinite(resources?.fuel))state.fuel=clampResource(resources.fuel);if(Number.isFinite(resources?.food))state.food=clampResource(resources.food);ui.fuelLevel.style.width=state.fuel+'%';ui.foodLevel.style.width=state.food+'%';updateResourceWarning();if(currentPortCity)saveCheckpoint(currentPortCity);},
+    setResources:resources=>{if(Number.isFinite(resources?.fuel))state.fuel=clampResource(resources.fuel);if(Number.isFinite(resources?.food))state.food=clampResource(resources.food);ui.fuelLevel.style.width=state.fuel+'%';ui.foodLevel.style.width=state.food+'%';updateResourceBarColors();updateResourceWarning();if(currentPortCity)saveCheckpoint(currentPortCity);},
     estimateMissionResources,
     onNavigate:navigateToResearchTarget,
     onResearchStart:()=>{state.tx=state.x;state.ty=state.y;state.commandActive=false;state.moving=false;state.ramming=false;state.portDestination=null;},

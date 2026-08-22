@@ -21,7 +21,7 @@ body { overscroll-behavior: none; touch-action: none; }
 .vessel-button img { display: block; width: 100%; height: 100%; border-radius: 5px; object-fit: contain; background: #082a3d; }
 .season-telemetry { display: none; }
 .fuel-status > i { display: block; width: 58px; height: 3px; margin-top: 4px; overflow: hidden; border-radius: 3px; background: #315e70; }
-.fuel-status > i em { display: block; width: 100%; height: 100%; background: #f6d365; transition: width .2s, background .2s; }
+.fuel-status > i em { display: block; width: 100%; height: 100%; background: #73d6a1; transition: width .2s, background .2s; }
 .food-status { position: relative; }
 .food-status > i { display: block; width: 58px; height: 3px; margin-top: 4px; overflow: hidden; border-radius: 3px; background: #315e70; }
 .food-status > i em { display: block; width: 100%; height: 100%; background: #73d6a1; transition: width .2s, background .2s; }
@@ -306,3 +306,22 @@ body { overscroll-behavior: none; touch-action: none; }
   .minimap.expanded .minimap-nav-details span{min-width:0!important;padding:8px 5px!important;overflow:hidden!important}
   .minimap.expanded .minimap-nav-details b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 }
+
+
+/* ARS expedition-23o HUD and modal layering */
+#arx-mobile-toggle,#arx-dev-toggle{z-index:5!important}
+.cash-status{flex:0 0 auto}
+.cash-status b{color:#f6d365;white-space:nowrap}
+@media(max-width:760px) and (orientation:portrait){
+  .cash-status{position:absolute!important;left:42px;top:0;display:block!important;width:94px;height:34px;padding:4px 7px;border-radius:6px;background:rgba(5,31,48,.72);text-align:left;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  .cash-status small{display:block!important;margin:0!important;color:#93bdc8!important;font-size:5px!important;letter-spacing:.08em!important}
+  .cash-status b{display:block!important;margin:3px 0 0!important;color:#f6d365!important;font-size:9px!important;letter-spacing:.02em!important}
+}
+
+.arx-research-review-actions{display:grid;grid-template-columns:1fr 1.35fr;gap:8px;margin-top:14px}
+.arx-research-review-actions button{width:100%;padding:10px;border:0;border-radius:7px;background:#f6d365;color:#17323b;font-size:8px;font-weight:900;letter-spacing:.07em}
+.arx-research-review-actions .ghost{border:1px solid rgba(166,230,244,.25);background:transparent;color:#a9d2dc}
+.arx-research-work .arx-operation-progress{margin-top:6px}
+.arx-research-work .arx-operation-progress strong{color:#eafaff}
+.arx-work-readiness{margin:10px 0}
+@media(max-width:760px){.arx-research-review-actions{grid-template-columns:1fr}.arx-research-work{padding-top:34px!important}}
