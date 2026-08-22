@@ -1,30 +1,357 @@
 ===== renderResearchWindow =====
-NOT FOUND
+gId]||0;if(differentPort||state.elapsedDays>=readyAt)state.grantMarketReady[incomingId]=state.elapsedDays+3.5;
+      }else if(!state.candidates.length)generateCandidates(state.port);
+      renderSidebar();if(portOpen)renderPort();if(!state.offers.length)scheduleGrantRefresh(10);
+    },18);
+  }
+  function closePort() { capturePortView(); root?.querySelector('#arx-port-modal')?.classList.remove('open'); portOpen=false; }
+  function leavePort() { state.port=null; closePort(); renderSidebar(); }
 
-===== action-handler =====
-else if (action==='accept') acceptOffer(id);
-    else if (action==='accept-professor-grant'&&state.remoteOffer) { state.targets.forEach(item=>item.selected=false);state.remoteOffer.selected=true;state.remoteOffer.upfront=0;state.remoteOffer.advancePaid=0;state.targets.push(state.remoteOffer);addLog(`Professor-originated grant accepted: ${state.remoteOffer.title}. Payment due on completion.`);state.remoteOffer=null;root.querySelector('#arx-target-modal').classList.remove('open');renderSidebar();changed(); }
-    else if (action==='decline-professor-grant') { state.remoteOffer=null;root.querySelector('#arx-target-modal').classList.remove('open');changed(); }
-    else if (action==='drop-grant') dropGrant(id);
-    else if (action==='abandon-deployment') abandonDeployment(id);
-    else if (action==='navigate-target') { const target=state.targets.find(item=>item.id===id);root.querySelector('#arx-target-modal')?.classList.remove('open');if(target)callbacks.onNavigate?.(target); }
-    else if (action==='publish') publishPaper();
+  function renderResearchWindow(target,{phase='ready',resultTitle='',resultBody='',resultStats=[]}={}) {
+    const running=phase==='running',complete=phase==='complete',programFinished=complete&&target.status==='completed';
+    const readiness=missionReadiness(target),projection=readiness.projection,station=currentStation(target),stationLabel=station?`${station.number} of ${target.stations.length}`:'Single station';
+    const contextDistance=state.lastTargetContext?.id===target.id?state.lastTargetContext.distanceKm:null,navDistance=state.navigation?.id===target.id?state.navigation.distanceKm:null,distance=Number.isFinite(contextDistance)?contextDistance:Number.isFinite(navDistance)?navDistance:Infinity,atSite=target.anywhere||distance<=RESEARCH_INTERACTION_KM;
+    const opportunity=target.kind==='opportunity'||target.kind==='weather-opportunity',missing=readiness.rows.find(row=>!row.ready),participants=participantIdsFor(target),rate=workRate(target),workHours=Math.round(running?(activeOperation?.workHours||operationWorkHours(target)):remainingWorkHours(target));
+    const progress=running?0:complete?100:0,steps=target.steps?.length?target.steps:['Hold the science station','Calibrate instruments','Collect observations','Check sample metadata','Secure the station'];
+    const canBegin=atSite&&readiness.ready&&!running&&!complete;
+    const primaryLabel=running?'RESEARCH IN PROGRESS':complete?'RESEARCH COMPLETE':!atSite&&!target.anywhere?'SAIL TO SITE FIRST':readiness.ready?'BEGIN RESEARCH':`CANNOT BEGIN · ${missing?.label||'MISSING CAPABILITY'}`;
+    const decline=opportunity?`<button class="ghost" data-arx-action="cancel-opportunity" data-id="${target.id}" ${running||complete?'disabled':''}>DECLINE</button>`:(target.kind==='grant'||target.kind==='contract')?`<button class="danger" data-arx-action="drop-grant" data-id="${target.id}" ${running||programFinished||(target.deploymentId&&target.missionMode!=='staged-recovery')?'disabled':''}>${target.missionMode==='staged-recovery'?'DROP RETURN PICKUP':'DROP GRANT'}</button>`:'<button class="ghost" disabled>NO DROP ACTION</button>';
+    const media=canonicalMissionMedia(target),result=resultTitle||'Research result';
+    const modal=root.querySelector('#arx-target-modal');
+    modal.innerHTML=`<div class="arx-modal-card arx-target-card arx-operation arx-research-unified ${complete?'arx-complete':''}"><button class="arx-close" data-arx-action="close-target" aria-label="Close research site" ${running?'disabled':''}>×</button><small>${target.weather?'LIVE WEATHER RESEARCH':opportunity?'DISCOVERED RESEARCH OPPORTUNITY':'ACTIVE RESEARCH GRANT'}</small><h2>${escapeHtml(target.title)}</h2>${mediaMarkup(target,'hero')}<p>${escapeHtml(target.description)}</p><div class="arx-target-facts arx-research-facts"><span><small>STATION</small><b>${stationLabel}</b></span><span><small>REMAINING WORK</small><b>${workHours} person-hours · team rate ${rate.toFixed(1)}×</b></span><span><small>TOTAL AWARD</small><b>${cash(target.reward||0)}</b></span><span><small>PAYMENT</small><b>ON COMPLETION</b></span><span><small>RESULT</small><b>${['mooring-deploy','staged-deploy','autonomous'].includes(target.missionMode)?'Data after telemetry / recovery':`+${target.data} data`}</b></span><span><small>DISTANCE</small><b>${target.anywhere?'REMOTE / ONBOARD':Number.isFinite(distance)?`${Math.round(distance)} km`:'OFF-SCREEN SITE'}</b></span></div><h3 class="arx-operation-subhead">RESPONSIBLE SCIENTISTS</h3>${operationScientistsMarkup(target)}<h3 class="arx-operation-subhead">EQUIPMENT USED</h3>${operationEquipmentMarkup(target)}<h3 class="arx-check-title">MISSION READINESS</h3>${readinessMarkup(readiness)}<div class="arx-operation-progress"><div><b id="arx-operation-percent">${progress}%</b><span>${workHours} person-hours · ~${projection.days} game days · ${participants.length||1} scientist${participants.length===1?'':'s'} assigned</span></div><i><em id="arx-operation-bar" style="width:${progress}%"></em></i></div><ol>${steps.map((step,index)=>`<li data-arx-step="${index}" class="${complete?'done':''}"><i>${complete?'✓':index+1}</i><b>${escapeHtml(step)}</b><span>${complete?'Complete':'Queued'}</span></li>`).join('')}</ol><div class="arx-operation-result-space">${complete?`<div class="arx-research-result"><small>${escapeHtml(result)}</small><p>${escapeHtml(resultBody)}</p>${resultStats.length?`<div class="arx-chance">${resultStats.map(item=>`<span>${escapeHtml(item.label)}<b>${escapeHtml(item.value)}</b></span>`).join('')}</div>`:''}</div>`:'<div class="arx-result-placeholder">Results will appear here without replacing this research card.</div>'}</div><div class="arx-research-actions">${decline}<button data-arx-action="complete-target" data-id="${target.id}" ${canBegin?'':'disabled'}>${escapeHtml(primaryLabel)}</button><button data-arx-action="acknowledge-research" ${complete?'':'disabled'}>OKAY</button></div></div>`;
+    modal.classList.add('open');
+  }
+  function openTarget(id,context={}) {
+    const target=state.targets.find(item=>item.id===id);if(!target)return false;
+    if(activeOperation&&activeOperation.targetId!==id){toast('RESEARCH STATION ALREADY IN PROGRESS');return false;}
+    const distance=context.distanceKm??(state.navigation?.id===id?state.navigation.distanceKm:Infinity);
+    state.targets.forEach(item=>item.selected=item.id===id);state.lastTargetContext={...context,id,distanceKm:distance};
+    renderResearchWindow(target,{phase:activeOperation?.targetId===id?'running':'ready'});renderSidebar();return true;
+  }
+  function operationEquipmentMarkup(target) {
+    const ids=[...(target.equipment||[]),...(target.consumables||[])],items=[...new Set(ids)].map(id=>EQUIPMENT[id]).filter(Boolean);
+    if(!items.length)return `<div class="arx-operation-equipment"><div class="arx-operation-gear field-kit"><img src="${escapeHtml(MEDIA.fieldKit.src)}" alt="${escapeHtml(MEDIA.fieldKit.alt)}"><span>General Arctic Field Kit</span></div></div>`;
+    return `<div class="arx-operation-equipment">${items.map(item=>`<div class="arx-operation-gear"><img src="${escapeHtml(item.media?.src||MEDIA.fieldKit.src)}" alt="${escapeHtml(item.media?.alt||item.name)}"><span>${escapeHtml(item.name)}</span></div>`).join('')}</div>`;
+  }
+  function operationScientistsMarkup(target) {
+    const ids=participantIdsFor(target),people=state.scientists.filter(item=>ids.includes(item.id));
+    return `<div class="arx-operation-scientists">${people.map(item=>{const profile=profileFor(item);return`<div><img src="${escapeHtml(profile.portrait)}" alt=""><span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(specialtyById[item.specialty]?.name||item.specialty)} · ${CAREERS[item.career]?.short||item.career}</small></span></div>`;}).join('')}</div>`;
+  }
+  function renderOperationShell(target) { renderResearchWindow(target,{phase:'running'}); }
+  function participantIdsFor(target) {
+    const player=playerScientist(),requiredLevel=templateCareerLevel(target);if(target?.anyScientist)return player?[player.id]:[];
+    const specialistIds=specialistAssignment(target).ids||[],ids=[...specialistIds];
+    const candidates=state.scientists.filter(item=>(target.specialties||[]).includes(item.specialty)&&careerLevel(item.career)>=requiredLevel).sort((a,b)=>careerLevel(b.career)-careerLevel(a.career));
+    for(const item of candidates)if(!ids.includes(item.id))ids.push(item.id);
+    return ids.length?ids:(player?[player.id]:[]);
+  }
+  function creditSpecialtyMission(target,participantIds) {
+    if (!(target.specialties||[]).length) return;
+    for (const scientist of state.scientists) {
+      if (!participantIds.includes(scientist.id)||(target.specialties||[]).includes(scientist.specialty)===false) continue;
+      scientist.missions=(scientist.missions||0)+1; recordScientist(scientist);
+    }
+  }
+  function updateOperation(now) {
+    if (!activeOperation) return;
+    const target=state.targets.find(item=>item.id===activeOperation.targetId);
+    if (!target) { activeOperation=null; operationFrame=0; root.querySelector('#arx-target-modal')?.classList.remove('open'); return; }
+    const progress=clamp((now-activeOperation.startedAt)/activeOperation.durationMs,0,1), percent=Math.floor(progress*100), current=Math.min(activeOperation.steps.length-1,Math.floor(progress*activeOperation.steps.length));
+    const modal=root.querySelector('#arx-target-modal'), bar=modal.querySelector('#arx-operation-bar'), readout=modal.querySelector('#arx-operation-percent');
+    if (bar) bar.style.width=`${percent}%`; if (readout) readout.textContent=`${percent}%`;
+    modal.querySelectorAll('[data-arx-step]').forEach((row,index)=>{
+      row.classList.toggle('done',progress>=1||index<current); row.classList.toggle('active',progress<1&&index===current);
+      const label=row.querySelector('span'); if (label) label.textContent=progress>=1||index<current?'Complete':index===current?'In progress':'Queued';
+    });
+    if (progress<1) { operationFrame=requestAnimationFrame(updateOperation); return; }
+    finishOperation(target);
+  }
+  function completionModal(target,title,body,stats=[]) { renderResearchWindow(target,{phase:'complete',resultTitle:title,resultBody:body,resultStats:stats}); }
+  function settleResearch(target,dataGain) {
+    const payment=Math.max(0,Number(target.reward)||0);addData(dataGain);adjustMoney(payment);
+    return [{label:'DATA ARCHIVED',value:`+${dataGain}`},{label:'RESEARCH AWARD',value:cash(payment)},{label:'PAYMENT',value:'PAID ON COMPLETION'}];
+  }
+  function finishOperation(target) {
+    const operation=activeOperation||{}, participants=operation.participantIds||participantIdsFor(target);
+    activeOperation=null; operationFrame=0;
+    const days=operation.days||effectiveDays(target,operation.workHours||operationWorkHours(target));
+    target.lastOperationHours=operation.workHours||operationWorkHours(target);
+    callbacks.onAdvanceTime?.(days);
+    const station=currentStation(target);
+    if (station) {
+      station.status='completed';
+      const nextIndex=target.stations.findIndex(item=>item.status!=='completed');
+      if (nextIndex>=0) {
+        target.stationIndex=nextIndex; target.lat=target.stations[nextIndex].lat; target.lon=target.stations[nextIndex].lon; target.selected=true;
+        state.lastTargetContext=null; state.navigation=null;
+        const done=target.stations.filter(item=>item.status==='completed').length;
+        addLog(`${target.shortTitle||target.title}: station ${done}/${target.stations.length} complete.`);
+        completionModal(target,`Station ${done} complete`,`The station record is secure. Station ${target.stations[nextIndex].number} is now highlighted; sail there to continue the section.`,[
+          {label:'SECTION PROGRESS',value:`${done}/${target.stations.length}`},{label:'NEXT STATION',value:`${target.stations[nextIndex].number}`}
+        ]);
+        renderSidebar(); callbacks.onStateChange?.(); return;
+      }
+    }
+    const quality=averageQuality(), recoveryMode=['mooring-recovery','staged-recovery'].includes(target.missionMode);
+    const dataGain=recoveryMode?Math.max(1,Math.round(target.data)):Math.max(1,Math.round(target.data*(.82+quality*.18)));
+    target.status='completed'; target.selected=false;
+    let title='Program complete', body='The team completed the assignment and archived the station record.', stats=[];
+    if (['mooring-deploy','staged-deploy'].includes(target.missionMode)) {
+      const baseWait=target.recoveryAfterDaysByVessel?.[state.currentVessel]||target.recoveryAfterDays||7;
+      const wait=Math.max(1,Math.round(baseWait*(.92+seeded(target.id)()*.16)));
+      const staged=target.missionMode==='staged-deploy';
+      state.deployments.push({id:`deployment-${target.id}`,title:target.title.replace(/^(Deploy|Deliver) /,''),lat:target.lat,lon:target.lon,status:'collecting',remainingDays:wait,recoveryRequired:true,data:dataGain,reward:target.reward,upfront:target.upfront||0,advancePaid:target.advancePaid||0,equipment:[...target.equipment],specialties:[...target.specialties],anyScientist:target.anyScientist,berthReserve:target.berthReserve||0,workHours:Math.max(6,Math.round(target.workHours*.72)),supplies:Math.max(2,Math.round(target.supplies*.55)),media:clone(target.media),recoveryTargetId:null,originalKind:target.kind,templateId:target.templateId,recoveryMode:staged?'staged-recovery':'mooring-recovery',recoveryTitle:target.recoveryTitle,recoveryShortTitle:target.recoveryShortTitle,recoveryDescription:target.recoveryDescription});
+      title=staged?'Field team deployed':'Mooring deployed'; body=`${staged?'The shore or ice team is working independently':'The array is collecting autonomously'}. Return in about ${wait} game days for recovery; the full data set and sponsor payment are released only after a safe pickup.`;
+      stats=[{label:'RETURN WINDOW',value:`~${wait} days`},{label:'DATA STATUS',value:'AWAITING RECOVERY'}];
+      addLog(`${target.title} completed; return visit pending.`);
+    } else if (recoveryMode) {
+      const deployment=state.deployments.find(item=>item.id===target.deploymentId);
+      if (deployment) {
+        deployment.status='recovered';
+        deployment.remainingDays=0;
+        deployment.recoveryTargetId=null;
+      }
+      stats=settleResearch(target,dataGain);
+      title=target.missionMode==='staged-recovery'?'Team safely recovered':'Mooring recovered';
+      body=target.missionMode==='staged-recovery'?'The field party, samples and recorders are safely aboard. Their complete field record has been released to the expedition archive.':'The full instrument line is safely aboard. The team downloaded the complete time series, verified the record and released the recovered-mooring data to the expedition archive.';
+      addLog(`Recovery complete: ${target.title}. Full record archived.`);
+    } else if (target.missionMode==='autonomous') {
+      state.deployments.push({id:`deployment-${target.id}`,title:target.title,lat:target.lat,lon:target.lon,status:'collecting',remainingDays:target.deploymentDays,recoveryRequired:false,data:dataGain,reward:target.reward,upfront:target.upfront||0,advancePaid:target.advancePaid||0,equipment:[...target.equipment],specialties:[...target.specialties],media:clone(target.media)});
+      title='Autonomous platform released'; body=`Telemetry will accumulate for roughly ${target.deploymentDays} game days. This instrument is treated as expendable and may sink or go silent at the end of its mission.`;
+      stats=[{label:'TELEMETRY WINDOW',value:`${target.deploymentDays} days`},{label:'RECOVERY',value:'NOT REQUIRED'}];
+      addLog(`${target.title} deployed; telemetry collection underway.`);
+    } else {
+      stats=settleResearch(target,dataGain);
+      body='The assignment is complete, the data have been archived and the sponsor has released the contracted field payment.';
+      addLog(`Assignment completed: ${target.title}. Field record archived.`);
+    }
+    state.completed.push({...target,completedAt:Date.now(),dataGain});
+    recordGran
 
-===== root-style =====
-root.innerHTML=`<button id="arx-mobile-toggle" data-arx-action="mobile-toggle">RESEARCH</button><button id="arx-dev-toggle" data-arx-action="dev-console">${devIsUnlocked()?'TEST':'TEST 🔒'}</button><aside id="arx-sidebar" class="arx-sidebar" aria-label="Research program"></aside><div id="arx-port-modal" class="arx-modal"></div><div id="arx-target-modal" class="arx-modal"></div><div id="arx-wildlife-modal" class="arx-modal"></div><div id="arx-guide-modal" class="arx-modal"></div><div id="arx-publish-modal" class="arx-modal"></div><div id="arx-promotion-modal" class="arx-modal"></div><div id="arx-vessel-modal" class="arx-modal"></div><div id="arx-departure-modal" class="arx-modal"></div><div id="arx-character-modal" class="arx-modal"></div><div id="arx-npc-modal" class="arx-modal"></div><div id="arx-funding-modal" class="arx-modal"></div><div id="arx-dev-modal" class="arx-modal"></div>`;
+===== openTarget/actions =====
+abel)}<b>${escapeHtml(item.value)}</b></span>`).join('')}</div>`:''}</div>`:'<div class="arx-result-placeholder">Results will appear here without replacing this research card.</div>'}</div><div class="arx-research-actions">${decline}<button data-arx-action="complete-target" data-id="${target.id}" ${canBegin?'':'disabled'}>${escapeHtml(primaryLabel)}</button><button data-arx-action="acknowledge-research" ${complete?'':'disabled'}>OKAY</button></div></div>`;
+    modal.classList.add('open');
+  }
+  function openTarget(id,context={}) {
+    const target=state.targets.find(item=>item.id===id);if(!target)return false;
+    if(activeOperation&&activeOperation.targetId!==id){toast('RESEARCH STATION ALREADY IN PROGRESS');return false;}
+    const distance=context.distanceKm??(state.navigation?.id===id?state.navigation.distanceKm:Infinity);
+    state.targets.forEach(item=>item.selected=item.id===id);state.lastTargetContext={...context,id,distanceKm:distance};
+    renderResearchWindow(target,{phase:activeOperation?.targetId===id?'running':'ready'});renderSidebar();return true;
+  }
+  function operationEquipmentMarkup(target) {
+    const ids=[...(target.equipment||[]),...(target.consumables||[])],items=[...new Set(ids)].map(id=>EQUIPMENT[id]).filter(Boolean);
+    if(!items.length)return `<div class="arx-operation-equipment"><div class="arx-operation-gear field-kit"><img src="${escapeHtml(MEDIA.fieldKit.src)}" alt="${escapeHtml(MEDIA.fieldKit.alt)}"><span>General Arctic Field Kit</span></div></div>`;
+    return `<div class="arx-operation-equipment">${items.map(item=>`<div class="arx-operation-gear"><img src="${escapeHtml(item.media?.src||MEDIA.fieldKit.src)}" alt="${escapeHtml(item.media?.alt||item.name)}"><span>${escapeHtml(item.name)}</span></div>`).join('')}</div>`;
+  }
+  function operationScientistsMarkup(target) {
+    const ids=participantIdsFor(target),people=state.scientists.filter(item=>ids.includes(item.id));
+    return `<div class="arx-operation-scientists">${people.map(item=>{const profile=profileFor(item);return`<div><img src="${escapeHtml(profile.portrait)}" alt=""><span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(specialtyById[item.specialty]?.name||item.specialty)} · ${CAREERS[item.career]?.short||item.career}</small></span></div>`;}).join('')}</div>`;
+  }
+  function renderOperationShell(target) { renderResearchWindow(target,{phase:'running'}); }
+  function participantIdsFor(target) {
+    const player=playerScientist(),requiredLevel=templateCareerLevel(target);if(target?.anyScientist)return player?[player.id]:[];
+    const specialistIds=specialistAssignment(target).ids||[],ids=[...specialistIds];
+    const candidates=state.scientists.filter(item=>(target.specialties||[]).includes(item.specialty)&&careerLevel(item.career)>=requiredLevel).sort((a,b)=>careerLevel(b.career)-careerLevel(a.career));
+    for(const item of candidates)if(!ids.includes(item.id))ids.push(item.id);
+    return ids.length?ids:(player?[player.id]:[]);
+  }
+  function creditSpecialtyMission(target,participantIds) {
+    if (!(target.specialties||[]).length) return;
+    for (const scientist of state.scientists) {
+      if (!participantIds.includes(scientist.id)||(target.specialties||[]).includes(scientist.specialty)===false) continue;
+      scientist.missions=(scientist.missions||0)+1; recordScientist(scientist);
+    }
+  }
+  function updateOperation(now) {
+    if (!activeOperation) return;
+    const target=state.targets.find(item=>item.id===activeOperation.targetId);
+    if (!target) { activeOperation=null; operationFrame=0; root.querySelector('#arx-target-modal')?.classList.remove('open'); return; }
+    const progress=clamp((now-activeOperation.startedAt)/activeOperation.durationMs,0,1), percent=Math.floor(progress*100), current=Math.min(activeOperation.steps.length-1,Math.floor(progress*activeOperation.steps.length));
+    const modal=root.querySelector('#arx-target-modal'), bar=modal.querySelector('#arx-operation-bar'), readout=modal.querySelector('#arx-operation-percent');
+    if (bar) bar.style.width=`${percent}%`; if (readout) readout.textContent=`${percent}%`;
+    modal.querySelectorAll('[data-arx-step]').forEach((row,index)=>{
+      row.classList.toggle('done',progress>=1||index<current); row.classList.toggle('active',progress<1&&index===current);
+      const label=row.querySelector('span'); if (label) label.textContent=progress>=1||index<current?'Complete':index===current?'In progress':'Queued';
+    });
+    if (progress<1) { operationFrame=requestAnimationFrame(updateOperation); return; }
+    finishOperation(target);
+  }
+  function completionModal(target,title,body,stats=[]) { renderResearchWindow(target,{phase:'complete',resultTitle:title,resultBody:body,resultStats:stats}); }
+  function settleResearch(target,dataGain) {
+    const payment=Math.max(0,Number(target.reward)||0);addData(dataGain);adjustMoney(payment);
+    return [{label:'DATA ARCHIVED',value:`+${dataGain}`},{label:'RESEARCH AWARD',value:cash(payment)},{label:'PAYMENT',value:'PAID ON COMPLETION'}];
+  }
+  function finishOperation(target) {
+    const operation=activeOperation||{}, participants=operation.participantIds||participantIdsFor(target);
+    activeOperation=null; operationFrame=0;
+    const days=operation.days||effectiveDays(target,operation.workHours||operationWorkHours(target));
+    target.lastOperationHours=operation.workHours||operationWorkHours(target);
+    callbacks.onAdvanceTime?.(days);
+    const station=currentStation(target);
+    if (station) {
+      station.status='completed';
+      const nextIndex=target.stations.findIndex(item=>item.status!=='completed');
+      if (nextIndex>=0) {
+        target.stationIndex=nextIndex; target.lat=target.stations[nextIndex].lat; target.lon=target.stations[nextIndex].lon; target.selected=true;
+        state.lastTargetContext=null; state.navigation=null;
+        const done=target.stations.filter(item=>item.status==='completed').length;
+        addLog(`${target.shortTitle||target.title}: station ${done}/${target.stations.length} complete.`);
+        completionModal(target,`Station ${done} complete`,`The station record is secure. Station ${target.stations[nextIndex].number} is now highlighted; sail there to continue the section.`,[
+          {label:'SECTION PROGRESS',value:`${done}/${target.stations.length}`},{label:'NEXT STATION',value:`${target.stations[nextIndex].number}`}
+        ]);
+        renderSidebar(); callbacks.onStateChange?.(); return;
+      }
+    }
+    const quality=averageQuality(), recoveryMode=['mooring-recovery','staged-recovery'].includes(target.missionMode);
+    const dataGain=recoveryMode?Math.max(1,Math.round(target.data)):Math.max(1,Math.round(target.data*(.82+quality*.18)));
+    target.status='completed'; target.selected=false;
+    let title='Program complete', body='The team completed the assignment and archived the station record.', stats=[];
+    if (['mooring-deploy','staged-deploy'].includes(target.missionMode)) {
+      const baseWait=target.recoveryAfterDaysByVessel?.[state.currentVessel]||target.recoveryAfterDays||7;
+      const wait=Math.max(1,Math.round(baseWait*(.92+seeded(target.id)()*.16)));
+      const staged=target.missionMode==='staged-deploy';
+      state.deployments.push({id:`deployment-${target.id}`,title:target.title.replace(/^(Deploy|Deliver) /,''),lat:target.lat,lon:target.lon,status:'collecting',remainingDays:wait,recoveryRequired:true,data:dataGain,reward:target.reward,upfront:target.upfront||0,advancePaid:target.advancePaid||0,equipment:[...target.equipment],specialties:[...target.specialties],anyScientist:target.anyScientist,berthReserve:target.berthReserve||0,workHours:Math.max(6,Math.round(target.workHours*.72)),supplies:Math.max(2,Math.round(target.supplies*.55)),media:clone(target.media),recoveryTargetId:null,originalKind:target.kind,templateId:target.templateId,recoveryMode:staged?'staged-recovery':'mooring-recovery',recoveryTitle:target.recoveryTitle,recoveryShortTitle:target.recoveryShortTitle,recoveryDescription:target.recoveryDescription});
+      title=staged?'Field team deployed':'Mooring deployed'; body=`${staged?'The shore or ice team is working independently':'The array is collecting autonomously'}. Return in about ${wait} game days for recovery; the full data set and sponsor payment are released only after a safe pickup.`;
+      stats=[{label:'RETURN WINDOW',value:`~${wait} days`},{label:'DATA STATUS',value:'AWAITING RECOVERY'}];
+      addLog(`${target.title} completed; return visit pending.`);
+    } else if (recoveryMode) {
+      const deployment=state.deployments.find(item=>item.id===target.deploymentId);
+      if (deployment) {
+        deployment.status='recovered';
+        deployment.remainingDays=0;
+        deployment.recoveryTargetId=null;
+      }
+      stats=settleResearch(target,dataGain);
+      title=target.missionMode==='staged-recovery'?'Team safely recovered':'Mooring recovered';
+      body=target.missionMode==='staged-recovery'?'The field party, samples and recorders are safely aboard. Their complete field record has been released to the expedition archive.':'The full instrument line is safely aboard. The team downloaded the complete time series, verified the record and released the recovered-mooring data to the expedition archive.';
+      addLog(`Recovery complete: ${target.title}. Full record archived.`);
+    } else if (target.missionMode==='autonomous') {
+      state.deployments.push({id:`deployment-${target.id}`,title:target.title,lat:target.lat,lon:target.lon,status:'collecting',remainingDays:target.deploymentDays,recoveryRequired:false,data:dataGain,reward:target.reward,upfront:target.upfront||0,advancePaid:target.advancePaid||0,equipment:[...target.equipment],specialties:[...target.specialties],media:clone(target.media)});
+      title='Autonomous platform released'; body=`Telemetry will accumulate for roughly ${target.deploymentDays} game days. This instrument is treated as expendable and may sink or go silent at the end of its mission.`;
+      stats=[{label:'TELEMETRY WINDOW',value:`${target.deploymentDays} days`},{label:'RECOVERY',value:'NOT REQUIRED'}];
+      addLog(`${target.title} deployed; telemetry collection underway.`);
+    } else {
+      stats=settleResearch(target,dataGain);
+      body='The assignment is complete, the data have been archived and the sponsor has released the contracted field payment.';
+      addLog(`Assignment completed: ${target.title}. Field record archived.`);
+    }
+    state.completed.push({...target,c
+
+===== root/toggles =====
+Tab==='contracts'&&!state.offers.length)refreshGrantOffersNow({render:false});
+    if(activePortTab==='crew'&&!state.candidates.length)generateCandidates(state.port);
+    renderPort();
+  }
+
+  function ensureUI() {
+    if (root) return;
+    root=document.createElement('div'); root.id='arx-root';
+    root.innerHTML=`<button id="arx-mobile-toggle" data-arx-action="mobile-toggle">RESEARCH</button><button id="arx-dev-toggle" data-arx-action="dev-console">${devIsUnlocked()?'TEST':'TEST 🔒'}</button><aside id="arx-sidebar" class="arx-sidebar" aria-label="Research program"></aside><div id="arx-port-modal" class="arx-modal"></div><div id="arx-target-modal" class="arx-modal"></div><div id="arx-wildlife-modal" class="arx-modal"></div><div id="arx-guide-modal" class="arx-modal"></div><div id="arx-publish-modal" class="arx-modal"></div><div id="arx-promotion-modal" class="arx-modal"></div><div id="arx-vessel-modal" class="arx-modal"></div><div id="arx-departure-modal" class="arx-modal"></div><div id="arx-character-modal" class="arx-modal"></div><div id="arx-npc-modal" class="arx-modal"></div><div id="arx-funding-modal" class="arx-modal"></div><div id="arx-dev-modal" class="arx-modal"></div>`;
     document.body.appendChild(root);
     const style=document.createElement('style'); style.id='arx-expedition-style'; style.textContent=`
-      #arx-root{font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#eafaff}#arx-root *{box-sizing:border-box}#arx-root button,#arx-root a{touch-action:manipulation}.arx-sidebar{position:fixed;z-index:5;left:16px;top:96px;width:270px;max-height:calc(100vh - 118px);padding:13px;overflow:auto;border:1px solid rgba(166,230,244,.28);border-radius:13px;background:rgba(4,31,49,.88);box-shadow:0 14px 40px rgba(0,17,28,.34);backdrop-filter:blur(14px)}.arx-side-head{display:flex;justify-content:space-between;gap:10px;align-items:start}.arx-side-head small,.arx-metrics small,.arx-data small,.arx-nav small,.arx-papers>small,.arx-deployments>small{display:block;color:#82b7c7;font-size:7px;font-weight:800;letter-spacing:.12em}.arx-side-head b{display:block;margin-top:3px;color:#f6d365;font-size:16px}.arx-side-head button{display:none;border:0;background:transparent;color:#9cc6d0;font-size:22px}.arx-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin:11px 0}.arx-metrics span{padding:7px 5px;border-radius:7px;background:rgba(62,113,131,.25);text-align:center}.arx-metrics b{display:block;margin-top:3px;font-size:10px}.arx-metrics em{display:block;margin-top:2px;color:#91bac4;font-size:7px;font-style:normal;font-weight:800}.arx-data{padding:10px;border:1px solid rgba(246,211,101,.2);border-radius:9px;background:rgba(13,55,72,.58)}.arx-data>div{display:flex;justify-content:space-between;align-items:end}.arx-data>div b{color:#fff4bd;font-size:20px}.arx-data>i{position:relative;display:block;height:7px;margin:8px 0;border-radius:5px;background:#214f63}.arx-data>i em{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,#7dd3fc,#f6d365)}.arx-data>i u{position:absolute;top:-3px;width:1px;height:13px;background:#fff}.arx-data p{margin:7px 0 9px;color:#9bc5d0;font-size:9px;line-height:1.35}.arx-data button,.arx-card button,.arx-modal-card>button:not(.arx-close),.arx-modal-actions button,.arx-species button,.arx-resupply-all{width:100%;padding:9px;border:0;border-radius:7px;background:#f6d365;color:#17323b;font-size:8px;font-weight:900;letter-spacing:.09em;cursor:pointer}.arx-data button:disabled,.arx-card button:disabled,.arx-modal-actions button:disabled,.arx-resupply-all:disabled{background:#315766;color:#7896a0;cursor:default}.arx-nav{display:flex;width:100%;gap:10px;align-items:center;margin-top:9px;padding:9px;border:1px solid rgba(125,211,252,.22);border-radius:9px;background:rgba(12,54,71,.62);color:#eafaff;text-align:left;cursor:pointer}.arx-nav.empty{cursor:default}.arx-nav>span{display:grid;place-items:center;flex:0 0 34px;height:34px;border:1px solid rgba(246,211,101,.55);border-radius:50%;color:#f6d365;font-size:22px}.arx-nav div{min-width:0}.arx-nav b,.arx-nav em{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.arx-nav b{margin-top:3px;font-size:10px}.arx-nav em{margin-top:3px;color:#8bc2d0;font-size:8px;font-style:normal}.arx-side-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}.arx-side-actions button{padding:7px 4px;border:1px solid rgba(166,230,244,.2);border-radius:6px;background:transparent;color:#a9d1dc;font-size:7px;font-weight:800;cursor:pointer}.arx-sidebar footer{margin-top:8px;color:#6f9eab;font-size:7px;text-align:center}.arx-papers,.arx-deployments{margin-top:9px;padding:9px;border:1px solid rgba(125,211,252,.16);border-radius:8px;background:rgba(12,54,71,.45)}.arx-papers>div,.arx-deployments>div{display:flex;justify-content:space-between;gap:8px;padding-top:7px}.arx-papers span,.arx-deployments span{min-width:0;color:#c7e3e9;font-size:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.arx-papers span em,.arx-deployments span em{display:block;margin-top:2px;color:#709daa;font-size:7px;font-style:normal}.arx-papers b,.arx-deployments b{color:#f6d365;font-size:8px}#arx-mobile-toggle{display:none;position:fixed;z-index:7;right:14px;bottom:16px;padding:10px 12px;border:1px solid rgba(246,211,101,.55);border-radius:8px;background:rgba(4,31,49,.92);color:#f6d365;font-size:8px;font-weight:900;letter-spacing:.12em}.arx-modal{display:none;position:fixed;z-index:12;inset:0;padding:24px;overflow:auto;background:rgba(0,13,22,.72);backdrop-filter:blur(7px);touch-action:pan-y}.arx-modal.open{display:grid;place-items:center}.arx-modal-card{position:relative;width:min(900px,100%);max-height:calc(100vh - 48px);padding:26px;overflow:auto;border:1px solid rgba(166,230,244,.3);border-radius:16px;background:linear-gradient(145deg,rgba(6,42,61,.985),rgba(4,25,40,.985));box-shadow:0 30px 80px rgba(0,0,0,.45);touch-action:pan-y}.arx-close{position:absolute;right:13px;top:10px;z-index:2;border:0;background:rgba(4,25,40,.6);border-radius:50%;color:#c1dde4;font-size:26px;cursor:pointer}.arx-modal-card>header>small,.arx-modal-card>small,.arx-guide-card>small,.arx-species>small{color:#7dd3fc;font-size:8px;font-weight:900;letter-spacing:.16em}.arx-modal-card h2{margin:7px 0 8px;color:#f4fbfc;font:800 30px/1.05 Georgia,serif}.arx-modal-card>header p,.arx-modal-card>p,.arx-guide-card>p{margin:0;color:#a9cbd4;font-size:11px;line-height:1.5}.arx-port-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:18px 0 13px}.arx-port-summary span{padding:9px;border-radius:8px;background:rgba(76,133,151,.18)}.arx-port-summary small{display:block;color:#7faebc;font-size:7px;letter-spacing:.1em}.arx-port-summary b{display:block;margin-top:4px;font-size:10px}.arx-tabs{display:flex;gap:5px;overflow:auto;border-bottom:1px solid rgba(166,230,244,.18)}.arx-tabs button{padding:9px 12px;border:0;border-bottom:2px solid transparent;background:transparent;color:#86adba;font-size:8px;font-weight:800;cursor:pointer}.arx-tabs button.active{border-color:#f6d365;color:#f6d365}.arx-tab{display:none;padding-top:16px}.arx-tab.active{display:block}.arx-tab h3,.arx-vessel-card h3{margin:0 0 6px;font:800 18px Georgia,serif}.arx-help{margin:0 0 13px;color:#8eb7c3;font-size:10px}.arx-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.arx-card{padding:12px;border:1px solid rgba(166,230,244,.17);border-radius:9px;background:rgba(23,67,83,.42)}.arx-card.selected{border-color:rgba(246,211,101,.55)}.arx-card.locked{opacity:.58}.arx-card-head{display:flex;justify-content:space-between;gap:8px;align-items:start}.arx-card-head>div{min-width:0}.arx-card-head b,.arx-card-head small{display:block}.arx-card-head b{font-size:11px}.arx-card-head small{margin-top:3px;color:#82afbc;font-size:7px;font-weight:800;letter-spacing:.06em}.arx-card-head em{flex:0 0 auto;color:#f6d365;font-size:8px;font-style:normal}.arx-card-head em[style]{padding-left:8px;border-left:3px solid var(--career)}.arx-card p{min-height:29px;margin:8px 0;color:#9fc3cd;font-size:9px;line-height:1.4}.arx-card .ghost,.arx-modal-actions .ghost{border:1px solid rgba(166,230,244,.25);background:transparent;color:#a9d2dc}.arx-stats{display:flex;flex-wrap:wrap;gap:4px;margin:7px 0}.arx-stats span{padding:3px 5px;border-radius:4px;background:rgba(125,211,252,.1);color:#a9ccd5;font-size:7px}.arx-portrait{display:block;flex:0 0 50px;width:50px;height:50px;border:2px solid rgba(166,230,244,.34);border-radius:12px;object-fit:cover;background:#176070}.scientist .arx-card-head{align-items:center}.scientist p{min-height:0}.arx-qualification{margin:-2px 0 8px;color:#7dd3fc;font-size:7px;font-weight:900;letter-spacing:.08em}.arx-requirement{margin:8px 0;padding:7px;border:1px solid rgba(249,115,103,.22);border-radius:6px;background:rgba(92,45,49,.16)}.arx-requirement.ready{border-color:rgba(142,240,207,.25);background:rgba(35,91,77,.15)}.arx-requirement b,.arx-requirement span{display:block}.arx-requirement b{color:#f2b3a8;font-size:7px;letter-spacing:.08em}.arx-requirement.ready b{color:#8ef0cf}.arx-requirement span{margin-top:4px;color:#9fc3cd;font-size:8px;line-height:1.35}.arx-card details{margin:8px 0;border-top:1px solid rgba(166,230,244,.12);border-bottom:1px solid rgba(166,230,244,.12)}.arx-card summary{padding:7px 0;color:#7dd3fc;font-size:7px;font-weight:900;letter-spacing:.09em;cursor:pointer}.arx-card details ul{padding-left:17px;color:#b5d0d6;font-size:8px;line-height:1.5}.arx-media{position:relative;margin:0;overflow:hidden;border-radius:9px;background:#0c3447}.arx-media img{display:block;width:100%;height:100%;object-fit:cover}.arx-media figcaption{position:absolute;left:0;right:0;bottom:0;padding:6px 8px;background:rgba(2,20,31,.82);color:#b8d7df;font-size:6px}.arx-media a{color:#7dd3fc}.arx-media.compact{height:155px}.arx-media.hero{height:210px;margin:-26px -26px 20px;border-radius:16px 16px 9px 9px}.arx-media.result{height:185px;margin:-26px -26px 20px;border-radius:16px 16px 9px 9px}.arx-offer-thumb{height:86px;margin:-12px -12px 10px;overflow:hidden;border-radius:9px 9px 4px 4px}.arx-offer-thumb img{width:100%;height:100%;object-fit:cover}.arx-resupply-all{margin:5px 0 10px}.arx-resupply{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px}.arx-resupply article{display:flex;flex-direction:column;padding:11px;border-radius:9px;background:rgba(23,67,83,.48)}.arx-resupply small,.arx-resupply b,.arx-resupply span{display:block}.arx-resupply small{color:#84afbc;font-size:7px}.arx-resupply b{margin:5px 0 8px;font-size:15px}.arx-resupply span{min-height:20px;color:#8fb5bf;font-size:8px;line-height:1.3}.arx-resupply button{width:100%;margin-top:auto;padding:7px;border:0;border-radius:6px;background:#f6d365;color:#17323b;font-size:7px;font-weight:900}.arx-resupply button:disabled{background:#315766;color:#7896a0}.arx-empty{grid-column:1/-1;padding:25px;border:1px dashed rgba(166,230,244,.25);border-radius:9px;text-align:center}.arx-empty p{color:#8eb5c0;font-size:10px}.arx-target-card{width:min(690px,100%)}.arx-target-facts{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:18px 0}.arx-target-facts span{padding:9px;border-radius:7px;background:rgba(30,79,96,.48)}.arx-target-facts small,.arx-target-facts b{display:block}.arx-target-facts small{color:#82adba;font-size:7px}.arx-target-facts b{margin-top:4px;font-size:9px}.arx-modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.arx-modal-actions.single{grid-template-columns:1fr}.arx-operation-progress{margin:18px 0 14px;padding:11px;border-radius:9px;background:rgba(23,67,83,.48)}.arx-operation-progress>div{display:flex;justify-content:space-between;align-items:end}.arx-operation-progress b{color:#f6d365;font-size:23px}.arx-operation-progress span{color:#8eb7c3;font-size:8px}.arx-operation-progress>i{display:block;height:8px;margin-top:8px;overflow:hidden;border-radius:8px;background:#214f63}.arx-operation-progress>i em{display:block;width:0;height:100%;border-radius:8px;background:linear-gradient(90deg,#7dd3fc,#8ef0cf,#f6d365)}.arx-operation ol{display:grid;gap:6px;margin:0;padding:0;list-style:none}.arx-operation li{display:grid;grid-template-columns:26px 1fr auto;gap:8px;align-items:center;padding:8px;border:1px solid rgba(166,230,244,.12);border-radius:7px;color:#789eaa;background:rgba(13,50,66,.35)}.arx-operation li>i{display:grid;place-items:center;width:23px;height:23px;border-radius:50%;background:#234f61;color:#88b5c0;font-size:8px;font-style:normal}.arx-operation li>b{font-size:9px}.arx-operation li>span{font-size:7px;font-weight:800;text-transform:uppercase}.arx-operation li.active{border-color:rgba(246,211,101,.42);color:#eff9fb}.arx-operation li.active>i{background:#f6d365;color:#17323b}.arx-operation li.active>span{color:#f6d365}.arx-operation li.done{color:#a8daca}.arx-operation li.done>i{background:#4eb691;color:#062f32}.arx-operation ol{grid-template-columns:1fr}.arx-operation li{grid-template-columns:26px minmax(0,1fr) 72px}.arx-operation-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.arx-operation-actions button{width:100%}.arx-operation-result-space{min-height:54px}.arx-port-navrow{display:flex;align-items:stretch;gap:10px}.arx-port-navrow .arx-tabs{flex:1;min-width:0}.arx-port-cash{flex:0 0 auto;display:flex!important;align-items:center;gap:9px;margin:0!important;padding:0 12px!important;border-left:1px solid rgba(166,230,244,.18);white-space:nowrap}.arx-port-cash span{display:block}.arx-port-cash small,.arx-port-cash b{display:block;margin:0!important}.arx-port-cash button{padding:6px 8px;border:1px solid rgba(246,211,101,.42);border-radius:6px;background:rgba(246,211,101,.08);color:#f6d365;font-size:6px;font-weight:900;letter-spacing:.08em;cursor:pointer}.arx-funding-card{width:min(720px,100%)}.arx-web-preview{margin:17px 0;padding:10px 12px;border:1px solid rgba(125,211,252,.28);border-radius:8px;background:rgba(20,75,96,.38)}.arx-web-preview b,.arx-web-preview span{display:block}.arx-web-preview b{color:#7dd3fc;font-size:8px;letter-spacing:.1em}.arx-web-preview span{margin-top:4px;color:#9fc6d1;font-size:8px;line-height:1.4}.arx-funding-balance{margin:14px 0;text-align:center}.arx-funding-balance small,.arx-funding-balance b{display:block}.arx-funding-balance small{color:#82afbc;font-size:7px;letter-spacing:.12em}.arx-funding-balance b{margin-top:4px;color:#f6d365;font:800 25px Georgia,serif}.arx-funding-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:17px 0}.arx-funding-grid article{padding:16px 12px;border:1px solid rgba(166,230,244,.18);border-radius:10px;background:rgba(23,67,83,.46);text-align:center}.arx-funding-grid article.featured{border-color:rgba(246,211,101,.55);box-shadow:inset 0 0 0 1px rgba(246,211,101,.12)}.arx-funding-grid small,.arx-funding-grid b,.arx-funding-grid span{display:block}.arx-funding-grid small{color:#7dd3fc;font-size:7px;font-weight:900;letter-spacing:.1em}.arx-funding-grid b{margin:10px 0 2px;color:#fff4bd;font:800 23px Georgia,serif}.arx-funding-grid span{color:#8fb7c2;font-size:8px}.arx-funding-grid button{width:100%;margin-top:13px;padding:10px;border:0;border-radius:7px;background:#f6d365;color:#17323b;font-size:10px;font-weight:900;cursor:pointer}.arx-funding-grid button:disabled{background:#315766;color:#7896a0}.arx-funding-note{color:#789eaa!important;font-size:8px!important;text-align:center}.arx-resupply-block{margin:10px 0 16px}.arx-resupply-top{margin-top:14px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid rgba(166,230,244,.14)}.compact-dashboard{margin-bottom:6px}.arx-wildlife-card{display:grid;grid-template-columns:1.05fr 1fr;gap:22px;width:min(780px,100%)}.arx-photo{position:relative;min-height:330px;overflow:hidden;border-radius:11px;background:#123e51}.arx-photo img{width:100%;height:100%;min-height:330px;object-fit:cover}.arx-photo.contain{background:#edf4f3}.arx-photo.contain.dark{background:#03080b}.arx-photo.contain img{object-fit:contain!important;padding:16px}.arx-photo.contain.dark img{padding:10px}.arx-photo span{position:absolute;left:10px;bottom:10px;padding:6px 8px;border-radius:5px;background:rgba(3,26,39,.85);color:#f6d365;font-size:7px;font-weight:900}.arx-species{align-self:center}.arx-species>em{color:#8fc2ce;font:italic 13px Georgia,serif}.arx-species ul{padding-left:18px;color:#b6d2d9;font-size:11px;line-height:1.5}.arx-species a{display:block;margin:12px 0;color:#7dd3fc;font-size:8px}.arx-guide-card{width:min(720px,100%)}.arx-guide-card section{margin-top:12px;padding:12px;border:1px solid rgba(166,230,244,.16);border-radius:9px}.arx-guide-card section header{display:flex;justify-content:space-between}.arx-guide-card section small{color:#82afbb;font-size:8px}.arx-guide-card section em{color:#f6d365;font-size:8px;font-style:normal}.arx-guide-card section>div{display:grid;grid-template-columns:repeat(2,1fr);gap:5px;margin-top:9px}.arx-guide-card section span{color:#789eaa;font-size:9px}.arx-guide-card section span.seen{color:#8ef0cf}.arx-result-card{width:min(570px,100%);text-align:center}.arx-result-card.accepted{border-color:rgba(142,240,207,.45)}.arx-result-card.rejected{border-color:rgba(249,115,103,.45)}.arx-result-card p{margin:14px auto;max-width:470px}.arx-chance{display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin:15px 0}.arx-chance span{padding:8px;border-radius:6px;background:rgba(42,91,106,.35);color:#8db6c0;font-size:7px}.arx-chance b{display:block;margin-top:4px;color:#eafaff;font-size:13px}.arx-award{margin:15px auto 20px}.arx-award span,.arx-award small{display:block}.arx-award span{color:#f6d365;font:800 31px Georgia,serif}.arx-award small{color:#91bac4;font-size:7px}.arx-store-warning{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:18px 0}.arx-store-warning span{padding:12px;border:1px solid rgba(249,115,103,.28);border-radius:8px;background:rgba(100,43,47,.18)}.arx-store-warning small,.arx-store-warning b{display:block}.arx-store-warning small{color:#f2b3a8;font-size:8px}.arx-store-warning b{margin-top:4px}.arx-vessel-card{width:min(1050px,100%)}.arx-vessel-figure{position:relative;height:310px;margin:18px 0;padding:20px;overflow:hidden;border:1px solid rgba(125,211,252,.18);border-radius:12px;background:radial-gradient(circle at 60% 90%,rgba(62,137,160,.35),transparent 55%),linear-gradient(#08283d,#0c4258)}.arx-vessel-figure>img{position:absolute;left:4%;right:4%;bottom:10px;width:92%;height:88%;object-fit:contain;transform-origin:right bottom}.ship-fishing>img{transform:scaleX(.68) scaleY(.78)}.ship-coastal>img{transform:scaleX(.8) scaleY(.85)}.ship-global>img{transform:scaleX(.92) scaleY(.94)}.ship-icebreaker>img{transform:scaleX(1) scaleY(1.02)}.ship-nuclear>img{transform:scaleX(1.08) scaleY(1.06)}.arx-deck-line{position:absolute;left:9%;right:41%;top:29%;height:62%}.arx-deck-module{position:absolute;left:calc(2% + var(--module-index)*12%);bottom:20%;min-width:58px;padding:7px 5px;border:2px solid #f6d365;border-radius:5px;background:rgba(8,39,55,.92);color:#fff2ac;font-size:7px;font-weight:900;text-align:center}.arx-deck-module.helideck{bottom:4%;border-radius:50%;border-color:#8ef0cf;color:#8ef0cf}.arx-deck-module.aircraft{bottom:36%;border-color:#f7a766;color:#ffd2a3}.arx-bow-label{display:none!important;position:absolute;right:6%;bottom:13%;color:#88bbc8;font-size:8px;font-weight:900}.arx-vessel-facts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:13px 0}.arx-vessel-facts span{padding:10px;border-radius:8px;background:rgba(30,79,96,.48)}.arx-vessel-facts small,.arx-vessel-facts b{display:block}.arx-vessel-facts small{color:#82adba;font-size:7px}.arx-vessel-facts b{margin-top:4px;font-size:9px}.arx-vessel-columns{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}.arx-manifest{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}.arx-manifest>div{display:flex;gap:8px;align-items:center;padding:7px;border-radius:7px;background:rgba(30,79,96,.35)}.arx-manifest img{width:38px;height:38px;border-radius:9px;object-fit:cover}.arx-manifest b,.arx-manifest small{display:block}.arx-manifest b{font-size:9px}.arx-manifest small{margin-top:2px;color:#8eb7c3;font-size:7px}.arx-equipment-list{display:grid;gap:5px;margin:0;padding:0;list-style:none}.arx-equipment-list li{display:flex;justify-content:space-between;gap:8px;padding:8px;border-radius:7px;background:rgba(30,79,96,.35)}.arx-equipment-list b{font-size:9px}.arx-equipment-list span{color:#8eb7c3;font-size:7px;text-align:right}.arx-journal{margin-top:18px;padding:13px;border:1px solid rgba(166,230,244,.16);border-radius:9px;background:rgba(15,54,70,.4)}.arx-journal p{margin:5px 0;padding-left:10px;border-left:2px solid rgba(246,211,101,.4);color:#aacbd3;font-size:9px}.arx-image-note{color:#6f9eab!important;font-size:7px!important;text-align:center}
-      @media(max-width:760px){#arx-mobile-toggle{display:block}.arx-sidebar{display:none;left:auto;right:10px;top:76px;width:min(286px,calc(100vw - 20px));max-height:calc(100vh - 150px)}.arx-sidebar.open{display:block}.arx-side-head button{display:block}.arx-modal{padding:10px}.arx-modal-card{max-height:calc(100vh - 20px);padding:20px 15px}.arx-port-summary,.arx-grid,.arx-vessel-columns{grid-template-columns:1fr}.arx-resupply,.arx-target-facts,.arx-vessel-facts,.arx-store-warning{grid-template-columns:1fr 1fr}.arx-wildlife-card{grid-template-columns:1fr}.arx-photo,.arx-photo img{min-height:230px}.arx-modal-card h2{font-size:25px}.arx-media.hero,.arx-media.result{margin:-20px -15px 16px}.arx-vessel-figure{height:220px}.arx-deck-module{min-width:45px;padding:5px 3px;font-size:6px}.arx-manifest{grid-template-columns:1fr}.arx-operation li{grid-template-columns:24px 1fr}.arx-operation li>span{grid-column:2}}
-    `;
-    document.head.appendChild(style);
-    style.textContent+=`
-      .arx-store-list{grid-template-columns:1fr!important}.arx-store-details{padding:0;overflow:hidden}.arx-store-details>summary{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:14px;list-style:none;cursor:pointer}.arx-store-details>summary::-webkit-details-marker{display:none}.arx-store-details>summary:after{content:'＋';flex:0 0 auto;color:#7dd3fc;font-size:17px}.arx-store-details[open]>summary:after{content:'−'}.arx-store-details>summary span{min-width:0}.arx-store-details>summary b,.arx-store-details>summary small{display:block}.arx-store-details>summary b{color:#eff9fb;font-size:12px}.arx-store-details>summary small{margin-top:4px;color:#82afbc;font-size:7px;line-height:1.35;letter-spacing:.07em}.arx-store-details>summary em{margin-left:auto;color:#f6d365;font-size:9px;font-style:normal;white-space:nowrap}.arx-detail-split{display:grid;grid-template-columns:minmax(220px,.9fr) 1.35fr;gap:16px;padding:0 14px 14px;border-top:1px solid rgba(166,230,244,.13)}.arx-detail-split>.arx-media{height:210px;margin:14px 0 0}.arx-detail-split>div{padding-top:7px}.arx-detail-split p{min-height:0}.arx-spec-list{padding-left:18px;color:#b5d0d6;font-size:9px;line-height:1.6}.arx-card button.danger{border:1px solid rgba(249,115,103,.38);background:rgba(111,45,52,.6);color:#ffd0c9}.arx-card button.danger:hover{background:rgba(145,54,61,.72)}.arx-complete{text-align:left}.arx-complete>small,.arx-complete>h2,.arx-complete>p{text-align:center}.arx-complete>button{margin-top:16px}.arx-vessel-overview>header>small{color:#7dd3fc;font-size:8px;font-weight:900;letter-spacing:.16em}.arx-vessel-overview>header h2{margin:7px 0 8px;color:#f4fbfc;font:800 30px/1.05 Georgia,serif}.arx-vessel-overview>header p{margin:0;color:#a9cbd4;font-size:11px;line-height:1.5}.ship-fishing>img,.ship-trawler>img,.ship-coastal>img,.ship-global>img,.ship-icebreaker>img,.ship-nuclear>img{transform:none}.ship-global>img,.ship-icebreaker>img,.ship-nuclear>img{width:96%;height:94%;left:2%;right:2%;bottom:4px}
-      @media(max-width:760px){.arx-detail-split{grid-template-columns:1fr}.arx-detail-split>.arx-media{height:180px}.arx-store-details>summary{padding:12px}.arx-store-details>summary em{font-size:8px}.arx-vessel-overview>header h2{font-size:25px}}
-    `;
+      #arx-root{font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#eafaff}#arx-root *{box-sizing:border-box}#arx-root button,#arx-root a{touch-action:manipulation}.arx-sidebar{position:fixed;z-index:5;left:16px;top:96px;width:270px;max-height:calc(100vh - 118px);padding:13px;overflow:auto;border:1px solid rgba(166,230,244,.28);border-radius:13px;background:rgba(4,31,49,.88);box-shadow:0 14px 40px rgba(0,17,28,.34);backdrop-filter:blur(14px)}.arx-side-head{display:flex;justify-content:space-between;gap:10px;align-items:start}.arx-side-head small,.arx-metrics small,.arx-data small,.arx-nav small,.arx-papers>small,.arx-deployments>small{display:block;color:#82b7c7;font-size:7px;font-weight:800;letter-spacing:.12em}.arx-side-head b{display:block;margin-top:3px;color:#f6d365;font-size:16px}.arx-side-head button{display:none;border:0;background:transparent;color:#9cc6d0;font-size:22px}.arx-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin:11px 0}.arx-metrics span{padding:7px 5px;border-radius:7px;background:rgba(62,113,131,.25);text-align:center}.arx-metrics b{display:block;margin-top:3px;font-size:10px}.arx-metrics em{display:block;margin-top:2px;color:#91bac4;font-size:7px;font-style:normal;font-weight:800}.arx-data{padding:10px;border:1px solid rgba(246,211,101,.2);border-radius:9px;background:rgba(13,55,72,.58)}.arx-data>div{display:flex;justify-content:space-between;align-items:end}.arx-data>div b{color:#fff4bd;font-size:20px}.arx-data>i{position:relative;display:block;height:7px;margin:8px 0;border-radius:5px;background:#214f63}.arx-data>i em{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,#7dd3fc,#f6d365)}.arx-data>i u{position:absolute;top:-3px;width:1px;height:13px;background:#fff}.arx-data p{margin:7px 0 9px;color:#9bc5d0;font-size:9px;line-height:1.35}.arx-data button,.arx-card button,.arx-modal-card>button:not(.arx-close),.arx-modal-actions button,.arx-species button,.arx-resupply-all{width:100%;padding:9px;border:0;border-radius:7px;background:#f6d365;color:#17323b;font-size:8px;font-weight:900;letter-spacing:.09em;cursor:pointer}.arx-data button:disabled,.arx-card button:disabled,.arx-modal-actions button:disabled,.arx-resupply-all:disabled{background:#315766;color:#7896a0;cursor:default}.arx-nav{display:flex;width:100%;gap:10px;align-items:center;margin-top:9px;padding:9px;border:1px solid rgba(125,211,252,.22);border-radius:9px;background:rgba(12,54,71,.62);color:#eafaff;text-align:left;cursor:pointer}.arx-nav.empty{cursor:default}.arx-nav>span{display:grid;place-items:center;flex:0 0 34px;height:34px;border:1px solid rgba(246,211,101,.55);border-radius:50%;color:#f6d365;font-size:22px}.arx-nav div{min-width:0}.arx-nav b,.arx-nav em{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.arx-nav b{margin-top:3px;font-size:10px}.arx-nav em{margin-top:3px;color:#8bc2d0;font-size:8px;font-style:normal}.arx-side-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}.arx-side-actions button{padding:7px 4px;border:1px solid rgba(166,230,244,.2);border-radius:6px;background:transparent;color:#a9d1dc;font-size:7px;font-weight:800;cursor:pointer}.arx-sidebar footer{margin-top:8px;color:#6f9eab;font-size:7px;text-align:center}.arx-papers,.arx-deployments{margin-top:9px;padding:9px;border:1px solid rgba(125,211,252,.16);border-radius:8px;background:rgba(12,54,71,.45)}.arx-papers>div,.arx-deployments>div{display:flex;justify-content:space-between;gap:8px;padding-top:7px}.arx-papers span,.arx-deployments span{min-width:0;color:#c7e3e9;font-size:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.arx-papers span em,.arx-deployments span em{display:block;margin-top:2px;color:#709daa;font-size:7px;font-style:normal}.arx-papers b,.arx-deployments b{color:#f6d365;font-size:8px}#arx-mobile-toggle{display:none;position:fixed;z-index:7;right:14px;bottom:16px;padding:10px 12px;border:1px solid rg
 
-===== resource-warning =====
-NOT FOUND
+===== updateResourceWarning =====
+ot]||autosaveSuspended)return false;
+    try{const payload=createGameSave();localStorage.setItem(SAVE_KEYS[slot],JSON.stringify(payload));refreshMenu();if(slot!=='auto')analytics.track('game_saved',{save_slot:slot,save_reason:reason});return true;}catch(error){showToast('SAVE FAILED — BROWSER STORAGE IS NOT AVAILABLE',2600);return false;}
+  }
+  function scheduleAutosave(delay=450){if(!state.started||autosaveSuspended)return;clearTimeout(autosaveTimer);autosaveTimer=setTimeout(()=>saveGame('auto','state_change'),delay);}
+  function restoreGameSave(payload,source='auto'){
+    if(!payload?.navigation||!payload?.research)return false;
+    try{
+      const nav=safeJson(payload.navigation)||{};Object.assign(state,nav,{started:true,gameOver:false,moving:false,commandActive:false,ramming:false,ramClock:0});state.track=Array.isArray(nav.track)&&nav.track.length?nav.track:[{x:state.x,y:state.y}];
+      state.tx=Number.isFinite(nav.tx)?nav.tx:state.x;state.ty=Number.isFinite(nav.ty)?nav.ty:state.y;
+      checkpoint=payload.checkpoint||checkpoint;currentPortCity=payload.currentPortName?cityLabels.find(item=>item.name===payload.currentPortName)||null:null;
+      research?.restoreCheckpoint?.(payload.research);pendingResearchTargetId=null;announcedWeatherEvent=null;iceFloes.length=0;wakeFloes.length=0;wakeTrail.length=0;brokenIceChannels.length=0;brokenIceGrid.clear();
+      ui.gameOver.classList.add('hidden');ui.fuelLevel.style.width=state.fuel+'%';ui.foodLevel.style.width=state.food+'%';updateResourceWarning();
+      updateVesselButton(research?.getVesselModifiers?.()||vesselModifiers());zoomLevel=(research?.getVesselModifiers?.()||vesselModifiers()).minZoom||zoomLevel;setZoom(0,true);
+      if(currentPortCity&&state.dockedPort)research?.enterPort?.(currentPortCity,{resume:true});else research?.leavePort?.();
+      menuOpen=false;ui.welcome.classList.add('hidden');lastResearchAnalytics=research?.getState?.()||null;showToast(`EXPEDITION LOADED — ${payload.meta?.location||'ARCTIC OCEAN'}`,2400);
+      analytics.track(source==='auto'?'continue_game':'load_game',{save_slot:source,save_age_hours:Math.round((Date.now()-Date.parse(payload.savedAt||Date.now()))/360000)/10});scheduleAutosave(900);return true;
+    }catch(error){showToast('COULD NOT LOAD THIS SAVE',2600);return false;}
+  }
+  function saveDescription(save){if(!save?.meta)return'Empty slot';const m=save.meta,date=new Date(m.savedAt||save.savedAt);return`${m.location||'Arctic Ocean'} · ${m.vessel||'Research Vessel'} · ${m.missions||0} missions · ${new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(m.money||0)} · ${date.toLocaleString()}`;}
+  function slotMarkup(slot,mode){const save=readSave(slot),label=slot==='auto'?'AUTOSAVE':`SAVE SLOT ${slot.slice(-1)}`,button=mode==='save'?'SAVE':save?'LOAD':'EMPTY';return`<div class="save-slot ${save?'':'empty'}"><div><b>${label}</b><span>${save?saveDescription(save):'No expedition saved here.'}</span>${save?`<small>Game ${save.gameVersion||'earlier version'}</small>`:''}</div><button type="button" data-${mode}-slot="${slot}" ${(!save&&mode==='load')||slot==='auto'&&mode==='save'?'disabled':''}>${button}</button></div>`;}
+  function showTitlePane(id='title-main'){['title-main','title-load','title-save','title-help'].forEach(name=>document.getElementById(name)?.classList.toggle('hidden',name!==id));}
+  function refreshMenu(){
+    const auto=readSave('auto'),continueButton=document.getElementById('continue-button'),saveButton=document.getElementById('save-button'),summary=document.getElementById('continue-summary'),loadSlots=document.getElementById('load-slots'),saveSlots=document.getElementById('save-slots');
+    const validAuto=!!(auto?.research?.playerConfigured&&auto?.navigation?.started);
+    if(continueButton){continueButton.textContent=state.started?'RETURN TO EXPEDITION':'CONTINUE EXPEDITION';continueButton.classList.toggle('hidden',!state.started&&!validAuto);}
+    saveButton?.classList.toggle('hidden',!state.started);
+    if(summary)summary.textContent=state.started?'Game paused. Return when ready.':validAuto?saveDescription(auto):'';
+    const slots=['slot1','slot2','slot3'];if(loadSlots)loadSlots.innerHTML=slots.map(slot=>slotMarkup(slot,'load')).join('');if(saveSlots)saveSlots.innerHTML=slots.map(slot=>slotMarkup(slot,'save')).join('');
+  }
+  function openGameMenu(){menuOpen=true;ui.welcome.classList.remove('hidden');showTitlePane('title-main');refreshMenu();analytics.track('game_menu_opened',{menu_context:state.started?'in_game':'title'});}
+  function resumeGame(){if(!state.started)return;menuOpen=false;ui.welcome.classList.add('hidden');analytics.track('game_resumed');}
+  function beginFreshNewGame(){
+    try{localStorage.removeItem(SAVE_KEYS.auto);}catch(error){}
+    menuOpen=false;ui.welcome.classList.add('hidden');
+    try{requestExpeditionStart();}
+    catch(error){console.error('NEW GAME START FAILED',error);menuOpen=true;ui.welcome.classList.remove('hidden');showToast('NEW GAME COULD NOT START · RELOAD AND TRY AGAIN',3600);return false;}
+    try{analytics.track('new_game');}catch(error){}
+    return true;
+  }
+  function startNewGame(){
+    const params=new URLSearchParams(location.search);
+    if(params.get('new')==='1')return beginFreshNewGame();
+    try{const url=new URL(location.href);url.searchParams.set('new','1');url.searchParams.set('build','23n');location.replace(url.href);}
+    catch(error){beginFreshNewGame();}
+  }
+  function semanticAnalytics(){
+    const next=research?.getState?.();if(!next)return;const prev=lastResearchAnalytics;if(prev){
+      const completedBefore=new Set((prev.completed||[]).map(item=>item.id));for(const item of next.completed||[])if(!completedBefore.has(item.id))analytics.track('mission_completed',{mission_id:item.id||'',mission_kind:item.kind||'',mission_title:item.shortTitle||item.title||'',data_gain:item.dataGain||0,reward:item.reward||0});
+      const papersBefore=new Set((prev.papers||[]).map(item=>item.id)),newPapers=(next.papers||[]).filter(paper=>!papersBefore.has(paper.id));for(const paper of newPapers)analytics.track('publication_accepted',{paper_tier:paper.tier||'',journal:paper.journal||'',data_used:paper.data||0,award:paper.award||0,initial_citations:paper.initialCitations||0});if((next.publishAttempts||0)>(prev.publishAttempts||0)&&!newPapers.length)analytics.track('publication_rejected',{attempt_number:next.publishAttempts||0,science_data:next.data||0});
+      const targetBefore=new Map
 
-===== resource-update-near =====
-ui.fuelLevel.style.width=state.fuel+'%';ui.foodLevel.style.width=state.food+'%';updateResourceWarning();
+===== fuel width calls =====
+nction saveGame(slot='auto',reason='auto'){
+    if(!state.started||!SAVE_KEYS[slot]||autosaveSuspended)return false;
+    try{const payload=createGameSave();localStorage.setItem(SAVE_KEYS[slot],JSON.stringify(payload));refreshMenu();if(slot!=='auto')analytics.track('game_saved',{save_slot:slot,save_reason:reason});return true;}catch(error){showToast('SAVE FAILED — BROWSER STORAGE IS NOT AVAILABLE',2600);return false;}
+  }
+  function scheduleAutosave(delay=450){if(!state.started||autosaveSuspended)return;clearTimeout(autosaveTimer);autosaveTimer=setTimeout(()=>saveGame('auto','state_change'),delay);}
+  function restoreGameSave(payload,source='auto'){
+    if(!payload?.navigation||!payload?.research)return false;
+    try{
+      const nav=safeJson(payload.navigation)||{};Object.assign(state,nav,{started:true,gameOver:false,moving:false,commandActive:false,ramming:false,ramClock:0});state.track=Array.isArray(nav.track)&&nav.track.length?nav.track:[{x:state.x,y:state.y}];
+      state.tx=Number.isFinite(nav.tx)?nav.tx:state.x;state.ty=Number.isFinite(nav.ty)?nav.ty:state.y;
+      checkpoint=payload.checkpoint||checkpoint;currentPortCity=payload.currentPortName?cityLabels.find(item=>item.name===payload.currentPortName)||null:null;
+      research?.restoreCheckpoint?.(payload.research);pendingResearchTargetId=null;announcedWeatherEvent=null;iceFloes.length=0;wakeFloes.length=0;wakeTrail.length=0;brokenIceChannels.length=0;brokenIceGrid.clear();
+      ui.gameOver.classList.add('hidden');ui.fuelLevel.style.width=state.fuel+'%';ui.foodLevel.style.width=state.food+'%';updateResourceWarning();
+      updateVesselButton(research?.getVesselModifiers?.()||vesselModifiers());zoomLevel=(research?.getVesselModifiers?.()||vesselModifiers()).minZoom||zoomLevel;setZoom(0,true);
+      if(currentPortCity&&state.dockedPort)research?.enterPort?.(currentPortCity,{resume:true});else research?.leavePort?.();
+      menuOpen=false;ui.welcome.classList.add('hidden');lastResearchAnalytics=research?.getState?.()||null;showToast(`EXPEDITION LOADED — ${payload.meta?.location||'ARCTIC OCEAN'}`,2400);
+      analytics.track(source==='auto'?'continue_game':'load_game',{save_slot:source,save_age_hours:Math.round((Date.now()-Date.parse(payload.savedAt||Date.now()))/360000)/10});scheduleAutosave(900);return true;
+    }catch(error){showToast('COULD NOT LOAD THIS SAVE',2600);return false;}
+  }
+  function saveDescription(save){if(!save?.meta)return'Empty slot';const m=save.meta,date=new Date(m.savedAt||save.savedAt);return`${m.location||'Arctic Ocean'} · ${m.vessel||'Research Vessel'} · ${m.missions||0} missions · ${new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(m.money||0)} · ${date.toLocaleString()}`;}
+  function slotMarkup(slot,mode){const save=readSave(slot),label=slot==='auto'?'AUTOSAVE':`SAVE SLOT ${slot.slice(-1)}`,button=mode==='save'?'SAVE':save?'LOAD':'EMPTY';return`<div class="save-slot ${save?'':'empty'}"><div><b>${label}</b><span>${save?saveDescription(save):'No expedition saved here.'}</span>${save?`<small>Game ${save.gameVersion||'earlier version'}</small>`:''}</div><button type="button" data-${mode}-slot="${slot}" ${(!save&&mode==='load')||slot==='auto'&&mode==='save'?'disabled':''}>${button}</button></div>`;}
+  function showTitlePane(id='title-main'){['title-main','title-load','title-save','title-help'].forEach(name=>document.getElementById(name)?.classList.toggle('hidden',name!==id));}
+  function refreshMenu(){
+    const auto=readSave('auto'),continueButton=document.getElementById('continue-button'),saveButton=document.getElementById('save-button'),summary=document.getElementById('continue-summary'),loadSlots=document.getElementById('load-slots'),saveSlots=document.getElementById('save-slots');
+    const validAuto=!!(auto?.research?.playerConfigured&&auto?.navigation?.started);
+    if(continueButton){continueButton.textContent=state.started?'RETURN TO EXPEDITION':'CONTINUE EXPEDITION';continueButton.classList.toggle('hidden',!state.started&&!validAuto);}
+    saveButton?.classList.toggle('hidden',!state.started);
+    if(summary)summary.textContent=state.started?'Game paused. Return when ready.':validAuto?saveDescription(auto):'';
+    const slots=['slot1','slot2','slot3'];if(loadSlots)loadSlots.innerHTML=slots.map(slot=>slotMarkup(slot,'load')).join('');if(saveSlots)saveSlots.innerHTML=slots.map(slot=>slotMarkup(slot,'save')).join('');
+  }
+  function openGameMenu(){menuOpen=true;ui.welcome.classList.remove('hidden');showTitlePane('title-main');refreshMenu();analytics.track('game_menu_opened',{menu_context:state.started?'in_game':'title'});}
+  function resumeGame(){if(!state.started)return;menuOpen=false;ui.welcome.classList.add('hidden');analytics.track('game_resumed');}
+  function beginFreshNewGame(){
+    try{localStorage.removeItem(SAVE_KEYS.auto);}catch(error){}
+    menuOpen=false;ui.welcome.classList.add('hidden');
+    try{requestExpeditionStart();}
+    catch(error){console.error('NEW GAME START FAILED',error);menuOpen=true;ui.welcome.classList.remove('hidden');showToast('NEW GAME COULD NOT START · RELOAD AND TRY AGAIN',3600);return false;}
+    try{analytics.track('new_game');}catch(error){}
+    return true;
+  }
+  function startNewGame(){
+    const params=new URLSearchParams(location.search);
+    if(params.get('new')==='1')return beginFreshNewGame();
+    try{const url=new URL(location.href);url.searchParams.set('new','1');url.searchParams.set('build','23n');location.replace(url.href);}
+    catch(error){beginFreshNewGame();}
+  }
+  function semanticAnalytics(){
+    const next=research?.getState?.();if(!next)return;const prev=lastResearchAnalytics;if(prev){
+      const completedBefore=new Set((prev.completed||[]).map(item=>item.id));for(const item of next.completed||[])if(!completedBefore.has(item.id))analytics.track('mission_completed',{mission_id:item.id||'',mission_kind:item.kind||'',mission_title:item.shortTitle||item.title||'',data_gain:item.dataGain||0,reward:item.reward||0});
+      const papersBefore=new Set((prev.papers||[]).map(item=>item.id)),newPapers=(next.papers||[]).filter(paper=>!papersBefore.has(paper.id));for(const paper of newPapers)analytics.track('publication_accepted',{paper_tier:paper.tier||'',journal:paper.journal||'',data_used:paper.data||0,award:paper.award||0,initial_citations:paper.initialCitations||0});if((next.publishAttempts||0)>(prev.publishAttempts||0)&&!newPapers.length)analytics.track('publication_rejected',{attempt_number:next.
