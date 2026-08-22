@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '.github/workflows/p23o-inspect.yml'
+      - '.github/scripts/p23o_inspect.py'
 jobs:
   inspect:
     runs-on: ubuntu-latest
