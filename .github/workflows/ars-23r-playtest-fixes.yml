@@ -1,0 +1,106 @@
+name: ARS 23r playtest fixes
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ars-23r-playtest-fixes.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply playtest fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              p=Path(path)
+              text=p.read_text()
+              count=text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 match, found {count}')
+              p.write_text(text.replace(old,new,1))
+
+          # HUD: put vessel -> cash -> fuel/food together and cache-bust changed files.
+          p=Path('index.html')
+          text=p.read_text()
+          old='''      <div class="status">\n        <span class="ice-status"><small>SEA ICE</small><b id="ice-condition">OPEN WATER</b></span>\n        <span class="weather-status"><small>WEATHER</small><b id="weather-value">CLEAR</b></span>\n        <span class="cash-status"><small>CASH</small><b id="cash-balance">$185,000</b></span>\n        <span class="date-status"><small>DATE</small><b id="calendar-date">01 SEP 2026</b></span>\n        <span class="fuel-status"><small>FUEL</small><b id="fuel-value">100%</b><i><em id="fuel-level"></em></i></span>\n        <span class="food-status"><small>FOOD</small><b id="food-value">100%</b><i><em id="food-level"></em></i></span>\n        <span class="position-status"><small>POSITION</small><b id="position">78.2&deg;N 6.0&deg;E</b></span>\n        <span class="speed-status"><small>SPEED</small><b id="speed">0.0 KN</b></span>\n        <button id="game-menu-button" class="game-menu-button" type="button">MENU</button>\n        <button id="vessel-button" class="vessel-button" type="button" aria-label="Open current vessel information"><img id="vessel-button-image" src="assets/vessels/fishing-vessel.webp" alt=""></button>\n      </div>'''
+          new='''      <div class="status">\n        <span class="ice-status"><small>SEA ICE</small><b id="ice-condition">OPEN WATER</b></span>\n        <span class="weather-status"><small>WEATHER</small><b id="weather-value">CLEAR</b></span>\n        <span class="date-status"><small>DATE</small><b id="calendar-date">01 SEP 2026</b></span>\n        <span class="position-status"><small>POSITION</small><b id="position">78.2&deg;N 6.0&deg;E</b></span>\n        <span class="speed-status"><small>SPEED</small><b id="speed">0.0 KN</b></span>\n        <button id="game-menu-button" class="game-menu-button" type="button">MENU</button>\n        <button id="vessel-button" class="vessel-button" type="button" aria-label="Open current vessel information"><img id="vessel-button-image" src="assets/vessels/fishing-vessel.webp" alt=""></button>\n        <span class="cash-status"><small>CASH</small><b id="cash-balance">$185,000</b></span>\n        <span class="fuel-status"><small>FUEL</small><b id="fuel-value">100%</b><i><em id="fuel-level"></em></i></span>\n        <span class="food-status"><small>FOOD</small><b id="food-value">100%</b><i><em id="food-level"></em></i></span>\n      </div>'''
+          if text.count(old)!=1:
+              raise SystemExit(f'index HUD: expected 1 match, found {text.count(old)}')
+          text=text.replace(old,new,1).replace('expedition-23q-photo-integration','expedition-23r-playtest-fixes')
+          p.write_text(text)
+
+          # Main HUD polish: cash stays compact/transparent on portrait; title screen suppresses dev/research controls.
+          p=Path('style.css')
+          text=p.read_text()
+          text += '''\n\n/* ARS expedition-23r playtest polish */\nbody:has(#welcome:not(.hidden)) #arx-mobile-toggle,\nbody:has(#welcome:not(.hidden)) #arx-dev-toggle{visibility:hidden!important;pointer-events:none!important}\n@media(max-width:760px) and (orientation:portrait){\n  .cash-status{position:static!important;left:auto!important;top:auto!important;display:block!important;width:auto!important;height:auto!important;padding:0!important;border-radius:0!important;background:transparent!important;text-align:right!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}\n  .cash-status small{display:block!important;margin:0!important;color:#93bdc8!important;font-size:5px!important;letter-spacing:.08em!important}\n  .cash-status b{display:block!important;margin:3px 0 0!important;color:#f6d365!important;font-size:9px!important;letter-spacing:.02em!important}\n}\n'''
+          p.write_text(text)
+
+          # Correct corer classification/photo semantics.
+          replace_once('expedition.js',
+              "    shallowCorer: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Giant-box-corer%20hg.jpg', alt:'Scientific sediment corer being deployed from a research vessel', credit:'Hannes Grobe / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Giant-box-corer_hg.jpg'},",
+              "    shallowCorer: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Giant-box-corer%20hg.jpg', alt:'Medium-duty box corer being deployed from a research vessel', credit:'Hannes Grobe / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Giant-box-corer_hg.jpg'},",
+              'medium box-corer photo')
+          replace_once('expedition.js',
+              "    sedimentCorer: {src:'https://commons.wikimedia.org/wiki/Special:FilePath/Giant-box-corer%20hg.jpg', alt:'Large scientific box corer during research-vessel operations', credit:'Hannes Grobe / Wikimedia Commons', source:'https://commons.wikimedia.org/wiki/File:Giant-box-corer_hg.jpg'},",
+              "    sedimentCorer: {src:'assets/equipment/box-corer.webp', alt:'Deep box corer and bottom-camera package for heavy research-vessel operations', credit:'ARS photo archive', source:''},",
+              'deep box-corer photo')
+          replace_once('expedition.js',
+              "    'shallow-coring-kit': equipment({id:'shallow-coring-kit', name:'Shallow Corer & Sample Kit', price:21000, slotType:'light', slots:2, tier:1, deckTag:'CORER', specialties:['benthic','coastal-ecology'], crew:[{specialties:['benthic','coastal-ecology'], minCareer:'grad', count:1}], description:'Hand-deployed push corer, small gravity corer and sectioning tools for fjord sediment.', specs:['Multiple short sediment cores','Shallow hand or davit deployment','Core liner and sectioning kit'], media:MEDIA.shallowCorer}),",
+              "    'shallow-coring-kit': equipment({id:'shallow-coring-kit', name:'Coastal Box Corer & Sample Kit', price:85000, slotType:'medium', slots:2, tier:2, deckTag:'BOX CORER', requiresEquipment:['coastal-a-frame'], specialties:['benthic','coastal-ecology'], crew:[{specialties:['benthic','coastal-ecology'], minCareer:'postdoc', count:1}], description:'Medium-duty box corer and sectioning kit for undisturbed fjord and shelf sediment.', specs:['Undisturbed box sediment sample','Coastal A-frame deployment','Postdoc-level deck lead'], media:MEDIA.shallowCorer}),",
+              'box corer equipment duty')
+          replace_once('expedition.js',
+              "    mission({id:'fjord-sediment', tier:'local', title:'Fjord Sediment Core Gradient', shortTitle:'SHALLOW CORES', specialties:['benthic','coastal-ecology'], equipment:['shallow-coring-kit'], data:15, reward:14800, supplies:5, workHours:30, minDistance:9, distanceRange:34, coastal:true, fjordPreferred:true, transect:true, stationCounts:{fishing:3,trawler:4,coastal:5,global:6,icebreaker:7,nuclear:8}, stationSpacingKm:4, media:MEDIA.sedimentCorer, description:'Recover short sediment cores from the inner fjord to the shelf and document the change in grain size and benthic material.', steps:['Prepare clean core liners','Lower the shallow corer','Recover an undisturbed core','Section and label sediment','Clean the corer for the next station']}),",
+              "    mission({id:'fjord-sediment', tier:'local', title:'Fjord Box-Corer Sediment Gradient', shortTitle:'BOX CORES', specialties:['benthic','coastal-ecology'], equipment:['shallow-coring-kit'], data:15, reward:14800, supplies:5, workHours:30, minDistance:9, distanceRange:34, coastal:true, fjordPreferred:true, transect:true, stationCounts:{fishing:3,trawler:4,coastal:5,global:6,icebreaker:7,nuclear:8}, stationSpacingKm:4, media:MEDIA.shallowCorer, description:'Recover undisturbed sediment boxes from the inner fjord to the shelf and document the change in grain size and benthic material.', steps:['Prepare clean sample trays','Rig the coastal box corer','Recover an undisturbed sediment box','Section and label sediment','Clean the corer for the next station']}),",
+              'box corer mission')
+
+          # Research opportunity/work-card button cleanup.
+          replace_once('expedition.js',
+              '<span><small>PAYMENT</small><b>ON COMPLETION</b></span>',
+              '',
+              'payment fact')
+          replace_once('expedition.js',
+              "    const result=resultTitle||'Research result',modal=root.querySelector('#arx-target-modal');",
+              "    const result=resultTitle||'Research result',modal=root.querySelector('#arx-target-modal');\n    const workActions=complete?'<button data-arx-action=\"acknowledge-research\">OKAY</button>':`${decline}<button data-arx-action=\"complete-target\" data-id=\"${target.id}\" ${canBegin?'':'disabled'}>${escapeHtml(primaryLabel)}</button>`;",
+              'research action state')
+          replace_once('expedition.js',
+              '<div class="arx-research-actions">${decline}<button data-arx-action="complete-target" data-id="${target.id}" ${canBegin?\'\':\'disabled\'}>${escapeHtml(primaryLabel)}</button><button data-arx-action="acknowledge-research" ${complete?\'\':\'disabled\'}>OKAY</button></div>',
+              '<div class="arx-research-actions ${complete?\'single\':\'\'}">${workActions}</div>',
+              'research action markup')
+          replace_once('expedition.js',
+              '.arx-research-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:12px}',
+              '.arx-research-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:12px}.arx-research-actions.single{grid-template-columns:1fr}',
+              'research action columns')
+
+          # Dock before current/collision handling can push an arrived vessel into the land mask.
+          replace_once('game.js',
+              "      let commanded=state.commandActive&&dist>arrivalRadius;const shouldBreak=commanded&&(currentProfile.breaking||aheadProfile.breaking);state.ramming=shouldBreak;",
+              "      let commanded=state.commandActive&&dist>arrivalRadius;if(!commanded&&state.portDestination){const arrivingPort=state.portDestination;enterPort(arrivingPort);return;}const shouldBreak=commanded&&(currentProfile.breaking||aheadProfile.breaking);state.ramming=shouldBreak;",
+              'port arrival ordering')
+
+          print('ARS 23r patch applied')
+          PY
+      - name: Validate JavaScript
+        run: |
+          node --check expedition.js
+          node --check game.js
+          grep -q 'expedition-23r-playtest-fixes' index.html
+          grep -q 'Coastal Box Corer & Sample Kit' expedition.js
+          grep -q "if(!commanded&&state.portDestination)" game.js
+      - name: Commit fixes and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/ars-23r-playtest-fixes.yml
+          git add index.html style.css expedition.js game.js
+          git commit -m 'Fix ARS 23r playtest regressions'
+          git push origin main
