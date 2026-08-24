@@ -1206,7 +1206,7 @@
     else if(!vessel.nuclearFuel&&state.fuel<=0){ui.fuelValue.textContent='0%';ui.fuelLevel.style.width='0%';endGame('OUT OF FUEL','Oh, no! Your expedition failed because you ran out of fuel! The ship is dead in the water and the crew is getting cold. Restart from last known port.');return;}
     else{
       const arrivalRadius=Math.max(2,3/zoomLevel),heading=dist>0?Math.atan2(dy,dx):state.angle-Math.PI/2,aheadDistance=Math.min(10,Math.max(4,dist)),aheadProfile=dist>0?iceNavigationProfileAt(state.x+Math.cos(heading)*aheadDistance,state.y+Math.sin(heading)*aheadDistance,vessel):currentProfile;
-      let commanded=state.commandActive&&dist>arrivalRadius;const shouldBreak=commanded&&(currentProfile.breaking||aheadProfile.breaking);state.ramming=shouldBreak;
+      let commanded=state.commandActive&&dist>arrivalRadius;if(!commanded&&state.portDestination){const arrivingPort=state.portDestination;enterPort(arrivingPort);return;}const shouldBreak=commanded&&(currentProfile.breaking||aheadProfile.breaking);state.ramming=shouldBreak;
       const driveProfile=state.ramming?(currentProfile.breaking?currentProfile:aheadProfile):currentProfile,normalCruise=Math.max(vessel.cruiseKnots*KNOT_TO_WORLD_SPEED,Math.min(vessel.maxKnots*KNOT_TO_WORLD_SPEED,dist*1.1+30));
       let cruise=commanded?normalCruise*driveProfile.speedFactor:0;const precisionNav=commanded&&(state.precisionNav||dist<75);if(precisionNav){state.precisionNav=true;state.angle=Math.atan2(dy,dx)+Math.PI/2;cruise=Math.min(cruise,vessel.cruiseKnots*KNOT_TO_WORLD_SPEED*.58);}
       if(commanded&&!vessel.nuclearFuel)state.fuel=Math.max(0,state.fuel-elapsedDays*(200/vessel.fuelEnduranceDays)*(state.ramming?3.5:1));
