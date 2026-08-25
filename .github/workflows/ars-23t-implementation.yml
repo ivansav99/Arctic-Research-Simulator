@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/ars-23t-patch.py'
+      - '.github/ars-23t-patch2.py'
 
 permissions:
   contents: write
@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: '3.x'
       - name: Apply ARS 23t patch
-        run: python .github/ars-23t-patch.py
+        run: python .github/ars-23t-patch2.py
       - name: Validate JavaScript
         run: |
           node --check expedition.js
@@ -30,7 +30,7 @@ jobs:
           grep -q "assets/vessels/coastal-rv.webp" expedition.js
           grep -q "GRANT NOT READY" expedition.js
           grep -q "context.preview" expedition.js
-          grep -q "Math.max(45,portBuffer)" game.js
+          grep -q "researchSitePortClear" game.js
           grep -q "preview:true" game.js
           grep -q "expedition-23t-grants-vessels-map" index.html
       - name: Commit changes
