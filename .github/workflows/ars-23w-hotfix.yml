@@ -1,0 +1,41 @@
+name: ARS 23w emergency hotfix
+
+on:
+  push:
+    paths:
+      - '.github/workflows/ars-23w-hotfix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  hotfix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Apply hotfix
+        run: python .github/ars-23w-hotfix.py
+      - name: Validate JavaScript syntax
+        run: |
+          node --check expedition.js
+          node --check game.js
+      - name: Validate runtime helper and requested fixes
+        run: |
+          grep -F "function pointIsSpaced" expedition.js
+          grep -F "global:'assets/vessels/global-rv.webp?v=23w'" expedition.js
+          grep -F "icebreaker:'assets/vessels/icebreaker.webp?v=23w'" expedition.js
+          grep -F "state.citations>=2000" expedition.js
+          ! grep -F "There is no minimum publication-count requirement" expedition.js
+          grep -F "expedition-23w-vessel-art-runtime-hotfix" index.html
+      - name: Commit repaired build
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add expedition.js index.html
+          git commit -m 'Fix vessel art and pointIsSpaced runtime crash'
+          git push origin main
