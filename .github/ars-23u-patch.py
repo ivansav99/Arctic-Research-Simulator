@@ -71,7 +71,7 @@ replace_once(
 # Prune port-overlap legacy opportunities and old saves with >2 live popups.
 sub_once(
     'expedition.js',
-    r"  function getMapTargets\(\) \{.*?\n  \}\n  function selectTarget",
+    r"  function getMapTargets\(\) \{.*?\n  \}\n  function resetWildlifeObservations",
     """  function getMapTargets() {
     const remove=new Set();
     if(callbacks.researchSitePortClear){
@@ -90,7 +90,7 @@ sub_once(
     }
     return state.targets.map(item=>({...item,mapEligible:eligible(item,item.weather?{type:item.weather}:null)}));
   }
-  function selectTarget""",
+  function resetWildlifeObservations""",
     'map target pruning'
 )
 
