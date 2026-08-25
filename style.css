@@ -335,3 +335,7 @@ body:has(#welcome:not(.hidden)) #arx-dev-toggle{visibility:hidden!important;poin
   .cash-status small{display:block!important;margin:0!important;color:#93bdc8!important;font-size:5px!important;letter-spacing:.08em!important}
   .cash-status b{display:block!important;margin:3px 0 0!important;color:#f6d365!important;font-size:9px!important;letter-spacing:.02em!important}
 }
+
+
+/* ARS expedition-23u circular navigation chart */
+#minimap,.minimap.expanded #minimap{border-radius:50%!important;clip-path:circle(50% at 50% 50%)!important;overflow:hidden!important}
