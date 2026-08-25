@@ -18,20 +18,6 @@ replace_once(
     'restore generated vessel art'
 )
 
-# Display generated ship profiles as complete images rather than cropping them.
-replace_once(
-    'expedition.js',
-    '<figure class=\\"arx-media compact\\"><img src=\\"${escapeHtml(image)}\\" alt=\\"Side view of ${escapeHtml(item.shipName||item.name)}\\"></figure>',
-    '<figure class=\\"arx-media compact arx-vessel-shop-image\\"><img src=\\"${escapeHtml(image)}\\" alt=\\"Side view of ${escapeHtml(item.shipName||item.name)}\\"></figure>',
-    'shipyard image class'
-)
-replace_once(
-    'expedition.js',
-    ".arx-detail-split>.arx-media{height:210px;margin:14px 0 0}.arx-detail-split>div{padding-top:7px}",
-    ".arx-detail-split>.arx-media{height:210px;margin:14px 0 0}.arx-vessel-shop-image{background:#0b3043}.arx-vessel-shop-image img{object-fit:contain!important;padding:6px}.arx-detail-split>div{padding-top:7px}",
-    'shipyard image fit'
-)
-
 # Add the helper that buildTarget already calls. Its absence currently throws
 # ReferenceError: Can't find variable: pointIsSpaced and interrupts gameplay.
 needle="  function targetSpacingKm() {\n    return {fishing:18,trawler:45,coastal:110,global:180,icebreaker:240,nuclear:300}[state.currentVessel]||18;\n  }\n"
