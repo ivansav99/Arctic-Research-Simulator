@@ -1,0 +1,50 @@
+name: ARS 23u behavior pass
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/ars-23u-patch.py'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Apply ARS 23u patch
+        run: python .github/ars-23u-patch.py
+      - name: Validate JavaScript
+        run: |
+          node --check expedition.js
+          node --check game.js
+      - name: Validate patch markers
+        run: |
+          grep -q "recentOpportunityTemplates" expedition.js
+          grep -q "opportunityCap=2" expedition.js
+          grep -q "PUBLISH ARTICLE" expedition.js
+          grep -q "shop-equipment" expedition.js
+          grep -q "canAutoOpenTarget" expedition.js
+          grep -q "unlockChimed" game.js
+          grep -q "grantPortBuffer" game.js
+          grep -q "Math.min(viewW,viewH)" game.js
+          grep -q "expedition-23u-field-opportunity-audio" index.html
+          grep -q "clip-path:circle" style.css
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add expedition.js game.js style.css index.html
+          if git diff --cached --quiet; then
+            echo "No code changes to commit"
+            exit 0
+          fi
+          git commit -m "Fix ARS field opportunities audio and grant range"
+          git push
