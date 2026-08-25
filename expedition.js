@@ -130,10 +130,10 @@
   const DATA_SCALE_BY_VESSEL = {fishing:3,trawler:5,coastal:12,global:40,icebreaker:100,nuclear:180};
 
   const VESSEL_IMAGES = {
-    coastal:'assets/vessels/coastal-rv.webp',
-    global:'assets/vessels/noaa-rv-brown.webp',
-    icebreaker:'https://commons.wikimedia.org/wiki/Special:FilePath/Polarforskningssekretariatet%20IMG%202551%20Oden%20Hjorthfjellet.jpg',
-    nuclear:'assets/vessels/nuclear-icebreaker.webp'
+    coastal:'assets/vessels/coastal-rv.webp?v=23w',
+    global:'assets/vessels/global-rv.webp?v=23w',
+    icebreaker:'assets/vessels/icebreaker.webp?v=23w',
+    nuclear:'assets/vessels/nuclear-icebreaker.webp?v=23w'
   };
   const VESSELS = {
     fishing: {
@@ -483,7 +483,7 @@
       player.career='postdoc'; recordScientist(player); promotionQueue.push({name:'Chief Scientist',career:'postdoc',papers:state.papers.length,missions:player.missions||0,message:`Congratulations, you finally earned your PhD degree! You reached postdoc status with ${state.papers.length} published papers and ${Math.floor(state.citations)} citations. You may now hire postdocs (one per 100 citations), purchase medium-duty science systems, commission a coastal-class research vessel, relocate your expedition to ports around the Arctic, and receive much more sophisticated postdoc-level research programs.`}); addLog('Chief Scientist promoted to postdoc · coastal R/V and medium equipment unlocked.'); refreshProgressionOpportunities('career-promotion');
     }
     if (player?.career==='postdoc' && state.citations>=2000) {
-      player.career='professor'; recordScientist(player); promotionQueue.push({name:'Chief Scientist',career:'professor',papers:state.papers.length,missions:player.missions||0,message:'Reaching 2,000 citations has earned professor status. There is no minimum publication-count requirement. Global research vessels, icebreakers and heavy equipment are unlocked. Professors lead the highest-complexity programs and can originate new grants while at sea.'}); addLog('Chief Scientist promoted to professor at 2,000 citations · global vessels, icebreakers and heavy equipment unlocked.'); refreshProgressionOpportunities('career-promotion');
+      player.career='professor'; recordScientist(player); promotionQueue.push({name:'Chief Scientist',career:'professor',papers:state.papers.length,missions:player.missions||0,message:`Reaching 2,000 citations has earned professor status with ${state.papers.length} published paper${state.papers.length===1?'':'s'}. Global research vessels, icebreakers and heavy equipment are unlocked. Professors lead the highest-complexity programs and can originate new grants while at sea.`}); addLog('Chief Scientist promoted to professor at 2,000 citations · global vessels, icebreakers and heavy equipment unlocked.'); refreshProgressionOpportunities('career-promotion');
     }
     if (promotionQueue.length) showNextPromotion();
   }
@@ -694,6 +694,10 @@
   }
   function targetSpacingKm() {
     return {fishing:18,trawler:45,coastal:110,global:180,icebreaker:240,nuclear:300}[state.currentVessel]||18;
+  }
+  function pointIsSpaced(point,items=[],minimumKm=0) {
+    if(!Number.isFinite(point?.lat)||!Number.isFinite(point?.lon)||minimumKm<=0)return true;
+    return !(items||[]).some(item=>Number.isFinite(item?.lat)&&Number.isFinite(item?.lon)&&geoDistance(point,item)<minimumKm);
   }
   function missionRewardScore(template,distanceKm,kind,actualWorkHours=template.workHours) {
     const ids=[...(template.equipment||[]),...(template.consumables||[])],unique=[...new Set(ids)];
