@@ -105,7 +105,7 @@
 
   const CAREERS = {
     grad: {id:'grad', name:'Graduate Student', short:'Grad Student', level:1, minCitations:0, salary:300, quality:.88, productivity:1, color:'#8ef0cf', next:'postdoc', promotion:{papers:2,citations:100}},
-    postdoc: {id:'postdoc', name:'Postdoctoral Researcher', short:'Postdoc', level:2, minCitations:100, salary:800, quality:1.12, productivity:1.35, color:'#7dd3fc', next:'professor', promotion:{papers:10,citations:1000}},
+    postdoc: {id:'postdoc', name:'Postdoctoral Researcher', short:'Postdoc', level:2, minCitations:100, salary:800, quality:1.12, productivity:1.35, color:'#7dd3fc', next:'professor', promotion:{papers:0,citations:2000}},
     professor: {id:'professor', name:'Professor', short:'Professor', level:3, minCitations:1000, salary:1900, quality:1.42, productivity:1.8, color:'#f6d365', next:null, promotion:null}
   };
   const SLOT_TYPES = ['light', 'medium', 'heavy'];
@@ -131,8 +131,8 @@
 
   const VESSEL_IMAGES = {
     coastal:'assets/vessels/coastal-rv.webp',
-    global:'assets/vessels/global-rv.webp',
-    icebreaker:'assets/vessels/icebreaker.webp',
+    global:'assets/vessels/noaa-rv-brown.webp',
+    icebreaker:'https://commons.wikimedia.org/wiki/Special:FilePath/Polarforskningssekretariatet%20IMG%202551%20Oden%20Hjorthfjellet.jpg',
     nuclear:'assets/vessels/nuclear-icebreaker.webp'
   };
   const VESSELS = {
@@ -482,8 +482,8 @@
     if (player?.career==='grad' && state.papers.length>=2 && state.citations>=100) {
       player.career='postdoc'; recordScientist(player); promotionQueue.push({name:'Chief Scientist',career:'postdoc',papers:state.papers.length,missions:player.missions||0,message:`Congratulations, you finally earned your PhD degree! You reached postdoc status with ${state.papers.length} published papers and ${Math.floor(state.citations)} citations. You may now hire postdocs (one per 100 citations), purchase medium-duty science systems, commission a coastal-class research vessel, relocate your expedition to ports around the Arctic, and receive much more sophisticated postdoc-level research programs.`}); addLog('Chief Scientist promoted to postdoc · coastal R/V and medium equipment unlocked.'); refreshProgressionOpportunities('career-promotion');
     }
-    if (player?.career==='postdoc' && state.papers.length>=10 && state.citations>=1000) {
-      player.career='professor'; recordScientist(player); promotionQueue.push({name:'Chief Scientist',career:'professor',papers:state.papers.length,missions:player.missions||0,message:'Ten published papers and 1,000 citations have earned professor status. Global research vessels, icebreakers and heavy equipment are unlocked. Professors lead the highest-complexity programs and can originate new grants while at sea.'}); addLog('Chief Scientist promoted to professor · global vessels, icebreakers and heavy equipment unlocked.'); refreshProgressionOpportunities('career-promotion');
+    if (player?.career==='postdoc' && state.citations>=2000) {
+      player.career='professor'; recordScientist(player); promotionQueue.push({name:'Chief Scientist',career:'professor',papers:state.papers.length,missions:player.missions||0,message:'Reaching 2,000 citations has earned professor status. There is no minimum publication-count requirement. Global research vessels, icebreakers and heavy equipment are unlocked. Professors lead the highest-complexity programs and can originate new grants while at sea.'}); addLog('Chief Scientist promoted to professor at 2,000 citations · global vessels, icebreakers and heavy equipment unlocked.'); refreshProgressionOpportunities('career-promotion');
     }
     if (promotionQueue.length) showNextPromotion();
   }
@@ -721,7 +721,7 @@
     const avoidPoints=[...state.targets,...state.offers,...(state.recentGrantSites||[])].filter(item=>item.status!=='completed');
     let point=template.fixedDestination ? {...template.fixedDestination} : null;
     let distance=0, bearing=0;
-    const spacing=options.nearby?18:targetSpacingKm(),context=()=>({template,origin,kind,distanceKm:distance,bearingDeg:bearing,avoidPoints,minimumSpacingKm:spacing,preferred:template.fixedDestination||null,...options});
+    const spacing=options.nearby?18:targetSpacingKm(),context=()=>({template,origin,kind,distanceKm:distance,bearingDeg:bearing,distanceWindow:window,avoidPoints,minimumSpacingKm:spacing,preferred:template.fixedDestination||null,...options});
     if (point) {
       distance=geoDistance(origin,point);
       if (!pointIsSpaced(point,avoidPoints,spacing) || (validator&&!validator(point,context()))) point=null;
@@ -810,7 +810,7 @@
   function generateOffers(port,{fresh=false}={}) {
     if(!port)return; const portId=normalizedPortId(port),cycle=`${portId}:${state.portVisits}`; if(!fresh&&state.grantOfferCycle===cycle)return; state.grantOfferCycle=cycle;
     const rng=seeded(`${portId}-${state.portVisits}-grants-v6-${playerScientist()?.career||'grad'}-${state.currentVessel}`),activeTemplates=new Set(activeGrants().map(item=>item.templateId));
-    const careerFloor=playerCareerLevel(),available=TEMPLATES.filter(item=>!item.weather&&(careerFloor<2||templateCareerLevel(item)>=careerFloor)&&templateSupportedByVessel(item)&&hasSpecialty(item)&&(eligible(item)||teamCouldDoWithEquipment(item)||teamCouldDoWithMoreCrew(item))&&!activeTemplates.has(item.id)&&!(state.droppedGrantTemplates||[]).includes(item.id)&&(item.unlockAfter||0)<=state.completed.length&&(!item.onlyPorts||item.onlyPorts.includes(portId))&&(state.grantCooldowns?.[`${portId}:${item.id}`]||0)<=state.elapsedDays);
+    const careerFloor=playerCareerLevel(),available=TEMPLATES.filter(item=>!item.weather&&templateCareerLevel(item)<=careerFloor&&templateSupportedByVessel(item)&&hasSpecialty(item)&&(eligible(item)||teamCouldDoWithEquipment(item)||teamCouldDoWithMoreCrew(item))&&!activeTemplates.has(item.id)&&!(state.droppedGrantTemplates||[]).includes(item.id)&&(item.unlockAfter||0)<=state.completed.length&&(!item.onlyPorts||item.onlyPorts.includes(portId))&&(state.grantCooldowns?.[`${portId}:${item.id}`]||0)<=state.elapsedDays);
     const teamLevel=playerCareerLevel(),postdocCount=state.scientists.filter(item=>item.career==='postdoc').length,professorCount=state.scientists.filter(item=>item.career==='professor').length,weighted=[];
     for(const template of available){const level=templateCareerLevel(template);let weight=teamLevel===1?(level===1?7:1):teamLevel===2?(level===2?12:level===1?1:2):(level===3?15:level===2?5:1);if(level===2)weight+=postdocCount*4+professorCount*2;if(level===3)weight+=professorCount*5;if(template.fjordPreferred&&teamLevel===1)weight+=2;for(let i=0;i<weight;i++)weighted.push(template);}
     for(let i=weighted.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[weighted[i],weighted[j]]=[weighted[j],weighted[i]];} const pool=[],seen=new Set(); for(const item of weighted)if(!seen.has(item.id)){seen.add(item.id);pool.push(item);}
