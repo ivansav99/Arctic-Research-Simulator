@@ -1363,7 +1363,8 @@
   function opportunityDiscoverySummary(target){
     const ids=participantIdsFor(target),people=state.scientists.filter(item=>ids.includes(item.id)),names=people.map(item=>item.name).filter(Boolean),fields=[...new Set(people.map(item=>specialtyById[item.specialty]?.name).filter(Boolean))];
     const gear=[...new Set([...(target.equipment||[]),...(target.consumables||[])])].map(id=>EQUIPMENT[id]?.name).filter(Boolean);
-    const science=names.length?`${names.join(names.length>2?', ':names.length===2?' & ':'')}${names.length>2?` & ${names.pop()}`:''} made this opportunity possible with ${fields.join(' / ')||'the science team'} expertise.`:`Your science team made this opportunity possible.`;
+    const scientistNames=names.length>2?`${names.slice(0,-1).join(', ')} & ${names.at(-1)}`:names.join(' & ');
+    const science=scientistNames?`${scientistNames} made this opportunity possible with ${fields.join(' / ')||'the science team'} expertise.`:`Your science team made this opportunity possible.`;
     const equipment=gear.length?`Required equipment: ${gear.join(' + ')}.`:'Required equipment: general field kit only.';
     return `<div class="arx-empty arx-opportunity-context"><b>WHY THIS OPPORTUNITY APPEARED</b><p>${escapeHtml(science)}</p><small>${escapeHtml(equipment)}</small></div>`;
   }
