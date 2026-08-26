@@ -5,6 +5,10 @@ on:
     branches: [reimplement-23x-safe]
     paths:
       - '.github/workflows/ars-23x-browser-smoke.yml'
+      - 'expedition.js'
+      - 'game.js'
+      - 'index.html'
+      - 'assets/vessels/**'
 
 jobs:
   smoke:
@@ -24,5 +28,5 @@ jobs:
           echo $! > /tmp/ars-http.pid
           sleep 2
           curl -fsS http://127.0.0.1:8765/ >/dev/null
-      - name: Run playable browser smoke test with startup diagnostics
+      - name: Run playable browser smoke test after port helper repair
         run: python .github/ars-23x-browser-smoke.py
