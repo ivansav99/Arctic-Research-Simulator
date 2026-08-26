@@ -289,6 +289,8 @@
     mission({id:'itp-deploy', title:'Ice-Tethered Profiler Deployment', shortTitle:'ICE PROFILER', specialties:['physical','sea-ice-physics','moorings'], equipment:['ice-tethered-profiler'], consumables:['ice-tethered-profiler'], data:62, reward:98000, supplies:10, workHours:52, missionMode:'autonomous', deploymentDays:65, media:MEDIA.ice, iceAllowed:true, description:'Install an autonomous profiler through a suitable floe and let it drift with the pack.', steps:['Select and survey a stable floe','Drill the deployment hole','Lower the weighted tether','Install and program the profiler','Confirm GPS and satellite telemetry']}),
     mission({id:'sonobuoy-survey', title:'Arctic Sonobuoy Listening Station', shortTitle:'SONOBUOY', specialties:['marine-mammals','naval-acoustics'], equipment:['sonobuoy-pack'], consumables:['sonobuoy-pack'], data:22, reward:26000, supplies:3, workHours:24, media:MEDIA.sonobuoy, description:'Deploy a short-lived passive acoustic buoy to localize whale calls and characterize ambient sound.', steps:['Program listening depth and channel','Deploy the sonobuoy','Acquire the VHF signal','Classify calls and noise','Close the expendable station']}),
     mission({id:'routine-sounding', title:'Routine Arctic Atmosphere Sounding', shortTitle:'RADIOSONDE', specialties:['atmosphere'], equipment:['radiosonde-pack'], consumables:['radiosonde-pack'], data:18, reward:22000, supplies:2, workHours:15, media:MEDIA.balloon, description:'Launch a routine radiosonde away from a major weather event to strengthen the expedition atmosphere record.', steps:['Log surface meteorology','Prepare the radiosonde','Launch clear of the vessel','Track the full ascent','Transmit the quality-controlled profile']}),
+    mission({id:'fram-strait-deep-section',careerLevel:3,professorOpportunity:true,title:'Fram Strait Deep-Water Exchange Transect',shortTitle:'FRAM STRAIT',specialties:['physical','biogeochemistry'],equipment:['ctd-rosette','heavy-winch','deep-adcp'],transect:true,stationCounts:{global:5,icebreaker:7,nuclear:10},stationSpacingKm:55,fixedDestination:{lat:79.5,lon:-1.5},data:84,reward:168000,supplies:24,workHours:126,media:MEDIA.deepCtd,description:'Resolve the deep Atlantic-water inflow and Arctic-water export across Fram Strait with full-depth hydrography and velocity structure.',steps:['Occupy the eastern boundary station','Run full-depth CTD and bottle casts','Cross the central strait','Resolve the deep current structure','Close the western boundary station','Synthesize heat and freshwater transport']}),
+    mission({id:'lomonosov-ridge-transect',careerLevel:3,professorOpportunity:true,title:'Lomonosov Ridge Deep-Water Transect',shortTitle:'LOMONOSOV RIDGE',specialties:['physical','biogeochemistry'],equipment:['ctd-rosette','heavy-winch','deep-adcp'],transect:true,stationCounts:{icebreaker:6,nuclear:9},stationSpacingKm:65,fixedDestination:{lat:86.2,lon:140},iceAllowed:true,data:96,reward:195000,supplies:28,workHours:144,media:MEDIA.deepCtd,description:'Cross the Lomonosov Ridge with full-depth hydrography and deep-current measurements to resolve basin exchange and deep-water structure.',steps:['Approach the ridge in workable ice','Occupy the first deep station','Run full-depth CTD and velocity sections','Cross the ridge crest','Sample the opposite basin flank','Synthesize the cross-ridge exchange']}),
     mission({id:'deep-ctd', title:'Deep Arctic CTD Section', shortTitle:'DEEP CTD', specialties:['physical','biogeochemistry'], equipment:['ctd-rosette','heavy-winch'], transect:true, stationCounts:{global:4,icebreaker:6,nuclear:9}, stationSpacingKm:45, data:58, reward:88000, supplies:18, workHours:92, media:MEDIA.deepCtd, description:'Run full-depth rosette casts at numbered stations to resolve deep water masses and chemistry.', steps:['Position over the deep station','Test winch, sensors and bottles','Lower the rosette to full depth','Fire bottles on the upcast','Recover and advance to the next cast']}),
     mission({id:'deep-adcp-section', title:'Deep Boundary-Current ADCP Section', shortTitle:'DEEP CURRENT', specialties:['physical'], equipment:['deep-adcp'], transect:true, stationCounts:{global:6,icebreaker:9,nuclear:13}, stationSpacingKm:55, data:62, reward:98000, supplies:12, workHours:92, media:MEDIA.deepAdcp, description:'Use a low-frequency deep-water ADCP to resolve the velocity structure of an Arctic basin boundary current.', steps:['Verify deep-ADCP alignment','Begin the long section leg','Monitor range and interference','Cross the boundary current core','Quality-control the deep velocity field']}),
     mission({id:'seafloor', title:'Deep Ridge Sediment Station', shortTitle:'SEAFLOOR CORE', specialties:['benthic'], equipment:['box-corer','heavy-winch','stern-a-frame'], data:64, reward:112000, supplies:20, workHours:110, media:MEDIA.sedimentCorer, description:'Image the seafloor and recover sediment from a deep bathymetric feature.', steps:['Survey the bottom approach','Prepare box corer and camera','Lower to the deep seafloor','Recover and section the core','Catalogue imagery and sediment samples']}),
@@ -384,7 +386,11 @@
     return {ready:playerReady&&used+cost<=total,label:gate||`Citation budget ${used}/${total} used · ${stage} requires ${cost.toLocaleString()} citations`};
   }
   function templateCareerLevel(template) {
-    let level=1; for (const id of [...(template.equipment||[]),...(template.consumables||[])]) level=Math.max(level,EQUIPMENT[id]?.tier||1); return Math.min(3,level);
+    if(Number.isFinite(template?.careerLevel))return clamp(Math.round(template.careerLevel),1,3);
+    if(template?.professorOpportunity)return 3;
+    if(template?.postdocOpportunity)return 2;
+    if(template?.tier==='local')return 1;
+    let level=1;for(const id of [...(template.equipment||[]),...(template.consumables||[])])level=Math.max(level,EQUIPMENT[id]?.tier||1);return Math.min(3,level);
   }
   function missionMinCrew(template) {
     const title=String(template?.title||'').toLowerCase();
@@ -430,6 +436,19 @@
   function isRussianPort(port=state.port) { return RUSSIAN_PORTS.has(normalizedPortId(port)); }
   function activeGrants() {
     return state.targets.filter(item => (item.kind==='grant'||item.kind==='contract') && !['completed','failed','dropped'].includes(item.status));
+  }
+  const HARD_ACTIVE_GRANT_LIMIT=5;
+  const VESSEL_PROGRESSION_ORDER=['fishing','trawler','coastal','global','icebreaker','nuclear'];
+  function vesselProgressionRank(id){const rank=VESSEL_PROGRESSION_ORDER.indexOf(id);return rank<0?-1:rank;}
+  function activeGrantTemplateExists(templateId,excludeId=null){return !!templateId&&activeGrants().some(item=>item.templateId===templateId&&item.id!==excludeId);}
+  function makeRoomForNewGrant(){
+    while(grantLoad()>=HARD_ACTIVE_GRANT_LIMIT){
+      const droppable=activeGrants().filter(item=>activeOperation?.targetId!==item.id&&!item.deploymentId).sort((a,b)=>(Number(a.acceptedAtDay)||0)-(Number(b.acceptedAtDay)||0));
+      const oldest=droppable[0];if(!oldest)return false;
+      state.targets=state.targets.filter(item=>item.id!==oldest.id);if(state.navigation?.id===oldest.id)state.navigation=null;
+      addLog(`Research grant dropped to make room: ${oldest.title}.`);
+    }
+    return true;
   }
   function grantCapacity() { const level=playerCareerLevel();if(level<2)return Math.max(1,state.scientists.length);const postdocs=state.scientists.filter(item=>item.career==='postdoc').length,professors=state.scientists.filter(item=>item.career==='professor').length;return Math.max(2,postdocs*2+professors*3); }
   function grantLoad() {
@@ -817,8 +836,10 @@
     });
   }
   function compatibleFallbackTemplate() {
-    const scientist=state.scientists[0],specialty=scientist?.specialty||'physical',spec=specialtyById[specialty]?.name||'Arctic';
-    return mission({id:`fallback-${specialty}`,tier:'local',title:`${spec} Field Reconnaissance`,shortTitle:'FIELD RECON',specialties:[specialty],equipment:[],data:7,reward:7500,supplies:1,workHours:10,anywhere:true,coastal:['coastal-oceanography','coastal-ecology','plankton','fisheries'].includes(specialty),fjordPreferred:true,media:MEDIA.local,description:`A flexible sponsor call that matches the expertise currently aboard.`,steps:['Define the local observation plan','Collect a repeatable field record','Check metadata and position','Preserve samples or imagery','Transmit the sponsor summary']});
+    const scientist=state.scientists[0],specialty=scientist?.specialty||'physical',spec=specialtyById[specialty]?.name||'Arctic',level=playerCareerLevel();
+    if(level>=3)return mission({id:`fallback-professor-${specialty}`,careerLevel:3,professorOpportunity:true,title:`Arctic Basin ${spec} Synthesis Transect`,shortTitle:'BASIN SYNTHESIS',specialties:[specialty],equipment:[],data:72,reward:125000,supplies:14,workHours:90,anywhere:true,media:MEDIA.ctd,description:'Design and execute a basin-scale synthesis transect that connects the expedition’s observations to a major Arctic process question.',steps:['Define the basin-scale hypothesis','Select a defensible transect','Collect the core observations','Synthesize regional context','Deliver the sponsor science report']});
+    if(level===2)return mission({id:`fallback-postdoc-${specialty}`,careerLevel:2,postdocOpportunity:true,title:`Regional ${spec} Process Survey`,shortTitle:'PROCESS SURVEY',specialties:[specialty],equipment:[],data:42,reward:58000,supplies:8,workHours:56,anywhere:true,media:MEDIA.winch,description:'Resolve a regional Arctic process with a focused multi-station survey appropriate to a postdoctoral expedition.',steps:['Form the process hypothesis','Lay out regional stations','Collect repeatable observations','Resolve the spatial gradient','Prepare the sponsor synthesis']});
+    return mission({id:`fallback-${specialty}`,tier:'local',careerLevel:1,title:`${spec} Field Reconnaissance`,shortTitle:'FIELD RECON',specialties:[specialty],equipment:[],data:7,reward:7500,supplies:1,workHours:10,anywhere:true,coastal:['coastal-oceanography','coastal-ecology','plankton','fisheries'].includes(specialty),fjordPreferred:true,media:MEDIA.local,description:'A flexible sponsor call that matches the expertise currently aboard.',steps:['Define the local observation plan','Collect a repeatable field record','Check metadata and position','Preserve samples or imagery','Transmit the sponsor summary']});
   }
   const GRANT_MEDIA_POOL=[MEDIA.river,MEDIA.ice,MEDIA.storm,MEDIA.ctd,MEDIA.rov,MEDIA.radar,MEDIA.balloon,MEDIA.aerostat,MEDIA.drone,MEDIA.drifter,MEDIA.winch,MEDIA.handheldWater,MEDIA.iceCorer,MEDIA.miniRov,MEDIA.shallowAdcp,MEDIA.surfaceNet,MEDIA.verticalNet,MEDIA.bongoDetailed,MEDIA.ednaKit,MEDIA.fieldKit,MEDIA.shallowCorer,MEDIA.vessel].filter(Boolean);
   function canonicalMissionMedia(item){const template=TEMPLATES.find(template=>template.id===item?.templateId);return template?.media||item?.media||MEDIA.fieldKit||MEDIA.local;}
@@ -829,7 +850,7 @@
   function generateOffers(port,{fresh=false}={}) {
     if(!port)return; const portId=normalizedPortId(port),cycle=`${portId}:${state.portVisits}`; if(!fresh&&state.grantOfferCycle===cycle)return; state.grantOfferCycle=cycle;
     const rng=seeded(`${portId}-${state.portVisits}-grants-v6-${playerScientist()?.career||'grad'}-${state.currentVessel}`),activeTemplates=new Set(activeGrants().map(item=>item.templateId));
-    const careerFloor=playerCareerLevel(),available=TEMPLATES.filter(item=>!item.weather&&templateCareerLevel(item)<=careerFloor&&templateSupportedByVessel(item)&&hasSpecialty(item)&&(eligible(item)||teamCouldDoWithEquipment(item)||teamCouldDoWithMoreCrew(item))&&!activeTemplates.has(item.id)&&!(state.droppedGrantTemplates||[]).includes(item.id)&&(item.unlockAfter||0)<=state.completed.length&&(!item.onlyPorts||item.onlyPorts.includes(portId))&&(state.grantCooldowns?.[`${portId}:${item.id}`]||0)<=state.elapsedDays);
+    const careerFloor=playerCareerLevel(),lastAcceptedTemplate=(state.recentGrantTemplates||[])[0]||null,available=TEMPLATES.filter(item=>!item.weather&&templateCareerLevel(item)===careerFloor&&item.id!==lastAcceptedTemplate&&templateSupportedByVessel(item)&&hasSpecialty(item)&&(eligible(item)||teamCouldDoWithEquipment(item)||teamCouldDoWithMoreCrew(item))&&!activeTemplates.has(item.id)&&!(state.droppedGrantTemplates||[]).includes(item.id)&&(item.unlockAfter||0)<=state.completed.length&&(!item.onlyPorts||item.onlyPorts.includes(portId))&&(state.grantCooldowns?.[`${portId}:${item.id}`]||0)<=state.elapsedDays);
     const teamLevel=playerCareerLevel(),postdocCount=state.scientists.filter(item=>item.career==='postdoc').length,professorCount=state.scientists.filter(item=>item.career==='professor').length,weighted=[];
     for(const template of available){const level=templateCareerLevel(template);let weight=teamLevel===1?(level===1?7:1):teamLevel===2?(level===2?12:level===1?1:2):(level===3?15:level===2?5:1);if(level===2)weight+=postdocCount*4+professorCount*2;if(level===3)weight+=professorCount*5;if(template.fjordPreferred&&teamLevel===1)weight+=2;for(let i=0;i<weight;i++)weighted.push(template);}
     for(let i=weighted.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[weighted[i],weighted[j]]=[weighted[j],weighted[i]];} const pool=[],seen=new Set(); for(const item of weighted)if(!seen.has(item.id)){seen.add(item.id);pool.push(item);}
@@ -846,6 +867,12 @@
     if(!state.offers.length){const fallback=buildTarget(compatibleFallbackTemplate(),port,rng,'grant');if(fallback){giveGrantUniqueMedia(fallback,usedPictures,rng);state.offers.push(fallback);}}
   }
 
+  function mediaVisualMarkup(media,alt='',role='default') {
+    if(!media?.src)return '';
+    const safeAlt=escapeHtml(alt||media.alt||''),box=role==='gear'?'width:42px;height:42px;flex:0 0 42px;border-radius:7px;':role==='offer'?'width:100%;height:100%;border-radius:0;':'width:100%;aspect-ratio:4/3;border-radius:6px;';
+    if(Array.isArray(media.atlas)){const col=Number(media.atlas[0])||0,row=Number(media.atlas[1])||0,x=(col/3*100).toFixed(3),y=(row/2*100).toFixed(3);return `<div class="arx-atlas-photo arx-media-visual" role="img" aria-label="${safeAlt}" style="${box}background-color:#123d51;background-image:url(&quot;${escapeHtml(media.src)}&quot;);background-size:400% 300%;background-position:${x}% ${y}%;background-repeat:no-repeat"></div>`;}
+    return `<img class="arx-media-visual" src="${escapeHtml(media.src)}" alt="${safeAlt}">`;
+  }
   function mediaMarkup(item, className='') {
     const media=item?.templateId?canonicalMissionMedia(item):item?.media;
     if (!media?.src) return '';
@@ -1011,13 +1038,13 @@
     const projection=missionFoodProjection(item),cap=grantLoad()>=grantCapacity(),foodUnsafe=projection.remaining<15,fuelUnsafe=!vessel().nuclearFuel&&projection.fuelRemaining<10,ready=eligible(item),missingGear=missingMissionEquipment(item),readiness=missionReadiness(item);
     const blocked=!ready||cap||foodUnsafe||fuelUnsafe;
     const label=cap?`ACTIVE GRANT LIMIT ${grantLoad()}/${grantCapacity()}`:foodUnsafe?`INSUFFICIENT FOOD · PROJECTED ${Math.max(0,Math.floor(projection.remaining))}%`:fuelUnsafe?`INSUFFICIENT FUEL · PROJECTED ${Math.max(0,Math.floor(projection.fuelRemaining))}%`:!ready?'GRANT NOT READY':'ACCEPT RESEARCH GRANT';
-    const gearLinks=missingGear.length?`<div class="arx-grant-shop-links"><small>MISSING EQUIPMENT · CLICK TO SHOP</small>${missingGear.map(id=>`<button data-arx-action="shop-equipment" data-id="${id}">EQUIPMENT SHOP · ${escapeHtml(EQUIPMENT[id]?.name||id)}</button>`).join('')}</div>`:'';
-    return `<article class="arx-card offer research-offer ${ready?'':'unready'}"><div class="arx-offer-thumb"><img src="${escapeHtml(media?.src||MEDIA.fieldKit.src)}" alt="${escapeHtml(media?.alt||item.title)}"></div><div class="arx-card-head"><div><b>${escapeHtml(item.title)}</b><small>${escapeHtml(specialty)}</small></div><em>${cash(item.reward)}</em></div><p>${escapeHtml(item.description)}</p><div class="arx-grant-advance"><span><small>PAYMENT ON COMPLETION</small><b>${cash(item.reward)}</b></span></div><h4 class="arx-mini-label">RESPONSIBLE SCIENTISTS</h4>${operationScientistsMarkup(item)}<h4 class="arx-mini-label">EQUIPMENT USED</h4>${operationEquipmentMarkup(item)}${!ready?`<h4 class="arx-mini-label">WHY THIS GRANT IS LOCKED</h4>${readinessMarkup(readiness)}${gearLinks}`:''}<div class="arx-stats"><span>+${item.data} data</span><span>${item.minCrew||missionMinCrew(item)} people minimum</span><span>${item.supplies} supplies</span><span>${item.workHours} person-hours</span><span>~${projection.days} field days</span>${item.iceValueMultiplier>1?`<span>ICE DATA VALUE ×${item.iceValueMultiplier.toFixed(2)}</span>`:''}<span>Food on return ~${Math.max(0,Math.floor(projection.remaining))}%</span><span>Fuel on return ~${Math.max(0,Math.floor(projection.fuelRemaining))}%</span></div><button data-arx-action="accept" data-id="${item.id}" ${blocked?'disabled':''}>${label}</button></article>`;
+    const gearLinks=missingGear.length?`<div class="arx-grant-shop-links"><small>MISSING EQUIPMENT · CLICK TO SHOP</small>${missingGear.map(id=>`<button type="button" data-arx-action="shop-equipment" data-id="${id}">EQUIPMENT SHOP · ${escapeHtml(EQUIPMENT[id]?.name||id)}</button>`).join('')}</div>`:'';
+    return `<article class="arx-card offer research-offer ${ready?'':'unready'}"><div class="arx-offer-thumb">${mediaVisualMarkup(media||MEDIA.fieldKit,media?.alt||item.title,'offer')}</div><div class="arx-card-head"><div><b>${escapeHtml(item.title)}</b><small>${escapeHtml(specialty)}</small></div><em>${cash(item.reward)}</em></div><p>${escapeHtml(item.description)}</p><div class="arx-grant-advance"><span><small>PAYMENT ON COMPLETION</small><b>${cash(item.reward)}</b></span></div><h4 class="arx-mini-label">RESPONSIBLE SCIENTISTS</h4>${operationScientistsMarkup(item)}<h4 class="arx-mini-label">EQUIPMENT USED</h4>${operationEquipmentMarkup(item)}${!ready?`<h4 class="arx-mini-label">WHY THIS GRANT IS LOCKED</h4>${readinessMarkup(readiness)}${gearLinks}`:''}<div class="arx-stats"><span>+${item.data} data</span><span>${item.minCrew||missionMinCrew(item)} people minimum</span><span>${item.supplies} supplies</span><span>${item.workHours} person-hours</span><span>~${projection.days} field days</span>${item.iceValueMultiplier>1?`<span>ICE DATA VALUE ×${item.iceValueMultiplier.toFixed(2)}</span>`:''}<span>Food on return ~${Math.max(0,Math.floor(projection.remaining))}%</span><span>Fuel on return ~${Math.max(0,Math.floor(projection.fuelRemaining))}%</span></div><button data-arx-action="accept" data-id="${item.id}" ${blocked?'disabled':''}>${label}</button></article>`;
   }
   function activeGrantCard(item) {
-    const missing=!eligible(item), projection=missionFoodProjection(item);
+    const missing=!eligible(item), projection=missionFoodProjection(item),daysLeft=Number.isFinite(item.expiresAtDay)?Math.max(0,Math.ceil(item.expiresAtDay-state.elapsedDays)):null;
     const recovery=!!item.deploymentId,teamPickup=item.missionMode==='staged-recovery';
-    return `<article class="arx-card grant"><div class="arx-card-head"><div><b>${escapeHtml(item.title)}</b><small>${recovery?'RETURN VISIT REQUIRED':missing?'CAPABILITY CURRENTLY MISSING':'READY'} · ${Math.round(item.workHours)} PERSON-HOURS</small></div><em>${cash(item.reward)}</em></div><p>${escapeHtml(item.description)}</p><h4 class="arx-mini-label">RESPONSIBLE SCIENTISTS</h4>${operationScientistsMarkup(item)}<h4 class="arx-mini-label">EQUIPMENT USED</h4>${operationEquipmentMarkup(item)}<div class="arx-stats"><span>${item.data} data</span><span>Payment ${cash(item.reward)} on completion</span>${item.iceValueMultiplier>1?`<span>ICE DATA VALUE ×${item.iceValueMultiplier.toFixed(2)}</span>`:''}<span>~${projection.days} field days</span><span>Projected food ${Math.max(0,Math.floor(projection.remaining))}%</span></div><div class="arx-grant-actions"><button class="danger" data-arx-action="drop-grant" data-id="${item.id}" ${recovery&&!teamPickup?'disabled':''}>${recovery?(teamPickup?'DROP RETURN PICKUP':'DEPLOYED EQUIPMENT MUST BE RECOVERED'):'DROP RESEARCH GRANT'}</button></div></article>`;
+    return `<article class="arx-card grant"><div class="arx-card-head"><div><b>${escapeHtml(item.title)}</b><small>${recovery?'RETURN VISIT REQUIRED':missing?'CAPABILITY CURRENTLY MISSING':'READY'} · ${Math.round(item.workHours)} PERSON-HOURS</small></div><em>${cash(item.reward)}</em></div><p>${escapeHtml(item.description)}</p><h4 class="arx-mini-label">RESPONSIBLE SCIENTISTS</h4>${operationScientistsMarkup(item)}<h4 class="arx-mini-label">EQUIPMENT USED</h4>${operationEquipmentMarkup(item)}<div class="arx-stats"><span>${item.data} data</span><span>Payment ${cash(item.reward)} on completion</span>${item.iceValueMultiplier>1?`<span>ICE DATA VALUE ×${item.iceValueMultiplier.toFixed(2)}</span>`:''}<span>~${projection.days} field days</span><span>Projected food ${Math.max(0,Math.floor(projection.remaining))}%</span>${daysLeft!==null?`<span>Deadline ${daysLeft} day${daysLeft===1?'':'s'}</span>`:''}</div><div class="arx-grant-actions"><button class="danger" data-arx-action="drop-grant" data-id="${item.id}" ${recovery&&!teamPickup?'disabled':''}>${recovery?(teamPickup?'DROP RETURN PICKUP':'DEPLOYED EQUIPMENT MUST BE RECOVERED'):'DROP RESEARCH GRANT'}</button></div></article>`;
   }
   function collectingGrantCard(item) {
     const teamPickup=item.recoveryMode==='staged-recovery';
@@ -1150,7 +1177,7 @@
     const tab=(id,label,attention=false)=>`<button data-arx-tab="${id}" class="${activePortTab===id?'active':''} ${attention?'attention':''}">${label}</button>`;
     const collecting=(state.deployments||[]).filter(item=>item.originalKind==='grant'&&item.status==='collecting'), grantAttention=state.offers.length>0&&grantLoad()<grantCapacity();
     const crewAttention=state.scientists.length<ship.berths&&state.candidates.some(item=>careerHireStatus(item.career).ready);
-    const fleetAttention=vesselsForPort().some(vesselPurchaseReady);
+    const fleetAttention=vesselsForPort().some(item=>vesselProgressionRank(item.id)>vesselProgressionRank(state.currentVessel)&&vesselPurchaseReady(item));
     const panelMarkup=portPanelMarkup(activePortTab,resources,ship,quote,usage,collecting);
     modal.innerHTML=`<div class="arx-modal-card arx-port-card"><button class="arx-close" data-arx-action="close-port" aria-label="Close port">×</button><header><small>PORT CALL · ${escapeHtml(state.port?.name||'ARCTIC PORT')}</small><h2>Expedition Services</h2></header><div class="arx-port-navrow"><div class="arx-tabs-viewport"><i class="arx-tab-hint left">‹</i><nav class="arx-tabs arx-tabs-top">${tab('vessel','Your Vessel')}${tab('fleet','Shipyard',fleetAttention)}${tab('crew','Scientists',crewAttention)}${tab('equipment','Equipment')}${tab('contracts','Research Grants',grantAttention)}${relocationUnlocked()?tab('relocate','Relocate Home Port'):''}</nav><i class="arx-tab-hint right">›</i></div><div class="arx-port-cash"><span><small>CASH</small><b data-arx-cash>${cash(state.money)}</b></span><button data-arx-action="open-private-funding">APPLY FOR PRIVATE FUNDING</button></div></div>${state.bridgeSupportNotice?`<div class="arx-bridge-support"><b>UNIVERSITY BRIDGE SUPPORT</b><span>${escapeHtml(state.bridgeSupportNotice)}</span></div>`:''}<section class="arx-tab active" data-arx-panel="${activePortTab}">${panelMarkup}</section></div>`;
     modal.classList.add('open'); portOpen=true;
@@ -1212,7 +1239,8 @@
     const primaryLabel=running?'RESEARCH IN PROGRESS':complete?'RESEARCH COMPLETE':!atSite&&!target.anywhere?'SAIL TO SITE FIRST':readiness.ready?'BEGIN RESEARCH':`CANNOT BEGIN · ${missing?.label||'MISSING CAPABILITY'}`;
     const decline=opportunity?`<button class="${accepted?'danger':'ghost'}" data-arx-action="cancel-opportunity" data-id="${target.id}" ${running||complete?'disabled':''}>${accepted?'ABANDON OPPORTUNITY':'DECLINE'}</button>`:(target.kind==='grant'||target.kind==='contract')?`<button class="danger" data-arx-action="drop-grant" data-id="${target.id}" ${running||programFinished||(target.deploymentId&&target.missionMode!=='staged-recovery')?'disabled':''}>${target.missionMode==='staged-recovery'?'DROP RETURN PICKUP':'DROP GRANT'}</button>`:'<button class="ghost" disabled>NO DROP ACTION</button>';
     const result=resultTitle||'Research result',modal=root.querySelector('#arx-target-modal');
-    const workActions=complete?'<button data-arx-action="acknowledge-research">OKAY</button>':`${decline}<button data-arx-action="complete-target" data-id="${target.id}" ${canBegin?'':'disabled'}>${escapeHtml(primaryLabel)}</button>`;
+    const navigateAction=accepted&&!atSite&&!target.anywhere?`<button data-arx-action="navigate-target" data-id="${target.id}">NAVIGATE TO SITE</button>`:'';
+    const workActions=complete?'<button data-arx-action="acknowledge-research">OKAY</button>':navigateAction?`${decline}${navigateAction}`:`${decline}<button data-arx-action="complete-target" data-id="${target.id}" ${canBegin?'':'disabled'}>${escapeHtml(primaryLabel)}</button>`;
 
     if(!accepted){
       modal.innerHTML=`<div class="arx-modal-card arx-target-card arx-research-unified arx-research-review"><button class="arx-close" data-arx-action="close-target" aria-label="Close research opportunity">×</button><small>${target.weather?'LIVE WEATHER RESEARCH':'DISCOVERED RESEARCH OPPORTUNITY'}</small><h2>${escapeHtml(target.title)}</h2>${mediaMarkup(target,'hero')}<p>${escapeHtml(target.description)}</p><div class="arx-target-facts arx-research-facts"><span><small>STATION</small><b>${stationLabel}</b></span><span><small>WORK</small><b>${workHours} person-hours · team rate ${rate.toFixed(1)}×</b></span><span><small>CASH AWARD</small><b>${cash(target.reward||0)}</b></span><span><small>DATA AWARD</small><b>${['mooring-deploy','staged-deploy','autonomous'].includes(target.missionMode)?'Data after telemetry / recovery':`+${target.data} data`}</b></span><span><small>DISTANCE</small><b>${target.anywhere?'REMOTE / ONBOARD':Number.isFinite(distance)?`${Math.round(distance)} km`:'OFF-SCREEN SITE'}</b></span></div><h3 class="arx-operation-subhead">RESPONSIBLE SCIENTISTS</h3>${operationScientistsMarkup(target)}<h3 class="arx-operation-subhead">EQUIPMENT USED</h3>${operationEquipmentMarkup(target)}<h3 class="arx-check-title">MISSION READINESS</h3>${readinessMarkup(readiness)}<div class="arx-research-review-actions">${decline}<button data-arx-action="accept-opportunity" data-id="${target.id}" ${atSite?'':'disabled'}>${atSite?'ACCEPT OPPORTUNITY':'ARRIVE AT SITE FIRST'}</button></div></div>`;
@@ -1228,13 +1256,13 @@
     if(activeOperation&&activeOperation.targetId!==id){toast('RESEARCH STATION ALREADY IN PROGRESS');return false;}
     const distance=context.distanceKm??(state.navigation?.id===id?state.navigation.distanceKm:Infinity);
     state.targets.forEach(item=>item.selected=item.id===id);state.lastTargetContext={...context,id,distanceKm:distance};
-    if(!target.anywhere&&distance>RESEARCH_INTERACTION_KM){callbacks.onNavigate?.(target);renderSidebar();return true;}
+    if(!target.anywhere&&distance>RESEARCH_INTERACTION_KM&&!context.previewOnly){callbacks.onNavigate?.(target);renderSidebar();return true;}
     renderResearchWindow(target,{phase:activeOperation?.targetId===id?'running':'ready'});renderSidebar();return true;
   }
   function operationEquipmentMarkup(target) {
     const ids=[...(target.equipment||[]),...(target.consumables||[])],items=[...new Set(ids)].map(id=>EQUIPMENT[id]).filter(Boolean);
     if(!items.length)return `<div class="arx-operation-equipment"><div class="arx-operation-gear field-kit"><img src="${escapeHtml(MEDIA.fieldKit.src)}" alt="${escapeHtml(MEDIA.fieldKit.alt)}"><span>General Arctic Field Kit</span></div></div>`;
-    return `<div class="arx-operation-equipment">${items.map(item=>`<div class="arx-operation-gear"><img src="${escapeHtml(item.media?.src||MEDIA.fieldKit.src)}" alt="${escapeHtml(item.media?.alt||item.name)}"><span>${escapeHtml(item.name)}</span></div>`).join('')}</div>`;
+    return `<div class="arx-operation-equipment">${items.map(item=>`<div class="arx-operation-gear">${mediaVisualMarkup(item.media||MEDIA.fieldKit,item.media?.alt||item.name,'gear')}<span>${escapeHtml(item.name)}</span></div>`).join('')}</div>`;
   }
   function operationScientistsMarkup(target) {
     const ids=participantIdsFor(target),people=state.scientists.filter(item=>ids.includes(item.id));
@@ -1297,7 +1325,7 @@
     }
     const quality=averageQuality(), recoveryMode=['mooring-recovery','staged-recovery'].includes(target.missionMode);
     const dataGain=recoveryMode?Math.max(1,Math.round(target.data)):Math.max(1,Math.round(target.data*(.82+quality*.18)));
-    target.status='completed'; target.selected=false;
+    target.status='completed'; target.selected=false;if(target.professorOriginated)state.lastProfessorGrantDay=state.elapsedDays;
     let title='Program complete', body='The team completed the assignment and archived the station record.', stats=[];
     if (['mooring-deploy','staged-deploy'].includes(target.missionMode)) {
       const baseWait=target.recoveryAfterDaysByVessel?.[state.currentVessel]||target.recoveryAfterDays||7;
@@ -1391,9 +1419,15 @@
     return hasSpecialty(template)&&templateSupportedByVessel(template)&&(template.equipment||[]).every(id=>equipmentOperational(id))&&((state.scientists.length<missionMinCrew(template))||(specialistGap>0&&specialistGap<=1));
   }
   function maybeOfferProfessorGrant(environment={}) {
-    const professorCount=state.scientists.filter(item=>item.career==='professor').length,cooldown=Math.max(1.5,6/professorCount);if(!professorCount||state.port||state.remoteOffer||grantLoad()>=grantCapacity()||state.elapsedDays-(state.lastProfessorGrantDay||-999)<cooldown)return false;
-    const candidates=TEMPLATES.filter(item=>!item.weather&&templateCareerLevel(item)>=2&&eligible(item)&&!(item.onlyPorts?.length)); if(!candidates.length)return false; const rng=seeded(`professor-${Math.floor(state.elapsedDays*10)}-${professorCount}`),weighted=candidates.flatMap(item=>Array(templateCareerLevel(item)>=3?1+professorCount*8:1+professorCount*3).fill(item)),template=weighted[Math.floor(rng()*weighted.length)],origin=environment.position||{lat:78,lon:15},target=buildTarget(template,origin,rng,'grant',{nearby:!!(environment.iceEdge||environment.iceThickness),iceThickness:Number(environment.iceThickness)||0}); if(!target)return false;
-    state.remoteOffer=target;state.lastProfessorGrantDay=state.elapsedDays;const modal=root.querySelector('#arx-target-modal');modal.innerHTML=`<div class="arx-modal-card arx-target-card"><small>PROFESSOR-ORIGINATED PROPOSAL</small><h2>${escapeHtml(target.title)}</h2><p>A professor aboard has developed a fundable research idea from conditions observed at sea. Accept it and the site will receive normal grant navigation guidance.</p>${mediaMarkup(target,'hero')}<div class="arx-operation-actions"><button class="ghost" data-arx-action="decline-professor-grant">DECLINE</button><button data-arx-action="accept-professor-grant">ACCEPT GRANT</button></div></div>`;modal.classList.add('open');return true;
+    const professorCount=state.scientists.filter(item=>item.career==='professor').length,cooldown=7;
+    if(!professorCount||state.port||state.remoteOffer||grantLoad()>=3||state.elapsedDays-(state.lastProfessorGrantDay||-999)<cooldown)return false;
+    const activeTemplates=new Set(activeGrants().map(item=>item.templateId)),recentTemplates=new Set((state.recentGrantTemplates||[]).slice(0,3));
+    let candidates=TEMPLATES.filter(item=>!item.weather&&templateCareerLevel(item)===3&&eligible(item)&&!(item.onlyPorts?.length)&&!activeTemplates.has(item.id)&&!recentTemplates.has(item.id));
+    if(!candidates.length)candidates=TEMPLATES.filter(item=>!item.weather&&templateCareerLevel(item)===3&&eligible(item)&&!(item.onlyPorts?.length)&&!activeTemplates.has(item.id)&&item.id!==(state.recentGrantTemplates||[])[0]);
+    if(!candidates.length)return false;
+    const rng=seeded(`professor-${Math.floor(state.elapsedDays)}-${professorCount}`),template=candidates[Math.floor(rng()*candidates.length)],origin=environment.position||{lat:78,lon:15},target=buildTarget(template,origin,rng,'grant',{nearby:!!(environment.iceEdge||environment.iceThickness),iceThickness:Number(environment.iceThickness)||0});if(!target)return false;
+    target.professorOriginated=true;state.remoteOffer=target;state.lastProfessorGrantDay=state.elapsedDays;
+    const modal=root.querySelector('#arx-target-modal');modal.innerHTML=`<div class="arx-modal-card arx-target-card"><small>PROFESSOR-ORIGINATED PROPOSAL</small><h2>${escapeHtml(target.title)}</h2><p>A professor aboard has developed a fundable research idea from conditions observed at sea. Accept it and the site will receive normal grant navigation guidance.</p>${mediaMarkup(target,'hero')}<div class="arx-operation-actions"><button class="ghost" data-arx-action="decline-professor-grant">DECLINE</button><button data-arx-action="accept-professor-grant">ACCEPT GRANT</button></div></div>`;modal.classList.add('open');return true;
   }
   function liveFieldOpportunities(){return state.targets.filter(item=>(item.kind==='opportunity'||item.kind==='weather-opportunity')&&!item.accepted&&item.status!=='completed');}
   function opportunityMoveGateKm(){return{fishing:45,trawler:90,coastal:150,global:220,icebreaker:270,nuclear:330}[state.currentVessel]||45;}
@@ -1497,6 +1531,10 @@
     if (!Number.isFinite(days)||days<=0) return;
     state.elapsedDays=(Number(state.elapsedDays)||0)+days;
     state.recentGrantSites=(state.recentGrantSites||[]).filter(site=>state.elapsedDays-(site.day||0)<90).slice(0,18);
+    const expiredGrantIds=new Set();
+    for(const target of state.targets){if((target.kind==='grant'||target.kind==='contract')&&!['completed','failed','dropped'].includes(target.status)&&Number.isFinite(target.expiresAtDay)&&state.elapsedDays>=target.expiresAtDay&&activeOperation?.targetId!==target.id){target.status='dropped';target.selected=false;expiredGrantIds.add(target.id);addLog(`Research grant expired after 14 days: ${target.title}.`);if(target.professorOriginated)state.lastProfessorGrantDay=state.elapsedDays;}}
+    if(expiredGrantIds.size){state.targets=state.targets.filter(target=>!expiredGrantIds.has(target.id));if(state.navigation?.id&&expiredGrantIds.has(state.navigation.id))state.navigation=null;toast(expiredGrantIds.size===1?'RESEARCH GRANT EXPIRED · 14-DAY DEADLINE':`${expiredGrantIds.size} RESEARCH GRANTS EXPIRED · 14-DAY DEADLINE`);}
+
     const activeWeather=environment?.weather||null,expiredOpportunityIds=new Set();
     state.targets=state.targets.filter(target=>{if(target.kind!=='opportunity'&&target.kind!=='weather-opportunity')return true;const timedOut=Number.isFinite(target.expiresAtDay)&&state.elapsedDays>=target.expiresAtDay,weatherGone=target.kind==='weather-opportunity'&&activeWeather&&(activeWeather.type==='clear'||(target.weatherEventId&&activeWeather.eventId!==target.weatherEventId));if(timedOut||weatherGone){expiredOpportunityIds.add(target.id);return false;}return true;});
     if(state.navigation?.id&&expiredOpportunityIds.has(state.navigation.id))state.navigation=null;
@@ -1619,11 +1657,13 @@
   function acceptOffer(id) {
     const offer=state.offers.find(item=>item.id===id); if (!offer) return;
     if(!eligible(offer)){const missing=missingMissionEquipment(offer);toast(missing.length?`GRANT NOT READY · NEED ${EQUIPMENT[missing[0]]?.name||missing[0]}`:'GRANT NOT READY · CHECK CREW AND EQUIPMENT');return;}
+    if(activeGrantTemplateExists(offer.templateId)){toast('THAT RESEARCH GRANT IS ALREADY ACTIVE');return;}
+    if(grantLoad()>=HARD_ACTIVE_GRANT_LIMIT&&!makeRoomForNewGrant()){toast('ACTIVE GRANT LIMIT · COMPLETE OR DROP A GRANT FIRST');return;}
     if (grantLoad()>=grantCapacity()) { toast(`ACTIVE RESEARCH GRANT LIMIT · ${grantLoad()}/${grantCapacity()}`); return; }
     const projection=missionFoodProjection(offer);
     if (projection.remaining<15) { toast('INSUFFICIENT FOOD SUPPLY ONBOARD TO COMPLETE THE WORK'); return; }
     if (!vessel().nuclearFuel&&projection.fuelRemaining<10) { toast('INSUFFICIENT FUEL TO COMPLETE THE WORK AND RETURN'); return; }
-    state.targets.forEach(item=>item.selected=false);offer.selected=true;offer.upfront=0;offer.advancePaid=0;state.targets.push(offer);
+    state.targets.forEach(item=>item.selected=false);offer.selected=true;offer.upfront=0;offer.advancePaid=0;offer.acceptedAtDay=state.elapsedDays;offer.expiresAtDay=state.elapsedDays+14;state.targets.push(offer);
     state.offers=state.offers.filter(item=>item.id!==id);recordGrantUse(offer.templateId,offer);addLog(`Research grant accepted: ${offer.title}. Payment due on completion.`);
     toast(`RESEARCH GRANT ACCEPTED · ${offer.shortTitle}`);changed();
   }
@@ -1795,8 +1835,14 @@ function vesselOverlay() {
     else if (action==='shop-equipment') { if(!state.port){toast('RETURN TO PORT TO PURCHASE EQUIPMENT');}else{activePortTab='equipment';openStoreDetail=`equipment-${id}`;portScrollTop=0;renderPort();requestAnimationFrame(()=>root?.querySelector(`[data-arx-store-details=\"equipment-${id}\"]`)?.scrollIntoView({block:'start',behavior:'smooth'}));} }
     else if (action==='accept') acceptOffer(id);
     else if (action==='accept-opportunity') { const target=state.targets.find(item=>item.id===id); if(target&&(target.kind==='opportunity'||target.kind==='weather-opportunity')){target.accepted=true;target.expiresAtDay=null;target.selected=true;addLog(`Research opportunity accepted: ${target.title}.`);toast(`RESEARCH OPPORTUNITY ACCEPTED · ${target.shortTitle||target.title}`);renderResearchWindow(target,{phase:'ready'});changed({port:false});} }
-    else if (action==='accept-professor-grant'&&state.remoteOffer) { state.targets.forEach(item=>item.selected=false);state.remoteOffer.selected=true;state.remoteOffer.upfront=0;state.remoteOffer.advancePaid=0;state.targets.push(state.remoteOffer);addLog(`Professor-originated grant accepted: ${state.remoteOffer.title}. Payment due on completion.`);state.remoteOffer=null;root.querySelector('#arx-target-modal').classList.remove('open');renderSidebar();changed(); }
-    else if (action==='decline-professor-grant') { state.remoteOffer=null;root.querySelector('#arx-target-modal').classList.remove('open');changed(); }
+    else if (action==='accept-professor-grant'&&state.remoteOffer) {
+      const offer=state.remoteOffer;
+      if(grantLoad()>=3){toast('ON-THE-GO GRANTS PAUSE AT THREE ACTIVE GRANTS');state.remoteOffer=null;root.querySelector('#arx-target-modal').classList.remove('open');changed();}
+      else if(activeGrantTemplateExists(offer.templateId)){toast('THAT RESEARCH GRANT IS ALREADY ACTIVE');state.remoteOffer=null;root.querySelector('#arx-target-modal').classList.remove('open');changed();}
+      else if(grantLoad()>=HARD_ACTIVE_GRANT_LIMIT&&!makeRoomForNewGrant()){toast('ACTIVE GRANT LIMIT · COMPLETE OR DROP A GRANT FIRST');}
+      else{state.targets.forEach(item=>item.selected=false);offer.selected=true;offer.upfront=0;offer.advancePaid=0;offer.acceptedAtDay=state.elapsedDays;offer.expiresAtDay=state.elapsedDays+14;state.targets.push(offer);recordGrantUse(offer.templateId,offer,'field');addLog(`Professor-originated grant accepted: ${offer.title}. Payment due on completion.`);state.lastProfessorGrantDay=state.elapsedDays;state.remoteOffer=null;root.querySelector('#arx-target-modal').classList.remove('open');renderSidebar();changed();}
+    }
+    else if (action==='decline-professor-grant') { state.lastProfessorGrantDay=state.elapsedDays;state.remoteOffer=null;root.querySelector('#arx-target-modal').classList.remove('open');changed(); }
     else if (action==='drop-grant') dropGrant(id);
     else if (action==='abandon-deployment') abandonDeployment(id);
     else if (action==='navigate-target') { const target=state.targets.find(item=>item.id===id);root.querySelector('#arx-target-modal')?.classList.remove('open');if(target)callbacks.onNavigate?.(target); }
@@ -1897,6 +1943,7 @@ function vesselOverlay() {
     state.scientists=(state.scientists||[]).map(item=>({...item,missions:item.missions||0,papers:item.papers||0,recruitmentPool:item.recruitmentPool||profileFor(item).recruitmentPool||'international'}));
     for (const scientist of state.scientists) recordScientist(scientist);
     state.offers=(state.offers||[]).filter(Boolean).slice(0,9);
+    for(const grant of activeGrants()){if(!Number.isFinite(grant.acceptedAtDay))grant.acceptedAtDay=state.elapsedDays;if(!Number.isFinite(grant.expiresAtDay))grant.expiresAtDay=grant.acceptedAtDay+14;}
     const staleField=(state.targets||[]).filter(item=>(item.kind==='opportunity'||item.kind==='weather-opportunity')&&!item.accepted&&item.status!=='completed');if(staleField.length>2){const keep=new Set(staleField.slice(-2).map(item=>item.id));state.targets=state.targets.filter(item=>!(item.kind==='opportunity'||item.kind==='weather-opportunity')||item.accepted||item.status==='completed'||keep.has(item.id));}
     renderSidebar();
   }
