@@ -18,6 +18,18 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+      - name: Correct patch helper invocation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('.github/ars-23y-grant-cleanup.py')
+          s=p.read_text()
+          old="exp=replace_between(exp,start,end,new_fallback,end,'career-sensitive fallback')"
+          new="exp=replace_between(exp,start,end,new_fallback,'career-sensitive fallback')"
+          if s.count(old)!=1:
+              raise SystemExit(f'expected one bad helper call, found {s.count(old)}')
+          p.write_text(s.replace(old,new,1))
+          PY
       - name: Apply grant and fast-ice cleanup
         run: python .github/ars-23y-grant-cleanup.py
       - name: Validate JavaScript syntax
