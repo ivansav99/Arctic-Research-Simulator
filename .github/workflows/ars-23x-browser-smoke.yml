@@ -1,0 +1,28 @@
+name: ARS 23x browser smoke
+
+on:
+  push:
+    branches: [reimplement-23x-safe]
+    paths:
+      - '.github/workflows/ars-23x-browser-smoke.yml'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: reimplement-23x-safe
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install browser test packages
+        run: python -m pip install --quiet selenium pillow
+      - name: Start local game server
+        run: |
+          python -m http.server 8765 >/tmp/ars-http.log 2>&1 &
+          echo $! > /tmp/ars-http.pid
+          sleep 2
+          curl -fsS http://127.0.0.1:8765/ >/dev/null
+      - name: Run playable browser smoke test
+        run: python .github/ars-23x-browser-smoke.py
