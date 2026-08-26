@@ -1,0 +1,55 @@
+name: ARS 23y grant cleanup
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ars-23y-grant-cleanup.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Apply grant and fast-ice cleanup
+        run: python .github/ars-23y-grant-cleanup.py
+      - name: Validate JavaScript syntax
+        run: |
+          node --check expedition.js
+          node --check game.js
+      - name: Validate behavior markers
+        run: |
+          grep -q "HARD_ACTIVE_GRANT_LIMIT=5" expedition.js
+          grep -q "Fram Strait Deep-Water Exchange Transect" expedition.js
+          grep -q "Lomonosov Ridge Deep-Water Transect" expedition.js
+          grep -q "expiresAtDay=state.elapsedDays+14" expedition.js
+          grep -q "grantLoad()>=3" expedition.js
+          grep -q "mediaVisualMarkup" expedition.js
+          grep -q "previewOnly" expedition.js
+          grep -q "vesselProgressionRank" expedition.js
+          grep -q 'data-arx-action="shop-equipment"' expedition.js
+          test "$(grep -c 'function capturePortView' expedition.js)" -eq 1
+          ! grep -q "fastIceGrowth" game.js
+          ! grep -q "iceTextures.fast" game.js
+          ! grep -q "FAST ICE" game.js
+          grep -q "expedition-23y-grant-cleanup" index.html
+      - name: Commit validated game update
+        run: |
+          git config user.name "Ivan Savelyev"
+          git config user.email "ivansav@gmail.com"
+          git add expedition.js game.js index.html
+          git commit -m "Refine ARS grants and remove fast ice"
+          git push origin main
+      - name: Remove temporary patch machinery
+        if: success()
+        run: |
+          rm -f .github/ars-23y-grant-cleanup.py .github/workflows/ars-23y-grant-cleanup.yml
+          git add -A
+          git commit -m "Remove ARS 23y patch runner"
+          git push origin main
