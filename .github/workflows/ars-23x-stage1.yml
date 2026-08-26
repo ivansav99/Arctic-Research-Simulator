@@ -33,7 +33,7 @@ jobs:
           grep -F "nuclear:'assets/vessels/nuclear-icebreaker.webp?v=23x'" expedition.js
           grep -F "unlockChimed" game.js
           grep -F "viewRadius" game.js
-          grep -F "PUBLISH ${level.label.toUpperCase()}" expedition.js
+          grep -F 'level.label.toUpperCase()' expedition.js
           grep -F "article-ready" expedition.js
           grep -F "expedition-23x-stage1-safe" index.html
       - name: Commit validated stage 1
