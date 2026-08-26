@@ -18,7 +18,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-      - name: Correct patch helper invocation
+      - name: Correct patch helper invocations
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -28,7 +28,15 @@ jobs:
           new="exp=replace_between(exp,start,end,new_fallback,'career-sensitive fallback')"
           if s.count(old)!=1:
               raise SystemExit(f'expected one bad helper call, found {s.count(old)}')
-          p.write_text(s.replace(old,new,1))
+          s=s.replace(old,new,1)
+          # An earlier generic fast-ice sweep already removes this exact frozen-state fragment
+          # before the dedicated portIceInfo replacement runs. Match that intermediate form.
+          old_frag="frozen=type==='fast'||type==='packed'||type==='cracked'"
+          new_frag="frozen=type==='packed'||type==='cracked'"
+          if s.count(old_frag)!=1:
+              raise SystemExit(f'expected one pre-sweep portIceInfo fragment, found {s.count(old_frag)}')
+          s=s.replace(old_frag,new_frag,1)
+          p.write_text(s)
           PY
       - name: Apply grant and fast-ice cleanup
         run: python .github/ars-23y-grant-cleanup.py
