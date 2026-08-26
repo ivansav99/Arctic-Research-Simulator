@@ -1,5 +1,6 @@
 name: ARS 23y grant cleanup
 
+# Triggered after workflow registration.
 on:
   push:
     branches: [main]
