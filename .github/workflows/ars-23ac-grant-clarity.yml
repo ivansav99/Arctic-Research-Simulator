@@ -1,0 +1,49 @@
+name: ARS 23ac grant clarity
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ars-23ac-grant-clarity.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Apply grant clarity patch
+        run: python .github/ars-23ac-grant-clarity.py
+      - name: Validate JavaScript syntax
+        run: |
+          node --check expedition.js
+          node --check game.js
+      - name: Validate requested behavior
+        run: |
+          grep -q "No .* equipment capacity" expedition.js
+          grep -q "equipmentReadinessDetail" expedition.js
+          grep -q "lastExpiredGrantRemovalDay" expedition.js
+          grep -q "state.elapsedDays+21" expedition.js
+          grep -q "WHY THIS OPPORTUNITY APPEARED" expedition.js
+          grep -q "GEOGRAPHIC_RESEARCH_ANCHORS" expedition.js
+          grep -q "Book published" expedition.js || grep -q '\${level.label} published' expedition.js
+          grep -q "expedition-23ac-grant-clarity-images" index.html
+      - name: Commit validated changes
+        run: |
+          git config user.name "Ivan Savelyev"
+          git config user.email "ivansav@gmail.com"
+          git add expedition.js index.html
+          git commit -m "Clarify equipment grants and publication flow"
+          git push origin main
+      - name: Remove temporary patch machinery
+        if: success()
+        run: |
+          rm -f .github/ars-23ac-grant-clarity.py .github/workflows/ars-23ac-grant-clarity.yml
+          git add -A
+          git commit -m "Remove ARS 23ac patch runner"
+          git push origin main
