@@ -345,7 +345,7 @@
     candidates:[], offers:[], targets:[], completed:[], deployments:[], weatherEventsSeen:[], droppedGrantTemplates:[],
     observed:[], observedIndividuals:[], claimedGroups:[], papers:[], publicationCooldown:0, publishAttempts:0, lastPublicationRejected:false, publicationIntroShown:false,
     economyDays:0, elapsedDays:0, log:['Expedition commissioned in Longyearbyen.'], navigation:null, lastTargetContext:null,
-    scientistRecords:{}, promotions:[], recentGrantTemplates:[], recentGrantSites:[], grantCooldowns:{}, grantMarketReady:{}, assistedByVessels:[], bridgeSupportNotice:null, lastPortId:null, lastProfessorGrantDay:-999, remoteOffer:null, helicopterFoodReminderShown:false
+    scientistRecords:{}, promotions:[], recentGrantTemplates:[], recentGrantSites:[], recentOpportunityTemplates:[], lastOpportunitySpawnPosition:null, grantCooldowns:{}, grantMarketReady:{}, assistedByVessels:[], bridgeSupportNotice:null, lastPortId:null, lastProfessorGrantDay:-999, remoteOffer:null, helicopterFoodReminderShown:false
   };
 
   let callbacks = {};
@@ -680,18 +680,17 @@
     return 6371*2*Math.atan2(Math.sqrt(h),Math.sqrt(Math.max(0,1-h)));
   }
   function researchDistanceWindow(template,kind,options={}) {
-    if(options.nearby){const max=options.iceThickness>=2?70:90;return{min:10,max};}
-    const ranges={fishing:[5,48],trawler:[10,125],coastal:[28,330],global:[65,700],icebreaker:[95,1050],nuclear:[125,1450]}, range=ranges[state.currentVessel]||ranges.fishing;
-    const progress=clamp(state.completed.length/12,0,1),localMax=state.currentVessel==='fishing'?28+progress*34:state.currentVessel==='trawler'?80+progress*55:range[1];
-    const career=playerCareerLevel(),careerBonus=career>=3?45:career===2?20:0;
-    const opportunityFloor={fishing:18,trawler:55,coastal:100,global:180,icebreaker:260,nuclear:340}[state.currentVessel]||18;
-    const explicit=template.minDistance??0,official=kind==='grant'||kind==='contract';
-    const baseMin=kind==='opportunity'||kind==='weather-opportunity'?Math.max(explicit,opportunityFloor+careerBonus):Math.max(explicit,range[0]+careerBonus);
-    const min=official&&!template.anywhere?Math.max(22,baseMin):baseMin;
-    const requestedMax=min+(template.distanceRange??((kind==='opportunity'||kind==='weather-opportunity')?range[1]*.55:range[1]-range[0]));
-    return {min:Math.min(min,localMax-2),max:Math.max(min+2,Math.min(requestedMax,localMax))};
+    const vesselId=state.currentVessel,official=kind==='grant'||kind==='contract';
+    const grantRanges={fishing:[25,150],trawler:[260,720],coastal:[950,1700],global:[1200,2300],icebreaker:[1400,2700],nuclear:[1600,3100]};
+    const opportunityRanges={fishing:[25,100],trawler:[70,230],coastal:[170,480],global:[260,700],icebreaker:[320,850],nuclear:[380,1000]};
+    const nearbyRanges={fishing:[20,70],trawler:[55,150],coastal:[120,300],global:[180,420],icebreaker:[220,520],nuclear:[260,620]};
+    const range=(options.nearby?nearbyRanges:official?grantRanges:opportunityRanges)[vesselId]||(official?grantRanges.fishing:opportunityRanges.fishing);
+    const career=playerCareerLevel(),careerBonus=official?0:(career>=3?60:career===2?25:0),explicit=Math.max(0,Number(template.minDistance)||0);
+    let min=Math.max(range[0]+careerBonus,explicit),max=Math.max(min+20,range[1]+careerBonus);
+    if(official&&Number.isFinite(template.distanceRange)&&vesselId==='fishing')max=Math.min(max,min+Math.max(80,template.distanceRange*3));
+    return{min,max};
   }
-  function targetSpacingKm() { return state.currentVessel==='fishing'?12:state.currentVessel==='trawler'?18:32; }
+  function targetSpacingKm() { return {fishing:25,trawler:65,coastal:140,global:220,icebreaker:280,nuclear:340}[state.currentVessel]||25; }
   function pointIsSpaced(point,avoidPoints,minimum=targetSpacingKm()) { return avoidPoints.every(item => !Number.isFinite(item.lat)||geoDistance(point,item)>=minimum); }
   function stationCountFor(template) { return template.stationCounts?.[state.currentVessel]||template.stationCount||0; }
   function buildStations(template,firstPoint,rng,validator,baseContext) {
@@ -739,9 +738,9 @@
     const window=researchDistanceWindow(template,kind,options);
     const validator=callbacks.isResearchSiteSuitable;
     const avoidPoints=[...state.targets,...state.offers,...(state.recentGrantSites||[])].filter(item=>item.status!=='completed');
-    let point=template.anywhere ? {...origin} : template.fixedDestination ? {...template.fixedDestination} : null;
+    let point=template.fixedDestination ? {...template.fixedDestination} : null;
     let distance=0, bearing=0;
-    const spacing=options.nearby?18:targetSpacingKm(),context=()=>({template,origin,kind,distanceKm:distance,bearingDeg:bearing,avoidPoints,minimumSpacingKm:spacing,preferred:template.fixedDestination||null,...options});
+    const spacing=options.nearby?Math.max(35,targetSpacingKm()*.7):targetSpacingKm(),context=()=>({template,origin,kind,distanceKm:distance,bearingDeg:bearing,distanceWindow:window,avoidPoints,minimumSpacingKm:spacing,preferred:template.fixedDestination||null,...options});
     if (point) {
       distance=geoDistance(origin,point);
       if ((!template.anywhere&&!pointIsSpaced(point,avoidPoints,spacing)) || (!template.anywhere&&validator&&!validator(point,context()))) point=null;
@@ -754,7 +753,7 @@
       }
     }
     if (!point && !template.fixedDestination) {
-      for (let attempt=0; attempt<96; attempt++) {
+      for (let attempt=0; attempt<((kind==='grant'||kind==='contract')?240:120); attempt++) {
         distance=window.min+rng()*(window.max-window.min); bearing=rng()*360;
         const candidate=destination(origin.lat,origin.lon,distance,bearing);
         if (pointIsSpaced(candidate,avoidPoints,spacing) && (!validator || validator(candidate,context()))) { point=candidate; break; }
@@ -830,7 +829,7 @@
   function generateOffers(port,{fresh=false}={}) {
     if(!port)return; const portId=normalizedPortId(port),cycle=`${portId}:${state.portVisits}`; if(!fresh&&state.grantOfferCycle===cycle)return; state.grantOfferCycle=cycle;
     const rng=seeded(`${portId}-${state.portVisits}-grants-v6-${playerScientist()?.career||'grad'}-${state.currentVessel}`),activeTemplates=new Set(activeGrants().map(item=>item.templateId));
-    const careerFloor=playerCareerLevel(),available=TEMPLATES.filter(item=>!item.weather&&(careerFloor<2||templateCareerLevel(item)>=careerFloor)&&templateSupportedByVessel(item)&&hasSpecialty(item)&&(eligible(item)||teamCouldDoWithEquipment(item)||teamCouldDoWithMoreCrew(item))&&!activeTemplates.has(item.id)&&!(state.droppedGrantTemplates||[]).includes(item.id)&&(item.unlockAfter||0)<=state.completed.length&&(!item.onlyPorts||item.onlyPorts.includes(portId))&&(state.grantCooldowns?.[`${portId}:${item.id}`]||0)<=state.elapsedDays);
+    const careerFloor=playerCareerLevel(),available=TEMPLATES.filter(item=>!item.weather&&templateCareerLevel(item)<=careerFloor&&templateSupportedByVessel(item)&&hasSpecialty(item)&&(eligible(item)||teamCouldDoWithEquipment(item)||teamCouldDoWithMoreCrew(item))&&!activeTemplates.has(item.id)&&!(state.droppedGrantTemplates||[]).includes(item.id)&&(item.unlockAfter||0)<=state.completed.length&&(!item.onlyPorts||item.onlyPorts.includes(portId))&&(state.grantCooldowns?.[`${portId}:${item.id}`]||0)<=state.elapsedDays);
     const teamLevel=playerCareerLevel(),postdocCount=state.scientists.filter(item=>item.career==='postdoc').length,professorCount=state.scientists.filter(item=>item.career==='professor').length,weighted=[];
     for(const template of available){const level=templateCareerLevel(template);let weight=teamLevel===1?(level===1?7:1):teamLevel===2?(level===2?12:level===1?1:2):(level===3?15:level===2?5:1);if(level===2)weight+=postdocCount*4+professorCount*2;if(level===3)weight+=professorCount*5;if(template.fjordPreferred&&teamLevel===1)weight+=2;for(let i=0;i<weight;i++)weighted.push(template);}
     for(let i=weighted.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[weighted[i],weighted[j]]=[weighted[j],weighted[i]];} const pool=[],seen=new Set(); for(const item of weighted)if(!seen.has(item.id)){seen.add(item.id);pool.push(item);}
@@ -1004,61 +1003,16 @@
   function readinessMarkup(readiness) {
     return `<div class="arx-readiness">${readiness.rows.map(row=>`<div class="${row.ready?'ready':'missing'}"><i>${row.ready?'✓':'!'}</i><span><b>${escapeHtml(row.label)}</b><small>${escapeHtml(row.detail)}</small></span></div>`).join('')}</div>`;
   }
+  function missingMissionEquipment(target) {
+    return [...new Set([...(target.equipment||[]),...(target.consumables||[])])].filter(id=>EQUIPMENT[id]&&!equipmentOperational(id));
+  }
   function offerCard(item) {
     const specialty=item.anyScientist?'Any scientist aboard':item.specialties.map(id=>specialtyById[id]?.name).filter(Boolean).join(' / '),media=canonicalMissionMedia(item);
-    const projection=missionFoodProjection(item), cap=grantLoad()>=grantCapacity(), foodUnsafe=projection.remaining<15, fuelUnsafe=!vessel().nuclearFuel&&projection.fuelRemaining<10;
-    const label=cap?`ACTIVE GRANT LIMIT ${grantLoad()}/${grantCapacity()}`:foodUnsafe?`INSUFFICIENT FOOD · PROJECTED ${Math.max(0,Math.floor(projection.remaining))}%`:fuelUnsafe?`INSUFFICIENT FUEL · PROJECTED ${Math.max(0,Math.floor(projection.fuelRemaining))}%`:'ACCEPT RESEARCH GRANT';
-    return `<article class="arx-card offer research-offer"><div class="arx-offer-thumb"><img src="${escapeHtml(media?.src||MEDIA.fieldKit.src)}" alt="${escapeHtml(media?.alt||item.title)}"></div><div class="arx-card-head"><div><b>${escapeHtml(item.title)}</b><small>${escapeHtml(specialty)}</small></div><em>${cash(item.reward)}</em></div><p>${escapeHtml(item.description)}</p><div class="arx-grant-advance"><span><small>PAYMENT ON COMPLETION</small><b>${cash(item.reward)}</b></span></div><h4 class="arx-mini-label">RESPONSIBLE SCIENTISTS</h4>${operationScientistsMarkup(item)}<h4 class="arx-mini-label">EQUIPMENT USED</h4>${operationEquipmentMarkup(item)}<div class="arx-stats"><span>+${item.data} data</span><span>${item.minCrew||missionMinCrew(item)} people minimum</span><span>${item.supplies} supplies</span><span>${item.workHours} person-hours</span><span>~${projection.days} field days</span>${item.iceValueMultiplier>1?`<span>ICE DATA VALUE ×${item.iceValueMultiplier.toFixed(2)}</span>`:''}<span>Food on return ~${Math.max(0,Math.floor(projection.remaining))}%</span><span>Fuel on return ~${Math.max(0,Math.floor(projection.fuelRemaining))}%</span></div><button data-arx-action="accept" data-id="${item.id}" ${cap||foodUnsafe||fuelUnsafe?'disabled':''}>${label}</button></article>`;
-  }
-  function activeGrantCard(item) {
-    const missing=!eligible(item), projection=missionFoodProjection(item);
-    const recovery=!!item.deploymentId,teamPickup=item.missionMode==='staged-recovery';
-    return `<article class="arx-card grant"><div class="arx-card-head"><div><b>${escapeHtml(item.title)}</b><small>${recovery?'RETURN VISIT REQUIRED':missing?'CAPABILITY CURRENTLY MISSING':'READY'} · ${Math.round(item.workHours)} PERSON-HOURS</small></div><em>${cash(item.reward)}</em></div><p>${escapeHtml(item.description)}</p><h4 class="arx-mini-label">RESPONSIBLE SCIENTISTS</h4>${operationScientistsMarkup(item)}<h4 class="arx-mini-label">EQUIPMENT USED</h4>${operationEquipmentMarkup(item)}<div class="arx-stats"><span>${item.data} data</span><span>Payment ${cash(item.reward)} on completion</span>${item.iceValueMultiplier>1?`<span>ICE DATA VALUE ×${item.iceValueMultiplier.toFixed(2)}</span>`:''}<span>~${projection.days} field days</span><span>Projected food ${Math.max(0,Math.floor(projection.remaining))}%</span></div><div class="arx-grant-actions"><button class="danger" data-arx-action="drop-grant" data-id="${item.id}" ${recovery&&!teamPickup?'disabled':''}>${recovery?(teamPickup?'DROP RETURN PICKUP':'DEPLOYED EQUIPMENT MUST BE RECOVERED'):'DROP RESEARCH GRANT'}</button></div></article>`;
-  }
-  function collectingGrantCard(item) {
-    const teamPickup=item.recoveryMode==='staged-recovery';
-    return `<article class="arx-card grant"><div class="arx-card-head"><div><b>${escapeHtml(item.title)}</b><small>${teamPickup?'FIELD TEAM ASHORE · RETURN VISIT PENDING':'INSTRUMENT COLLECTING · RETURN VISIT PENDING'}</small></div><em>${Math.max(0,Math.ceil(item.remainingDays||0))} d</em></div><p>${teamPickup?'The shore party is working independently. You can return for them when ready, or hand their pickup to local logistics and drop the return visit.':'Autonomous observations are underway. This research grant continues to occupy one scientist-led grant slot until recovery.'}</p>${teamPickup?`<button class="danger" data-arx-action="abandon-deployment" data-id="${item.id}">DROP RETURN PICKUP</button>`:'<button disabled>RECOVERY WINDOW NOT OPEN YET</button>'}</article>`;
-  }
-
-  function relocationPorts(force=false) { const key=`${state.currentVessel}:${Math.floor((state.elapsedDays||0)*2)}`;if(!force&&relocationPortCache.key===key)return relocationPortCache.ports;const ports=(callbacks.getRelocationPorts?.()||[]).map(item=>({...item,id:item.id||slug(item.name)}));relocationPortCache={key,ports};return ports; }
-  function emergencyRelocationAllowed() {
-    if(playerCareerLevel()>=2||['icebreaker','nuclear'].includes(state.currentVessel))return false;
-    const currentId=normalizedPortId(state.port),current=relocationPorts().find(item=>item.id===currentId);
-    return !!current?.frozen;
-  }
-  function relocationUnlocked() { return playerCareerLevel()>=2||emergencyRelocationAllowed(); }
-  function relocationPanelMarkup() {
-    const ports=relocationPorts(),emergency=playerCareerLevel()<2&&emergencyRelocationAllowed();
-    if (!relocationUnlocked()) return '<div class="arx-empty"><b>POSTDOCTORAL CAREER REQUIRED</b><p>Relocating the expedition home port unlocks when the Chief Scientist reaches postdoctoral status.</p></div>';
-    const currentId=normalizedPortId(state.port),homeId=state.homePortId||'longyearbyen';
-    return `<p class="arx-help">${emergency?'EMERGENCY RELOCATION · Your current port is frozen in, so relocation is temporarily available before postdoctoral status. ':''}Move the entire expedition and vessel to another Arctic home port for ${cash(RELOCATION_COST)}. Frozen destination ports remain selectable only aboard an icebreaker.</p><div class="arx-relocation-list">${ports.map(port=>{const current=port.id===currentId,home=port.id===homeId,frozen=!!port.frozen,available=port.relocationAvailable!==false,poor=state.money<RELOCATION_COST,blocked=frozen&&!available;return `<article class="arx-relocation-row ${blocked?'frozen':''}"><div><b>${escapeHtml(port.name)}</b><small>${escapeHtml(port.country||'Arctic')} ${home?'· CURRENT HOME PORT':''}</small></div><span>${frozen?`FROZEN IN · ${escapeHtml(port.iceLabel||'SEA ICE')}${available?' · ICEBREAKER ACCESS':''}`:escapeHtml(port.iceLabel||'OPEN')}</span><button data-arx-action="relocate-port" data-id="${escapeHtml(port.id)}" ${current||blocked||poor?'disabled':''}>${current?'CURRENT PORT':blocked?'UNAVAILABLE':poor?'INSUFFICIENT CASH':`RELOCATE · ${cash(RELOCATION_COST)}`}</button></article>`;}).join('')}</div>`;
-  }
-  function relocateHomePort(id) {
-    if (!relocationUnlocked()) { toast('POSTDOCTORAL CAREER REQUIRED'); return; }
-    const port=relocationPorts().find(item=>item.id===id); if(!port) return;
-    if (port.frozen&&port.relocationAvailable===false) { toast(`${port.name.toUpperCase()} · PORT CURRENTLY FROZEN IN`); return; }
-    if (state.money<RELOCATION_COST) { toast(`RELOCATION REQUIRES ${cash(RELOCATION_COST)}`); return; }
-    const oldMoney=state.money; adjustMoney(-RELOCATION_COST); state.homePortId=id;
-    closePort(); relocationPortCache={key:null,ports:[]};
-    const moved=callbacks.relocateToPort?.(id);
-    if (!moved) { state.money=oldMoney; cashAnimation={from:oldMoney-RELOCATION_COST,to:oldMoney}; toast('RELOCATION FAILED · PORT APPROACH UNAVAILABLE'); changed(); return; }
-    addLog(`Home port relocated to ${port.name}, ${port.country||'Arctic'} · ${cash(RELOCATION_COST)}.`);
-    toast(`HOME PORT RELOCATED · ${port.name.toUpperCase()}`); callbacks.onStateChange?.();
-  }
-
-  function capturePortView() {
-    if (!root) return;
-    const card=root.querySelector('.arx-port-card'), tabs=card?.querySelector('.arx-tabs');
-    if (card) portScrollTop=card.scrollTop;
-    if (tabs) portTabsScrollLeft=tabs.scrollLeft;
-    const opened=card?.querySelector('[data-arx-store-details][open]');
-    openStoreDetail=opened?.dataset.arxStoreDetails || null;
-  }
-  function resupplyAllQuote(resources,ship=vessel()) {
-    const fuelMissing=ship.nuclearFuel?0:Math.max(0,100-resources.fuel);
-    const foodMissing=Math.max(0,100-resources.food);
-    const supplyMissing=Math.max(0,ship.supplyCapacity-state.supplies);
-    return Math.round(fuelMissing/10*fuelStepCost(ship)+foodMissing/10*foodStepCost(ship)+supplyMissing/10*2500);
+    const projection=missionFoodProjection(item),cap=grantLoad()>=grantCapacity(),foodUnsafe=projection.remaining<15,fuelUnsafe=!vessel().nuclearFuel&&projection.fuelRemaining<10,ready=eligible(item),missingGear=missingMissionEquipment(item),readiness=missionReadiness(item);
+    const blocked=!ready||cap||foodUnsafe||fuelUnsafe;
+    const label=cap?`ACTIVE GRANT LIMIT ${grantLoad()}/${grantCapacity()}`:foodUnsafe?`INSUFFICIENT FOOD · PROJECTED ${Math.max(0,Math.floor(projection.remaining))}%`:fuelUnsafe?`INSUFFICIENT FUEL · PROJECTED ${Math.max(0,Math.floor(projection.fuelRemaining))}%`:!ready?'GRANT NOT READY':'ACCEPT RESEARCH GRANT';
+    const gearLinks=missingGear.length?`<div class="arx-grant-shop-links"><small>MISSING EQUIPMENT · CLICK TO SHOP</small>${missingGear.map(id=>`<button data-arx-action="shop-equipment" data-id="${id}">EQUIPMENT SHOP · ${escapeHtml(EQUIPMENT[id]?.name||id)}</button>`).join('')}</div>`:'';
+    return `<article class="arx-card offer research-offer ${ready?'':'unready'}"><div class="arx-offer-thumb"><img src="${escapeHtml(media?.src||MEDIA.fieldKit.src)}" alt="${escapeHtml(media?.alt||item.title)}"></div><div class="arx-card-head"><div><b>${escapeHtml(item.title)}</b><small>${escapeHtml(specialty)}</small></div><em>${cash(item.reward)}</em></div><p>${escapeHtml(item.description)}</p><div class="arx-grant-advance"><span><small>PAYMENT ON COMPLETION</small><b>${cash(item.reward)}</b></span></div><h4 class="arx-mini-label">RESPONSIBLE SCIENTISTS</h4>${operationScientistsMarkup(item)}<h4 class="arx-mini-label">EQUIPMENT USED</h4>${operationEquipmentMarkup(item)}${!ready?`<h4 class="arx-mini-label">WHY THIS GRANT IS LOCKED</h4>${readinessMarkup(readiness)}${gearLinks}`:''}<div class="arx-stats"><span>+${item.data} data</span><span>${item.minCrew||missionMinCrew(item)} people minimum</span><span>${item.supplies} supplies</span><span>${item.workHours} person-hours</span><span>~${projection.days} field days</span>${item.iceValueMultiplier>1?`<span>ICE DATA VALUE ×${item.iceValueMultiplier.toFixed(2)}</span>`:''}<span>Food on return ~${Math.max(0,Math.floor(projection.remaining))}%</span><span>Fuel on return ~${Math.max(0,Math.floor(projection.fuelRemaining))}%</span></div><button data-arx-action="accept" data-id="${item.id}" ${blocked?'disabled':''}>${label}</button></article>`;
   }
   function portVesselDashboardMarkup(resources,ship,quote) {
     const installed=[...ship.standardEquipment,...state.installedEquipment].map(id=>EQUIPMENT[id]).filter(Boolean), usage=slotUsage();
@@ -1391,36 +1345,34 @@
     const candidates=TEMPLATES.filter(item=>!item.weather&&templateCareerLevel(item)>=2&&eligible(item)&&!(item.onlyPorts?.length)); if(!candidates.length)return false; const rng=seeded(`professor-${Math.floor(state.elapsedDays*10)}-${professorCount}`),weighted=candidates.flatMap(item=>Array(templateCareerLevel(item)>=3?1+professorCount*8:1+professorCount*3).fill(item)),template=weighted[Math.floor(rng()*weighted.length)],origin=environment.position||{lat:78,lon:15},target=buildTarget(template,origin,rng,'grant',{nearby:!!(environment.iceEdge||environment.iceThickness),iceThickness:Number(environment.iceThickness)||0}); if(!target)return false;
     state.remoteOffer=target;state.lastProfessorGrantDay=state.elapsedDays;const modal=root.querySelector('#arx-target-modal');modal.innerHTML=`<div class="arx-modal-card arx-target-card"><small>PROFESSOR-ORIGINATED PROPOSAL</small><h2>${escapeHtml(target.title)}</h2><p>A professor aboard has developed a fundable research idea from conditions observed at sea. Accept it and the site will receive normal grant navigation guidance.</p>${mediaMarkup(target,'hero')}<div class="arx-operation-actions"><button class="ghost" data-arx-action="decline-professor-grant">DECLINE</button><button data-arx-action="accept-professor-grant">ACCEPT GRANT</button></div></div>`;modal.classList.add('open');return true;
   }
+  function liveFieldOpportunities(){return state.targets.filter(item=>(item.kind==='opportunity'||item.kind==='weather-opportunity')&&!item.accepted&&item.status!=='completed');}
+  function opportunityMoveGateKm(){return{fishing:45,trawler:90,coastal:150,global:220,icebreaker:270,nuclear:330}[state.currentVessel]||45;}
+  function recordOpportunitySpawn(target,position){if(!target)return;state.recentOpportunityTemplates=[target.templateId,...(state.recentOpportunityTemplates||[]).filter(id=>id!==target.templateId)].slice(0,3);if(position&&Number.isFinite(position.lat)&&Number.isFinite(position.lon))state.lastOpportunitySpawnPosition={lat:position.lat,lon:position.lon};}
   function maybeSpawnOpportunity(payload={}) {
-    if (!payload.position) return null;
-    if (maybeOfferProfessorGrant(payload)) return null;
+    if(!payload.position)return null;
+    if(maybeOfferProfessorGrant(payload))return null;
+    const live=liveFieldOpportunities();if(live.length>=2)return null;
+    const previous=state.lastOpportunitySpawnPosition,moveRequired=opportunityMoveGateKm();if(previous&&geoDistance(previous,payload.position)<moveRequired)return null;
+    const recentList=state.recentOpportunityTemplates||[],recent=new Set(recentList),activeTypes=new Set(live.map(item=>item.templateId));
     const weather=payload.weather;
-    if (weather?.type && weather.type!=='clear' && weather.eventId && !state.weatherEventsSeen.includes(weather.eventId)) {
-      const careerFloor=playerCareerLevel(),weatherTemplates=TEMPLATES.filter(item=>item.weather===weather.type&&(careerFloor<2||templateCareerLevel(item)>=careerFloor)&&templateSupportedByVessel(item)), basic=careerFloor<2?weatherTemplates.find(item=>item.anyScientist):null, advanced=weatherTemplates.filter(item=>!item.anyScientist&&eligible(item,weather));
-      const spawned=[];
-      for (const template of [basic,advanced[0]].filter(Boolean)) {
-        const rng=seeded(`${weather.eventId}-${template.id}`), target=buildTarget(template,payload.position,rng,'weather-opportunity',{weatherEventId:weather.eventId});
-        if (target) { target.selected=false; state.targets.push(target); spawned.push(target); }
-      }
+    if(weather?.type&&weather.type!=='clear'&&weather.eventId&&!state.weatherEventsSeen.includes(weather.eventId)){
+      const careerFloor=playerCareerLevel(),weatherTemplates=TEMPLATES.filter(item=>item.weather===weather.type&&templateCareerLevel(item)<=careerFloor&&templateSupportedByVessel(item)&&!activeTypes.has(item.id)),basic=careerFloor<2?weatherTemplates.find(item=>item.anyScientist&&!recent.has(item.id)):null,advanced=weatherTemplates.filter(item=>!item.anyScientist&&eligible(item,weather)&&!recent.has(item.id));
+      const template=advanced[0]||basic||weatherTemplates.find(item=>eligible(item,weather));
       state.weatherEventsSeen.push(weather.eventId);
-      if (spawned.length) { toast(`WEATHER RESEARCH AVAILABLE · ${spawned.map(item=>item.shortTitle).join(' + ')}`); changed(); return spawned[0]; }
-      return null;
+      if(!template)return null;
+      const rng=seeded(`${weather.eventId}-${template.id}`),target=buildTarget(template,payload.position,rng,'weather-opportunity',{weatherEventId:weather.eventId,iceThickness:Number(payload.iceThickness)||0,nearby:!!(payload.iceEdge||payload.iceThickness)});
+      if(!target)return null;target.selected=false;state.targets.push(target);recordOpportunitySpawn(target,payload.position);toast(`WEATHER RESEARCH AVAILABLE · ${target.shortTitle}`);changed({port:false});return target;
     }
-    const coastal=payload.fjord||payload.fjordScore>.38||payload.coastal||payload.coastDistanceKm<30,iceEdge=!!payload.iceEdge||payload.ice==='marginal'||payload.ice==='fast',iceThickness=Math.max(0,Number(payload.iceThickness)||0),deepIce=payload.ice==='packed'||payload.ice==='cracked'||payload.ice==='fast',inIce=iceEdge||deepIce,teamLevel=Math.max(1,...state.scientists.map(item=>careerLevel(item.career))),postdocCount=state.scientists.filter(item=>item.career==='postdoc').length,professorCount=state.scientists.filter(item=>item.career==='professor').length;
-    const opportunityCap=4;if(state.targets.filter(item=>item.kind==='opportunity'||item.kind==='weather-opportunity').length>=opportunityCap)return null;
-    const rng=seeded(`${payload.position.lat.toFixed(2)}-${payload.position.lon.toFixed(2)}-${state.portVisits}-${state.completed.length}-${Math.floor(state.elapsedDays*4)}`),recent=new Set(state.recentGrantTemplates||[]),unlockCredit=teamLevel>=3?8:teamLevel>=2?3:0;
-    let possible=TEMPLATES.filter(item=>!item.weather&&templateSupportedByVessel(item)&&(playerCareerLevel()<2||templateCareerLevel(item)>=playerCareerLevel())&&(item.unlockAfter||0)<=state.completed.length+unlockCredit&&!recent.has(item.id));
-    if(inIce){const icePossible=possible.filter(item=>item.iceAllowed);if(icePossible.length)possible=icePossible;}if(!possible.length){
-      const fallback=compatibleFallbackTemplate(),target=buildTarget(fallback,payload.position,rng,'opportunity',{nearby:inIce,iceThickness});
-      if(!target)return null;target.selected=false;state.targets.push(target);toast(`NEW RESEARCH OPPORTUNITY · ${target.shortTitle}`);changed({port:false});return target;
-    }
-    const weighted=possible.flatMap(template=>{let weight=1,level=templateCareerLevel(template);if(coastal&&(template.coastal||template.fjordPreferred||template.tier==='local'))weight+=payload.fjord?14:7;if(iceEdge&&template.iceAllowed)weight+=18;if(deepIce&&template.iceAllowed)weight+=30+iceThickness*18;if(inIce&&!template.iceAllowed)weight=1;if(teamLevel===2)weight+=level===2?18:level===1?2:0;if(teamLevel===2&&template.postdocOpportunity)weight+=42;if(teamLevel>=3)weight+=level===3?42:level===2?12:1;if(level===2)weight+=postdocCount*4+professorCount*3;if(level===3)weight+=professorCount*12;if(payload.ramming&&template.iceAllowed)weight+=25;if(!coastal&&template.tier!=='local')weight+=2;return Array(Math.max(1,Math.round(weight))).fill(template);});
-    const ready=weighted.filter(item=>eligible(item)), aspirational=weighted.filter(item=>teamCouldDoWithEquipment(item)||teamCouldDoWithMoreCrew(item)), otherMissing=weighted.filter(item=>!eligible(item));
-    let pool;
-    if(!ready.length&&aspirational.length) pool=aspirational;
-    else if(!ready.length){const fallback=compatibleFallbackTemplate(),target=buildTarget(fallback,payload.position,rng,'opportunity',{nearby:inIce,iceThickness});if(!target)return null;target.selected=false;state.targets.push(target);toast(`NEW RESEARCH OPPORTUNITY · ${target.shortTitle}`);changed();return target;}
-    else if (aspirational.length&&rng()<.30) pool=aspirational; else pool=ready;
-    const template=pool[Math.floor(rng()*pool.length)];let target=buildTarget(template,payload.position,rng,'opportunity',{nearby:inIce,iceThickness});if(!target){const fallback=compatibleFallbackTemplate();fallback.anywhere=false;fallback.minDistance=12;fallback.distanceRange=45;target=buildTarget(fallback,payload.position,rng,'opportunity',{nearby:true,iceThickness});}if(!target)return null;target.selected=false;state.targets.push(target);toast(`NEW RESEARCH OPPORTUNITY · ${target.shortTitle}`);changed({port:false});return target;
+    const coastal=payload.fjord||payload.fjordScore>.38||payload.coastal||payload.coastDistanceKm<30,iceEdge=!!payload.iceEdge||payload.ice==='marginal'||payload.ice==='fast',iceThickness=Math.max(0,Number(payload.iceThickness)||0),deepIce=payload.ice==='packed'||payload.ice==='cracked'||payload.ice==='fast',inIce=iceEdge||deepIce,teamLevel=Math.max(1,...state.scientists.map(item=>careerLevel(item.career))),postdocCount=state.scientists.filter(item=>item.career==='postdoc').length,professorCount=state.scientists.filter(item=>item.career==='professor').length,careerFloor=playerCareerLevel(),unlockCredit=teamLevel>=3?8:teamLevel>=2?3:0;
+    const basePossible=TEMPLATES.filter(item=>!item.weather&&templateSupportedByVessel(item)&&templateCareerLevel(item)<=careerFloor&&(item.unlockAfter||0)<=state.completed.length+unlockCredit&&!activeTypes.has(item.id));
+    let possible=basePossible.filter(item=>!recent.has(item.id));if(!possible.length&&recentList.length)possible=basePossible.filter(item=>item.id!==recentList[0]);if(!possible.length)possible=basePossible;
+    if(inIce){const icePossible=possible.filter(item=>item.iceAllowed);if(icePossible.length)possible=icePossible;}
+    const allowGenericFallback=careerFloor===1&&state.currentVessel==='fishing';
+    if(!possible.length){if(!allowGenericFallback)return null;const fallback=compatibleFallbackTemplate();if(recent.has(fallback.id))return null;const rng=seeded(`fallback-${payload.position.lat.toFixed(2)}-${payload.position.lon.toFixed(2)}-${Math.floor(state.elapsedDays*4)}`),target=buildTarget(fallback,payload.position,rng,'opportunity',{nearby:false,iceThickness});if(!target)return null;target.selected=false;state.targets.push(target);recordOpportunitySpawn(target,payload.position);toast(`NEW RESEARCH OPPORTUNITY · ${target.shortTitle}`);changed({port:false});return target;}
+    const weighted=possible.flatMap(template=>{let weight=1,level=templateCareerLevel(template);if(coastal&&(template.coastal||template.fjordPreferred||template.tier==='local'))weight+=payload.fjord?8:4;if(iceEdge&&template.iceAllowed)weight+=12;if(deepIce&&template.iceAllowed)weight+=20+iceThickness*10;if(inIce&&!template.iceAllowed)weight=1;if(teamLevel===2)weight+=level===2?18:level===1?3:0;if(teamLevel===2&&template.postdocOpportunity)weight+=30;if(teamLevel>=3)weight+=level===3?36:level===2?12:2;if(level===2)weight+=postdocCount*4+professorCount*3;if(level===3)weight+=professorCount*10;if(!coastal&&template.tier!=='local')weight+=3;return Array(Math.max(1,Math.round(weight))).fill(template);});
+    const ready=weighted.filter(item=>eligible(item)),aspirational=weighted.filter(item=>teamCouldDoWithEquipment(item)||teamCouldDoWithMoreCrew(item));let pool;if(!ready.length&&aspirational.length)pool=aspirational;else if(!ready.length)return null;else if(aspirational.length&&Math.random()<.25)pool=aspirational;else pool=ready;
+    const rng=seeded(`${payload.position.lat.toFixed(2)}-${payload.position.lon.toFixed(2)}-${state.portVisits}-${state.completed.length}-${Math.floor(state.elapsedDays*4)}`),template=pool[Math.floor(rng()*pool.length)],target=buildTarget(template,payload.position,rng,'opportunity',{nearby:false,iceThickness});
+    if(!target)return null;target.selected=false;state.targets.push(target);recordOpportunitySpawn(target,payload.position);toast(`NEW RESEARCH OPPORTUNITY · ${target.shortTitle}`);changed({port:false});return target;
   }
 
   function publishPaper(automatic=false) {
@@ -1616,6 +1568,7 @@
   }
   function acceptOffer(id) {
     const offer=state.offers.find(item=>item.id===id); if (!offer) return;
+    if(!eligible(offer)){const missing=missingMissionEquipment(offer);toast(missing.length?`GRANT NOT READY · NEED ${EQUIPMENT[missing[0]]?.name||missing[0]}`:'GRANT NOT READY · CHECK CREW AND EQUIPMENT');return;}
     if (grantLoad()>=grantCapacity()) { toast(`ACTIVE RESEARCH GRANT LIMIT · ${grantLoad()}/${grantCapacity()}`); return; }
     const projection=missionFoodProjection(offer);
     if (projection.remaining<15) { toast('INSUFFICIENT FOOD SUPPLY ONBOARD TO COMPLETE THE WORK'); return; }
@@ -1789,6 +1742,7 @@ function vesselOverlay() {
     else if (action==='vessel') chooseVessel(id);
     else if (action==='equipment') buyEquipment(id);
     else if (action==='sell-equipment') sellEquipment(id);
+    else if (action==='shop-equipment') { if(!state.port){toast('RETURN TO PORT TO PURCHASE EQUIPMENT');}else{activePortTab='equipment';openStoreDetail=`equipment-${id}`;portScrollTop=0;renderPort();requestAnimationFrame(()=>root?.querySelector(`[data-arx-store-details=\"equipment-${id}\"]`)?.scrollIntoView({block:'start',behavior:'smooth'}));} }
     else if (action==='accept') acceptOffer(id);
     else if (action==='accept-opportunity') { const target=state.targets.find(item=>item.id===id); if(target&&(target.kind==='opportunity'||target.kind==='weather-opportunity')){target.accepted=true;target.expiresAtDay=null;target.selected=true;addLog(`Research opportunity accepted: ${target.title}.`);toast(`RESEARCH OPPORTUNITY ACCEPTED · ${target.shortTitle||target.title}`);renderResearchWindow(target,{phase:'ready'});changed({port:false});} }
     else if (action==='accept-professor-grant'&&state.remoteOffer) { state.targets.forEach(item=>item.selected=false);state.remoteOffer.selected=true;state.remoteOffer.upfront=0;state.remoteOffer.advancePaid=0;state.targets.push(state.remoteOffer);addLog(`Professor-originated grant accepted: ${state.remoteOffer.title}. Payment due on completion.`);state.remoteOffer=null;root.querySelector('#arx-target-modal').classList.remove('open');renderSidebar();changed(); }
@@ -1848,7 +1802,7 @@ function vesselOverlay() {
       @media(max-width:900px) and (orientation:landscape){.arx-port-navrow{display:flex!important}.arx-tabs-viewport{padding:0!important}.arx-tab-hint{display:none!important}.arx-port-cash{flex:0 0 auto!important;justify-content:flex-end!important;padding:0 10px!important;border-left:1px solid rgba(166,230,244,.18)!important;border-bottom:0!important}}
     `;
     style.textContent+=`
-      .arx-research-unified{width:min(780px,100%)!important;max-height:calc(100vh - 24px)!important;overflow:auto!important}.arx-research-unified .arx-media.hero{height:180px;margin:10px 0 14px;border-radius:10px}.arx-research-facts{grid-template-columns:repeat(3,1fr)!important}.arx-research-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:12px}.arx-research-actions.single{grid-template-columns:1fr}.arx-research-actions button,.arx-grant-actions button{width:100%;padding:9px;border:0;border-radius:7px;background:#f6d365;color:#17323b;font-size:7px;font-weight:900;letter-spacing:.06em}.arx-research-actions button:disabled{background:#315766;color:#7896a0}.arx-research-actions .ghost{border:1px solid rgba(166,230,244,.25);background:transparent;color:#a9d2dc}.arx-research-actions .danger,.arx-grant-actions .danger{border:1px solid rgba(249,115,103,.38);background:rgba(111,45,52,.6);color:#ffd0c9}.arx-operation-scientists,.arx-operation-equipment{display:flex;flex-wrap:wrap;gap:7px;margin:7px 0 11px}.arx-operation-scientists>div,.arx-operation-gear{display:flex;align-items:center;gap:7px;min-width:150px;padding:6px;border-radius:7px;background:rgba(30,79,96,.4)}.arx-operation-scientists img,.arx-operation-gear img{width:42px;height:42px;flex:0 0 42px;border-radius:7px;object-fit:cover;background:#123d51}.arx-operation-gear img{object-fit:contain}.arx-operation-scientists b,.arx-operation-scientists small,.arx-operation-gear span{display:block;font-size:7px}.arx-operation-scientists small{margin-top:2px;color:#8fb7c2}.arx-operation-subhead,.arx-mini-label{margin:9px 0 4px;color:#7dd3fc;font:900 8px system-ui;letter-spacing:.1em}.research-offer .arx-operation-scientists>div,.research-offer .arx-operation-gear{min-width:130px;padding:4px}.research-offer .arx-operation-scientists img,.research-offer .arx-operation-gear img{width:34px;height:34px;flex-basis:34px}.arx-grant-advance{display:grid;grid-template-columns:1fr;gap:6px;margin:8px 0}.arx-grant-advance span{padding:7px;border-radius:7px;background:rgba(246,211,101,.08)}.arx-grant-advance small,.arx-grant-advance b{display:block}.arx-grant-advance small{color:#8fb7c2;font-size:6px}.arx-grant-advance b{margin-top:3px;color:#fff1a8;font-size:10px}.arx-grant-actions{display:grid;grid-template-columns:1fr;gap:6px}.arx-publication-tier-guide{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:16px 0;text-align:left}.arx-publication-tier-guide span{padding:11px;border:1px solid rgba(125,211,252,.2);border-radius:8px;background:rgba(30,79,96,.42)}.arx-publication-tier-guide b,.arx-publication-tier-guide small,.arx-publication-tier-guide em{display:block}.arx-publication-tier-guide b{color:#f6d365;font:900 14px system-ui}.arx-publication-tier-guide small{margin-top:3px;color:#7dd3fc;font-size:8px;font-weight:900}.arx-publication-tier-guide em{margin-top:7px;color:#a9cbd4;font-size:8px;font-style:normal;line-height:1.4}.arx-gauge-labels{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px;color:#91bac4;font-size:7px;font-weight:900;letter-spacing:.08em;text-align:center}@media(max-width:760px){.arx-publication-tier-guide{grid-template-columns:1fr}}.arx-result-placeholder{padding:9px;border:1px dashed rgba(166,230,244,.18);border-radius:7px;color:#789eaa;font-size:8px;text-align:center}.arx-research-result{padding:10px;border:1px solid rgba(142,240,207,.24);border-radius:8px;background:rgba(35,91,77,.16)}.arx-research-result>small{color:#8ef0cf;font-size:8px;font-weight:900;letter-spacing:.08em}.arx-research-result>p{color:#b9d7d9;font-size:9px}@media(max-width:760px){.arx-research-facts{grid-template-columns:1fr 1fr!important}.arx-research-actions{grid-template-columns:1fr 1fr}.arx-research-unified .arx-media.hero{height:145px}.arx-grant-advance{grid-template-columns:1fr}}
+      .arx-research-unified{width:min(780px,100%)!important;max-height:calc(100vh - 24px)!important;overflow:auto!important}.arx-research-unified .arx-media.hero{height:180px;margin:10px 0 14px;border-radius:10px}.arx-research-facts{grid-template-columns:repeat(3,1fr)!important}.arx-research-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:12px}.arx-research-actions.single{grid-template-columns:1fr}.arx-research-actions button,.arx-grant-actions button{width:100%;padding:9px;border:0;border-radius:7px;background:#f6d365;color:#17323b;font-size:7px;font-weight:900;letter-spacing:.06em}.arx-research-actions button:disabled{background:#315766;color:#7896a0}.arx-research-actions .ghost{border:1px solid rgba(166,230,244,.25);background:transparent;color:#a9d2dc}.arx-research-actions .danger,.arx-grant-actions .danger{border:1px solid rgba(249,115,103,.38);background:rgba(111,45,52,.6);color:#ffd0c9}.arx-operation-scientists,.arx-operation-equipment{display:flex;flex-wrap:wrap;gap:7px;margin:7px 0 11px}.arx-operation-scientists>div,.arx-operation-gear{display:flex;align-items:center;gap:7px;min-width:150px;padding:6px;border-radius:7px;background:rgba(30,79,96,.4)}.arx-operation-scientists img,.arx-operation-gear img{width:42px;height:42px;flex:0 0 42px;border-radius:7px;object-fit:cover;background:#123d51}.arx-operation-gear img{object-fit:contain}.arx-operation-scientists b,.arx-operation-scientists small,.arx-operation-gear span{display:block;font-size:7px}.arx-operation-scientists small{margin-top:2px;color:#8fb7c2}.arx-operation-subhead,.arx-mini-label{margin:9px 0 4px;color:#7dd3fc;font:900 8px system-ui;letter-spacing:.1em}.research-offer .arx-operation-scientists>div,.research-offer .arx-operation-gear{min-width:130px;padding:4px}.research-offer .arx-operation-scientists img,.research-offer .arx-operation-gear img{width:34px;height:34px;flex-basis:34px}.research-offer.unready{border-color:rgba(150,166,171,.32)!important;background:rgba(45,58,64,.46)!important}.research-offer.unready>.arx-offer-thumb,.research-offer.unready>.arx-card-head,.research-offer.unready>p,.research-offer.unready>.arx-grant-advance,.research-offer.unready>.arx-stats{filter:grayscale(.75);opacity:.7}.arx-grant-shop-links{display:grid;gap:6px;margin:8px 0 11px}.arx-grant-shop-links>small{color:#c5d1d4;font-size:7px;font-weight:900;letter-spacing:.08em}.arx-grant-shop-links button{background:#78919a!important;color:#f7fbfc!important}.arx-grant-advance{display:grid;grid-template-columns:1fr;gap:6px;margin:8px 0}.arx-grant-advance span{padding:7px;border-radius:7px;background:rgba(246,211,101,.08)}.arx-grant-advance small,.arx-grant-advance b{display:block}.arx-grant-advance small{color:#8fb7c2;font-size:6px}.arx-grant-advance b{margin-top:3px;color:#fff1a8;font-size:10px}.arx-grant-actions{display:grid;grid-template-columns:1fr;gap:6px}.arx-publication-tier-guide{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:16px 0;text-align:left}.arx-publication-tier-guide span{padding:11px;border:1px solid rgba(125,211,252,.2);border-radius:8px;background:rgba(30,79,96,.42)}.arx-publication-tier-guide b,.arx-publication-tier-guide small,.arx-publication-tier-guide em{display:block}.arx-publication-tier-guide b{color:#f6d365;font:900 14px system-ui}.arx-publication-tier-guide small{margin-top:3px;color:#7dd3fc;font-size:8px;font-weight:900}.arx-publication-tier-guide em{margin-top:7px;color:#a9cbd4;font-size:8px;font-style:normal;line-height:1.4}.arx-gauge-labels{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px;color:#91bac4;font-size:7px;font-weight:900;letter-spacing:.08em;text-align:center}@media(max-width:760px){.arx-publication-tier-guide{grid-template-columns:1fr}}.arx-result-placeholder{padding:9px;border:1px dashed rgba(166,230,244,.18);border-radius:7px;color:#789eaa;font-size:8px;text-align:center}.arx-research-result{padding:10px;border:1px solid rgba(142,240,207,.24);border-radius:8px;background:rgba(35,91,77,.16)}.arx-research-result>small{color:#8ef0cf;font-size:8px;font-weight:900;letter-spacing:.08em}.arx-research-result>p{color:#b9d7d9;font-size:9px}@media(max-width:760px){.arx-research-facts{grid-template-columns:1fr 1fr!important}.arx-research-actions{grid-template-columns:1fr 1fr}.arx-research-unified .arx-media.hero{height:145px}.arx-grant-advance{grid-template-columns:1fr}}
     `;
     root.addEventListener('click',event=>{
       const mobile=event.target.closest('[data-arx-action="mobile-toggle"]');
@@ -1888,11 +1842,12 @@ function vesselOverlay() {
     root?.querySelectorAll('.arx-modal.open').forEach(modal=>modal.classList.remove('open'));
     for (const key of Object.keys(state)) if (Object.prototype.hasOwnProperty.call(snapshot,key)) state[key]=clone(snapshot[key]);
     state.inventory=state.inventory||{}; state.deployments=state.deployments||[]; state.weatherEventsSeen=state.weatherEventsSeen||[]; state.droppedGrantTemplates=state.droppedGrantTemplates||[]; state.scientistRecords=state.scientistRecords||{};
-    state.observed=state.observed||[]; state.observedIndividuals=state.observedIndividuals||[]; state.homePortId=state.homePortId||'longyearbyen'; state.recentGrantTemplates=state.recentGrantTemplates||[]; state.recentGrantSites=state.recentGrantSites||[]; state.grantCooldowns=state.grantCooldowns||{}; state.grantMarketReady=state.grantMarketReady||{}; state.assistedByVessels=state.assistedByVessels||[]; state.bridgeSupportNotice=state.bridgeSupportNotice||null; state.lastPortId=state.lastPortId||null; state.lastProfessorGrantDay=Number(state.lastProfessorGrantDay??-999); state.remoteOffer=state.remoteOffer||null; state.helicopterFoodReminderShown=!!state.helicopterFoodReminderShown; state.elapsedDays=Number(state.elapsedDays)||0; state.playerConfigured=!!state.playerConfigured;
+    state.observed=state.observed||[]; state.observedIndividuals=state.observedIndividuals||[]; state.homePortId=state.homePortId||'longyearbyen'; state.recentGrantTemplates=state.recentGrantTemplates||[]; state.recentGrantSites=state.recentGrantSites||[]; state.recentOpportunityTemplates=state.recentOpportunityTemplates||[]; state.lastOpportunitySpawnPosition=state.lastOpportunitySpawnPosition||null; state.grantCooldowns=state.grantCooldowns||{}; state.grantMarketReady=state.grantMarketReady||{}; state.assistedByVessels=state.assistedByVessels||[]; state.bridgeSupportNotice=state.bridgeSupportNotice||null; state.lastPortId=state.lastPortId||null; state.lastProfessorGrantDay=Number(state.lastProfessorGrantDay??-999); state.remoteOffer=state.remoteOffer||null; state.helicopterFoodReminderShown=!!state.helicopterFoodReminderShown; state.elapsedDays=Number(state.elapsedDays)||0; state.playerConfigured=!!state.playerConfigured;
     state.installedEquipment=(state.installedEquipment||[]).filter(id=>EQUIPMENT[id]&&!EQUIPMENT[id].builtIn);
     state.scientists=(state.scientists||[]).map(item=>({...item,missions:item.missions||0,papers:item.papers||0,recruitmentPool:item.recruitmentPool||profileFor(item).recruitmentPool||'international'}));
     for (const scientist of state.scientists) recordScientist(scientist);
     state.offers=(state.offers||[]).filter(Boolean).slice(0,9);
+    const staleField=(state.targets||[]).filter(item=>(item.kind==='opportunity'||item.kind==='weather-opportunity')&&!item.accepted&&item.status!=='completed');if(staleField.length>2){const keep=new Set(staleField.slice(-2).map(item=>item.id));state.targets=state.targets.filter(item=>!(item.kind==='opportunity'||item.kind==='weather-opportunity')||item.accepted||item.status==='completed'||keep.has(item.id));}
     renderSidebar();
   }
   function ensureMinimumSupplies(fraction=.25) { state.supplies=Math.max(state.supplies,Math.ceil(vessel().supplyCapacity*fraction)); renderSidebar(); }
