@@ -23,6 +23,17 @@ def browser_errors():
             errors.append(msg)
     return errors
 
+def decode_image(url):
+    driver.set_script_timeout(15)
+    return driver.execute_async_script("""
+      const url=arguments[0],done=arguments[arguments.length-1];
+      const img=new Image();
+      const finish=(ok)=>done({ok,width:img.naturalWidth,height:img.naturalHeight,src:img.src});
+      img.onload=()=>finish(img.naturalWidth>0);
+      img.onerror=()=>finish(false);
+      img.src=url+'?smoke='+Date.now();
+    """,url)
+
 try:
     driver.get('http://127.0.0.1:8765/')
     wait.until(EC.element_to_be_clickable((By.ID,'start-button'))).click()
@@ -50,18 +61,23 @@ try:
     if not port_visible:
         raise AssertionError(f'Port screen unavailable after startup; character_open={character_open}, port_enabled={port_enabled}, welcome_hidden={welcome_hidden}, sidebar={sidebar.text[:300]!r}')
 
-    # Shipyard: generated images must really load in browser, not merely exist in Git.
+    # Decode every approved vessel art file directly. Nuclear is tested even though
+    # it is not sold at Longyearbyen. Then verify the local Shipyard points at the
+    # correct three conventional-vessel drawings.
+    urls={
+      'coastal-rv.webp':'assets/vessels/coastal-rv.webp',
+      'global-rv.webp':'assets/vessels/global-rv.webp',
+      'icebreaker.webp':'assets/vessels/icebreaker.webp',
+      'nuclear-icebreaker.webp':'assets/vessels/nuclear-icebreaker.webp'
+    }
+    loaded={key:decode_image(url) for key,url in urls.items()}
+    missing=[key for key,value in loaded.items() if not value.get('ok')]
+    if missing: raise AssertionError('Approved vessel images failed browser decode: '+', '.join(missing)+' details='+repr(loaded))
     driver.find_element(By.CSS_SELECTOR,'[data-arx-tab="fleet"]').click()
     wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR,'[data-arx-store-details^="vessel-"] img')))
-    required=('coastal-rv.webp','global-rv.webp','icebreaker.webp','nuclear-icebreaker.webp')
-    loaded={}
-    for img in driver.find_elements(By.CSS_SELECTOR,'[data-arx-store-details^="vessel-"] img'):
-        src=img.get_attribute('src') or ''
-        for key in required:
-            if key in src:
-                loaded[key]=driver.execute_script('return arguments[0].complete && arguments[0].naturalWidth>0',img)
-    missing=[key for key in required if not loaded.get(key)]
-    if missing: raise AssertionError('Shipyard vessel images failed to load: '+', '.join(missing))
+    shipyard_src='\n'.join(img.get_attribute('src') or '' for img in driver.find_elements(By.CSS_SELECTOR,'[data-arx-store-details^="vessel-"] img'))
+    for expected in ('coastal-rv.webp','global-rv.webp','icebreaker.webp'):
+        if expected not in shipyard_src: raise AssertionError('Shipyard is not wired to '+expected)
 
     # Grant board must not be empty on a fresh playable career.
     driver.find_element(By.CSS_SELECTOR,'[data-arx-tab="contracts"]').click()
