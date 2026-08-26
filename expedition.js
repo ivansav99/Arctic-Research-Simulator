@@ -700,9 +700,9 @@
   }
   function researchDistanceWindow(template,kind,options={}) {
     const vesselId=state.currentVessel,official=kind==='grant'||kind==='contract';
-    const grantRanges={fishing:[25,150],trawler:[260,720],coastal:[950,1700],global:[1200,2300],icebreaker:[1400,2700],nuclear:[1600,3100]};
-    const opportunityRanges={fishing:[25,100],trawler:[70,230],coastal:[170,480],global:[260,700],icebreaker:[320,850],nuclear:[380,1000]};
-    const nearbyRanges={fishing:[20,70],trawler:[55,150],coastal:[120,300],global:[180,420],icebreaker:[220,520],nuclear:[260,620]};
+    const grantRanges={fishing:[25,150],trawler:[70,350],coastal:[120,650],global:[180,900],icebreaker:[220,1350],nuclear:[260,1700]};
+    const opportunityRanges={fishing:[25,100],trawler:[45,160],coastal:[70,240],global:[100,320],icebreaker:[120,400],nuclear:[140,480]};
+    const nearbyRanges={fishing:[20,70],trawler:[35,110],coastal:[55,160],global:[75,220],icebreaker:[95,280],nuclear:[110,330]};
     const range=(options.nearby?nearbyRanges:official?grantRanges:opportunityRanges)[vesselId]||(official?grantRanges.fishing:opportunityRanges.fishing);
     const career=playerCareerLevel(),careerBonus=official?0:(career>=3?60:career===2?25:0),explicit=Math.max(0,Number(template.minDistance)||0);
     let min=Math.max(range[0]+careerBonus,explicit),max=Math.max(min+20,range[1]+careerBonus);
@@ -754,12 +754,12 @@
   function buildTarget(template, origin, rng, kind='grant', options={}) {
     if(!missionFitsCurrentVessel(template))return null;
     const scale=.88+rng()*.26, vesselScale=DATA_SCALE_BY_VESSEL[state.currentVessel]||3, crewScale=1+Math.min(.5,Math.max(0,state.scientists.length-1)*.03);
-    const window=researchDistanceWindow(template,kind,options);
+    const window=template.anywhere?{min:0,max:0}:researchDistanceWindow(template,kind,options);
     const validator=callbacks.isResearchSiteSuitable;
     const avoidPoints=[...state.targets,...state.offers,...(state.recentGrantSites||[])].filter(item=>item.status!=='completed');
-    let point=template.fixedDestination ? {...template.fixedDestination} : null;
+    let point=template.anywhere?{lat:origin.lat,lon:origin.lon}:(template.fixedDestination ? {...template.fixedDestination} : null);
     let distance=0, bearing=0;
-    const spacing=options.nearby?Math.max(35,targetSpacingKm()*.7):targetSpacingKm(),context=()=>({template,origin,kind,distanceKm:distance,bearingDeg:bearing,distanceWindow:window,avoidPoints,minimumSpacingKm:spacing,preferred:template.fixedDestination||null,...options});
+    const spacing=options.nearby?Math.max(35,targetSpacingKm()*.7):targetSpacingKm(),context=()=>({template,origin,kind,distanceKm:distance,bearingDeg:bearing,distanceWindow:template.fixedDestination?null:window,avoidPoints,minimumSpacingKm:spacing,preferred:template.fixedDestination||null,...options});
     if (point) {
       distance=geoDistance(origin,point);
       if ((!template.anywhere&&!pointIsSpaced(point,avoidPoints,spacing)) || (!template.anywhere&&validator&&!validator(point,context()))) point=null;
@@ -835,12 +835,18 @@
       return {id:`candidate-${state.portVisits}-${profile.id}`,profileId:profile.id,name:profile.name,specialty:profile.specialty,recruitmentPool:profile.recruitmentPool,career:record.career||career,missions:record.missions||0,papers:record.papers||0};
     });
   }
-  function compatibleFallbackTemplate() {
-    const scientist=state.scientists[0],specialty=scientist?.specialty||'physical',spec=specialtyById[specialty]?.name||'Arctic',level=playerCareerLevel();
-    if(level>=3)return mission({id:`fallback-professor-${specialty}`,careerLevel:3,professorOpportunity:true,title:`Arctic Basin ${spec} Synthesis Transect`,shortTitle:'BASIN SYNTHESIS',specialties:[specialty],equipment:[],data:72,reward:125000,supplies:14,workHours:90,anywhere:true,media:MEDIA.ctd,description:'Design and execute a basin-scale synthesis transect that connects the expedition’s observations to a major Arctic process question.',steps:['Define the basin-scale hypothesis','Select a defensible transect','Collect the core observations','Synthesize regional context','Deliver the sponsor science report']});
-    if(level===2)return mission({id:`fallback-postdoc-${specialty}`,careerLevel:2,postdocOpportunity:true,title:`Regional ${spec} Process Survey`,shortTitle:'PROCESS SURVEY',specialties:[specialty],equipment:[],data:42,reward:58000,supplies:8,workHours:56,anywhere:true,media:MEDIA.winch,description:'Resolve a regional Arctic process with a focused multi-station survey appropriate to a postdoctoral expedition.',steps:['Form the process hypothesis','Lay out regional stations','Collect repeatable observations','Resolve the spatial gradient','Prepare the sponsor synthesis']});
-    return mission({id:`fallback-${specialty}`,tier:'local',careerLevel:1,title:`${spec} Field Reconnaissance`,shortTitle:'FIELD RECON',specialties:[specialty],equipment:[],data:7,reward:7500,supplies:1,workHours:10,anywhere:true,coastal:['coastal-oceanography','coastal-ecology','plankton','fisheries'].includes(specialty),fjordPreferred:true,media:MEDIA.local,description:'A flexible sponsor call that matches the expertise currently aboard.',steps:['Define the local observation plan','Collect a repeatable field record','Check metadata and position','Preserve samples or imagery','Transmit the sponsor summary']});
+  function careerFallbackTemplate(specialty=playerScientist()?.specialty||'physical',variant=0) {
+    const spec=specialtyById[specialty]?.name||'Arctic science',level=playerCareerLevel(),crew=Math.max(1,Math.min(vessel().berths,state.scientists.length||1)),iceCapable=['icebreaker','nuclear'].includes(state.currentVessel);
+    if(level>=3)return mission({id:`fallback-professor-${specialty}-${variant?'section':'synthesis'}`,careerLevel:3,professorOpportunity:true,title:variant?`Trans-Arctic ${spec} Process Section`:`Arctic Basin ${spec} Synthesis Transect`,shortTitle:variant?'TRANS-ARCTIC SECTION':'BASIN SYNTHESIS',specialties:[specialty],equipment:[],minCrew:crew,data:72,reward:125000,supplies:14,workHours:90,iceAllowed:iceCapable,media:MEDIA.ctd,description:variant?'Resolve a basin-scale process along a defensible trans-Arctic section, combining repeated stations with regional context.':'Design and execute a basin-scale synthesis transect that connects the expedition’s observations to a major Arctic process question.',steps:['Define the basin-scale hypothesis','Select a defensible transect','Collect the core observations','Resolve the regional gradient','Deliver the sponsor science synthesis']});
+    if(level===2)return mission({id:`fallback-postdoc-${specialty}-${variant?'gradient':'process'}`,careerLevel:2,postdocOpportunity:true,title:variant?`Shelf-Basin ${spec} Gradient Transect`:`Regional ${spec} Process Survey`,shortTitle:variant?'SHELF-BASIN GRADIENT':'PROCESS SURVEY',specialties:[specialty],equipment:[],minCrew:crew,data:42,reward:58000,supplies:8,workHours:56,media:MEDIA.winch,description:variant?'Resolve a regional shelf-to-basin gradient with a focused sequence of repeatable stations.':'Resolve a regional Arctic process with a focused multi-station survey appropriate to a postdoctoral expedition.',steps:['Form the process hypothesis','Lay out regional stations','Collect repeatable observations','Resolve the spatial gradient','Prepare the sponsor synthesis']});
+    return mission({id:`fallback-grad-${specialty}-${variant?'station':'recon'}`,tier:'local',careerLevel:1,title:variant?`${spec} Local Process Station`:`${spec} Field Reconnaissance`,shortTitle:variant?'LOCAL PROCESS':'FIELD RECON',specialties:[specialty],equipment:[],minCrew:1,data:7,reward:7500,supplies:1,workHours:10,coastal:['coastal-oceanography','coastal-ecology','plankton','fisheries'].includes(specialty),fjordPreferred:true,media:MEDIA.local,description:variant?'A compact local station designed around one clear, graduate-scale process question.':'A flexible sponsor call that matches the expertise currently aboard.',steps:['Define the local observation plan','Collect a repeatable field record','Check metadata and position','Preserve samples or imagery','Transmit the sponsor summary']});
   }
+  function careerFallbackTemplates() {
+    const specialties=[...new Set([playerScientist()?.specialty,...state.scientists.map(item=>item.specialty)].filter(Boolean))].slice(0,4),templates=[];
+    for(const specialty of specialties)for(const variant of [0,1])templates.push(careerFallbackTemplate(specialty,variant));
+    return templates;
+  }
+  function compatibleFallbackTemplate() { return careerFallbackTemplates()[0]||careerFallbackTemplate(); }
   const GRANT_MEDIA_POOL=[MEDIA.river,MEDIA.ice,MEDIA.storm,MEDIA.ctd,MEDIA.rov,MEDIA.radar,MEDIA.balloon,MEDIA.aerostat,MEDIA.drone,MEDIA.drifter,MEDIA.winch,MEDIA.handheldWater,MEDIA.iceCorer,MEDIA.miniRov,MEDIA.shallowAdcp,MEDIA.surfaceNet,MEDIA.verticalNet,MEDIA.bongoDetailed,MEDIA.ednaKit,MEDIA.fieldKit,MEDIA.shallowCorer,MEDIA.vessel].filter(Boolean);
   function canonicalMissionMedia(item){const template=TEMPLATES.find(template=>template.id===item?.templateId);return template?.media||item?.media||MEDIA.fieldKit||MEDIA.local;}
   function giveGrantUniqueMedia(target,used,rng){
@@ -849,8 +855,8 @@
   }
   function generateOffers(port,{fresh=false}={}) {
     if(!port)return; const portId=normalizedPortId(port),cycle=`${portId}:${state.portVisits}`; if(!fresh&&state.grantOfferCycle===cycle)return; state.grantOfferCycle=cycle;
-    const rng=seeded(`${portId}-${state.portVisits}-grants-v6-${playerScientist()?.career||'grad'}-${state.currentVessel}`),activeTemplates=new Set(activeGrants().map(item=>item.templateId));
-    const careerFloor=playerCareerLevel(),lastAcceptedTemplate=(state.recentGrantTemplates||[])[0]||null,available=TEMPLATES.filter(item=>!item.weather&&templateCareerLevel(item)===careerFloor&&item.id!==lastAcceptedTemplate&&templateSupportedByVessel(item)&&hasSpecialty(item)&&(eligible(item)||teamCouldDoWithEquipment(item)||teamCouldDoWithMoreCrew(item))&&!activeTemplates.has(item.id)&&!(state.droppedGrantTemplates||[]).includes(item.id)&&(item.unlockAfter||0)<=state.completed.length&&(!item.onlyPorts||item.onlyPorts.includes(portId))&&(state.grantCooldowns?.[`${portId}:${item.id}`]||0)<=state.elapsedDays);
+    const rng=seeded(`${portId}-${state.portVisits}-grants-v7-${playerScientist()?.career||'grad'}-${state.currentVessel}`),activeTemplates=new Set(activeGrants().map(item=>item.templateId));
+    const careerFloor=playerCareerLevel(),lastAcceptedTemplate=(state.recentGrantTemplates||[])[0]||null,sourceTemplates=[...TEMPLATES,...careerFallbackTemplates()],available=sourceTemplates.filter(item=>!item.weather&&templateCareerLevel(item)===careerFloor&&item.id!==lastAcceptedTemplate&&templateSupportedByVessel(item)&&hasSpecialty(item)&&(eligible(item)||teamCouldDoWithEquipment(item)||teamCouldDoWithMoreCrew(item))&&!activeTemplates.has(item.id)&&!(state.droppedGrantTemplates||[]).includes(item.id)&&(item.unlockAfter||0)<=state.completed.length&&(!item.onlyPorts||item.onlyPorts.includes(portId))&&(state.grantCooldowns?.[`${portId}:${item.id}`]||0)<=state.elapsedDays);
     const teamLevel=playerCareerLevel(),postdocCount=state.scientists.filter(item=>item.career==='postdoc').length,professorCount=state.scientists.filter(item=>item.career==='professor').length,weighted=[];
     for(const template of available){const level=templateCareerLevel(template);let weight=teamLevel===1?(level===1?7:1):teamLevel===2?(level===2?12:level===1?1:2):(level===3?15:level===2?5:1);if(level===2)weight+=postdocCount*4+professorCount*2;if(level===3)weight+=professorCount*5;if(template.fjordPreferred&&teamLevel===1)weight+=2;for(let i=0;i<weight;i++)weighted.push(template);}
     for(let i=weighted.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[weighted[i],weighted[j]]=[weighted[j],weighted[i]];} const pool=[],seen=new Set(); for(const item of weighted)if(!seen.has(item.id)){seen.add(item.id);pool.push(item);}
@@ -864,7 +870,7 @@
     const ordered=[...priority,...pool.filter(item=>!priorityIds.has(item.id))];
     state.offers=[];const usedPictures=new Set();let attempts=0;
     for(const template of ordered){if(state.offers.length>=offerLimit||attempts>=offerLimit*4)break;attempts++;const target=buildTarget(template,port,rng,'grant');if(!target)continue;if(!giveGrantUniqueMedia(target,usedPictures,rng))continue;state.offers.push(target);}
-    if(!state.offers.length){const fallback=buildTarget(compatibleFallbackTemplate(),port,rng,'grant');if(fallback){giveGrantUniqueMedia(fallback,usedPictures,rng);state.offers.push(fallback);}}
+    if(!state.offers.length){let template=compatibleFallbackTemplate(),fallback=buildTarget(template,port,rng,'grant');if(!fallback){template={...template,anywhere:true};fallback=buildTarget(template,port,rng,'grant');}if(fallback){giveGrantUniqueMedia(fallback,usedPictures,rng);state.offers.push(fallback);}}
   }
 
   function mediaVisualMarkup(media,alt='',role='default') {
@@ -1419,18 +1425,19 @@
     return hasSpecialty(template)&&templateSupportedByVessel(template)&&(template.equipment||[]).every(id=>equipmentOperational(id))&&((state.scientists.length<missionMinCrew(template))||(specialistGap>0&&specialistGap<=1));
   }
   function maybeOfferProfessorGrant(environment={}) {
-    const professorCount=state.scientists.filter(item=>item.career==='professor').length,cooldown=7;
+    const professorCount=state.scientists.filter(item=>item.career==='professor').length,cooldown=3;
     if(!professorCount||state.port||state.remoteOffer||grantLoad()>=3||state.elapsedDays-(state.lastProfessorGrantDay||-999)<cooldown)return false;
     const activeTemplates=new Set(activeGrants().map(item=>item.templateId)),recentTemplates=new Set((state.recentGrantTemplates||[]).slice(0,3));
-    let candidates=TEMPLATES.filter(item=>!item.weather&&templateCareerLevel(item)===3&&eligible(item)&&!(item.onlyPorts?.length)&&!activeTemplates.has(item.id)&&!recentTemplates.has(item.id));
-    if(!candidates.length)candidates=TEMPLATES.filter(item=>!item.weather&&templateCareerLevel(item)===3&&eligible(item)&&!(item.onlyPorts?.length)&&!activeTemplates.has(item.id)&&item.id!==(state.recentGrantTemplates||[])[0]);
+    const professorTemplates=[...TEMPLATES,...careerFallbackTemplates()].filter(item=>templateCareerLevel(item)===3);
+    let candidates=professorTemplates.filter(item=>!item.weather&&eligible(item)&&!(item.onlyPorts?.length)&&!activeTemplates.has(item.id)&&!recentTemplates.has(item.id));
+    if(!candidates.length)candidates=professorTemplates.filter(item=>!item.weather&&eligible(item)&&!(item.onlyPorts?.length)&&!activeTemplates.has(item.id)&&item.id!==(state.recentGrantTemplates||[])[0]);
     if(!candidates.length)return false;
     const rng=seeded(`professor-${Math.floor(state.elapsedDays)}-${professorCount}`),template=candidates[Math.floor(rng()*candidates.length)],origin=environment.position||{lat:78,lon:15},target=buildTarget(template,origin,rng,'grant',{nearby:!!(environment.iceEdge||environment.iceThickness),iceThickness:Number(environment.iceThickness)||0});if(!target)return false;
     target.professorOriginated=true;state.remoteOffer=target;state.lastProfessorGrantDay=state.elapsedDays;
     const modal=root.querySelector('#arx-target-modal');modal.innerHTML=`<div class="arx-modal-card arx-target-card"><small>PROFESSOR-ORIGINATED PROPOSAL</small><h2>${escapeHtml(target.title)}</h2><p>A professor aboard has developed a fundable research idea from conditions observed at sea. Accept it and the site will receive normal grant navigation guidance.</p>${mediaMarkup(target,'hero')}<div class="arx-operation-actions"><button class="ghost" data-arx-action="decline-professor-grant">DECLINE</button><button data-arx-action="accept-professor-grant">ACCEPT GRANT</button></div></div>`;modal.classList.add('open');return true;
   }
   function liveFieldOpportunities(){return state.targets.filter(item=>(item.kind==='opportunity'||item.kind==='weather-opportunity')&&!item.accepted&&item.status!=='completed');}
-  function opportunityMoveGateKm(){return{fishing:45,trawler:90,coastal:150,global:220,icebreaker:270,nuclear:330}[state.currentVessel]||45;}
+  function opportunityMoveGateKm(){return{fishing:45,trawler:70,coastal:100,global:140,icebreaker:180,nuclear:220}[state.currentVessel]||45;}
   function recordOpportunitySpawn(target,position){if(!target)return;state.recentOpportunityTemplates=[target.templateId,...(state.recentOpportunityTemplates||[]).filter(id=>id!==target.templateId)].slice(0,3);if(position&&Number.isFinite(position.lat)&&Number.isFinite(position.lon))state.lastOpportunitySpawnPosition={lat:position.lat,lon:position.lon};}
   function maybeSpawnOpportunity(payload={}) {
     if(!payload.position)return null;
@@ -1447,12 +1454,11 @@
       const rng=seeded(`${weather.eventId}-${template.id}`),target=buildTarget(template,payload.position,rng,'weather-opportunity',{weatherEventId:weather.eventId,iceThickness:Number(payload.iceThickness)||0,nearby:!!(payload.iceEdge||payload.iceThickness)});
       if(!target)return null;target.selected=false;state.targets.push(target);recordOpportunitySpawn(target,payload.position);toast(`WEATHER RESEARCH AVAILABLE · ${target.shortTitle}`);changed({port:false});return target;
     }
-    const coastal=payload.fjord||payload.fjordScore>.38||payload.coastal||payload.coastDistanceKm<30,iceEdge=!!payload.iceEdge||payload.ice==='marginal'||payload.ice==='fast',iceThickness=Math.max(0,Number(payload.iceThickness)||0),deepIce=payload.ice==='packed'||payload.ice==='cracked'||payload.ice==='fast',inIce=iceEdge||deepIce,teamLevel=Math.max(1,...state.scientists.map(item=>careerLevel(item.career))),postdocCount=state.scientists.filter(item=>item.career==='postdoc').length,professorCount=state.scientists.filter(item=>item.career==='professor').length,careerFloor=playerCareerLevel(),unlockCredit=teamLevel>=3?8:teamLevel>=2?3:0;
-    const basePossible=TEMPLATES.filter(item=>!item.weather&&templateSupportedByVessel(item)&&templateCareerLevel(item)<=careerFloor&&(item.unlockAfter||0)<=state.completed.length+unlockCredit&&!activeTypes.has(item.id));
+    const coastal=payload.fjord||payload.fjordScore>.38||payload.coastal||payload.coastDistanceKm<30,iceEdge=!!payload.iceEdge||payload.ice==='marginal',iceThickness=Math.max(0,Number(payload.iceThickness)||0),deepIce=payload.ice==='packed'||payload.ice==='cracked',inIce=iceEdge||deepIce,teamLevel=Math.max(1,...state.scientists.map(item=>careerLevel(item.career))),postdocCount=state.scientists.filter(item=>item.career==='postdoc').length,professorCount=state.scientists.filter(item=>item.career==='professor').length,careerFloor=playerCareerLevel(),unlockCredit=teamLevel>=3?8:teamLevel>=2?3:0,opportunityTemplates=[...TEMPLATES,...careerFallbackTemplates()];
+    const basePossible=opportunityTemplates.filter(item=>!item.weather&&templateSupportedByVessel(item)&&templateCareerLevel(item)===careerFloor&&(item.unlockAfter||0)<=state.completed.length+unlockCredit&&!activeTypes.has(item.id));
     let possible=basePossible.filter(item=>!recent.has(item.id));if(!possible.length&&recentList.length)possible=basePossible.filter(item=>item.id!==recentList[0]);if(!possible.length)possible=basePossible;
     if(inIce){const icePossible=possible.filter(item=>item.iceAllowed);if(icePossible.length)possible=icePossible;}
-    const allowGenericFallback=careerFloor===1&&state.currentVessel==='fishing';
-    if(!possible.length){if(!allowGenericFallback)return null;const fallback=compatibleFallbackTemplate();if(recent.has(fallback.id))return null;const rng=seeded(`fallback-${payload.position.lat.toFixed(2)}-${payload.position.lon.toFixed(2)}-${Math.floor(state.elapsedDays*4)}`),target=buildTarget(fallback,payload.position,rng,'opportunity',{nearby:false,iceThickness});if(!target)return null;target.selected=false;state.targets.push(target);recordOpportunitySpawn(target,payload.position);toast(`NEW RESEARCH OPPORTUNITY · ${target.shortTitle}`);changed({port:false});return target;}
+    if(!possible.length){const fallbacks=careerFallbackTemplates().filter(item=>!activeTypes.has(item.id)&&!recent.has(item.id)),fallback=fallbacks[0]||careerFallbackTemplates().find(item=>item.id!==recentList[0])||compatibleFallbackTemplate(),rng=seeded(`fallback-${payload.position.lat.toFixed(2)}-${payload.position.lon.toFixed(2)}-${Math.floor(state.elapsedDays*4)}`),target=buildTarget(fallback,payload.position,rng,'opportunity',{nearby:false,iceThickness});if(!target)return null;target.selected=false;state.targets.push(target);recordOpportunitySpawn(target,payload.position);toast(`NEW RESEARCH OPPORTUNITY · ${target.shortTitle}`);changed({port:false});return target;}
     const weighted=possible.flatMap(template=>{let weight=1,level=templateCareerLevel(template);if(coastal&&(template.coastal||template.fjordPreferred||template.tier==='local'))weight+=payload.fjord?8:4;if(iceEdge&&template.iceAllowed)weight+=12;if(deepIce&&template.iceAllowed)weight+=20+iceThickness*10;if(inIce&&!template.iceAllowed)weight=1;if(teamLevel===2)weight+=level===2?18:level===1?3:0;if(teamLevel===2&&template.postdocOpportunity)weight+=30;if(teamLevel>=3)weight+=level===3?36:level===2?12:2;if(level===2)weight+=postdocCount*4+professorCount*3;if(level===3)weight+=professorCount*10;if(!coastal&&template.tier!=='local')weight+=3;return Array(Math.max(1,Math.round(weight))).fill(template);});
     const ready=weighted.filter(item=>eligible(item)),aspirational=weighted.filter(item=>teamCouldDoWithEquipment(item)||teamCouldDoWithMoreCrew(item));let pool;if(!ready.length&&aspirational.length)pool=aspirational;else if(!ready.length)return null;else if(aspirational.length&&Math.random()<.25)pool=aspirational;else pool=ready;
     const rng=seeded(`${payload.position.lat.toFixed(2)}-${payload.position.lon.toFixed(2)}-${state.portVisits}-${state.completed.length}-${Math.floor(state.elapsedDays*4)}`),template=pool[Math.floor(rng()*pool.length)],target=buildTarget(template,payload.position,rng,'opportunity',{nearby:false,iceThickness});
