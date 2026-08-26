@@ -10,4 +10,32 @@
       localStorage.setItem(KEY,PHOTO_BUILD);
     }
   }catch(error){}
+
+  // 23ab: Advanced saves created by the previous fallback generator may contain
+  // unaccepted professor/postdoc offers with no real equipment. Clear only
+  // those stale offer cards during restore so the current port immediately
+  // rebuilds them with the equipment-aware generator. Active grants are never
+  // touched here.
+  addEventListener('DOMContentLoaded',()=>{
+    const api=window.ArcticResearch;
+    if(!api||api.__equipmentOfferRestorePatch||typeof api.restoreCheckpoint!=='function')return;
+    api.__equipmentOfferRestorePatch=true;
+    const restore=api.restoreCheckpoint.bind(api);
+    const patchedRestore=snapshot=>{
+      let next=snapshot;
+      try{
+        const chief=snapshot?.scientists?.find(item=>item.isPlayer)||snapshot?.scientists?.[0];
+        const advanced=chief&&['postdoc','professor'].includes(chief.career);
+        const stale=advanced&&(snapshot?.offers||[]).some(item=>String(item?.templateId||'').startsWith('fallback-')&&!(item?.equipment||[]).length);
+        if(stale){
+          next=JSON.parse(JSON.stringify(snapshot));
+          next.offers=[];
+          next.grantOfferCycle=null;
+        }
+      }catch(error){}
+      return restore(next);
+    };
+    api.restoreCheckpoint=patchedRestore;
+    api.restoreSnapshot=patchedRestore;
+  });
 })();
