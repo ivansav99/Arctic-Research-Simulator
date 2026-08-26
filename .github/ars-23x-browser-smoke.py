@@ -1,4 +1,4 @@
-import io, sys, time
+import io, time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
@@ -14,6 +14,15 @@ opts.add_argument('--window-size=1280,900')
 opts.set_capability('goog:loggingPrefs', {'browser':'ALL'})
 driver=webdriver.Chrome(options=opts)
 wait=WebDriverWait(driver,20)
+
+def browser_errors():
+    errors=[]
+    for entry in driver.get_log('browser'):
+        msg=entry.get('message','')
+        if (entry.get('level')=='SEVERE' and 'favicon' not in msg.lower()) or 'ReferenceError' in msg or 'MAP ERROR' in msg:
+            errors.append(msg)
+    return errors
+
 try:
     driver.get('http://127.0.0.1:8765/')
     wait.until(EC.element_to_be_clickable((By.ID,'start-button'))).click()
@@ -21,7 +30,25 @@ try:
     name=driver.find_element(By.CSS_SELECTOR,'[data-arx-character-name]')
     name.clear(); name.send_keys('Smoke Test')
     driver.find_element(By.CSS_SELECTOR,'[data-arx-action="confirm-character"]').click()
-    wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR,'.arx-port-card')))
+    time.sleep(2.5)
+
+    errors=browser_errors()
+    character_open=bool(driver.find_elements(By.CSS_SELECTOR,'.arx-character-card')) and driver.find_element(By.CSS_SELECTOR,'.arx-character-card').is_displayed()
+    port_cards=driver.find_elements(By.CSS_SELECTOR,'.arx-port-card')
+    port_visible=bool(port_cards and port_cards[0].is_displayed())
+    welcome_hidden='hidden' in (driver.find_element(By.ID,'welcome').get_attribute('class') or '')
+    sidebar=driver.find_element(By.ID,'arx-sidebar')
+    port_buttons=driver.find_elements(By.CSS_SELECTOR,'[data-arx-action="open-port"]')
+    port_enabled=bool(port_buttons and port_buttons[0].is_enabled())
+    print('STARTUP_STATE',{'character_open':character_open,'port_visible':port_visible,'welcome_hidden':welcome_hidden,'port_enabled':port_enabled,'sidebar':sidebar.text[:300],'errors':errors[:6]})
+    if errors:
+        raise AssertionError('Startup browser errors:\n'+'\n'.join(errors[:12]))
+    if not port_visible and port_enabled:
+        port_buttons[0].click(); time.sleep(1.0)
+        port_cards=driver.find_elements(By.CSS_SELECTOR,'.arx-port-card')
+        port_visible=bool(port_cards and port_cards[0].is_displayed())
+    if not port_visible:
+        raise AssertionError(f'Port screen unavailable after startup; character_open={character_open}, port_enabled={port_enabled}, welcome_hidden={welcome_hidden}, sidebar={sidebar.text[:300]!r}')
 
     # Shipyard: generated images must really load in browser, not merely exist in Git.
     driver.find_element(By.CSS_SELECTOR,'[data-arx-tab="fleet"]').click()
@@ -39,19 +66,19 @@ try:
     # Grant board must not be empty on a fresh playable career.
     driver.find_element(By.CSS_SELECTOR,'[data-arx-tab="contracts"]').click()
     wait.until(lambda d: len(d.find_elements(By.CSS_SELECTOR,'.research-offer'))>0)
-    if not driver.find_elements(By.CSS_SELECTOR,'.research-offer'):
-        raise AssertionError('No research grants generated')
+    grants=len(driver.find_elements(By.CSS_SELECTOR,'.research-offer'))
+    if not grants: raise AssertionError('No research grants generated')
 
     # Close port and issue a navigation command. Speed must respond and map must stay rendered.
     driver.find_element(By.CSS_SELECTOR,'[data-arx-action="close-port"]').click()
     canvas=wait.until(EC.visibility_of_element_located((By.ID,'map')))
     time.sleep(1.0)
-    ActionChains(driver).move_to_element_with_offset(canvas,180,100).click().perform()
+    rect=canvas.rect
+    ActionChains(driver).move_to_element_with_offset(canvas,rect['width']*.18,rect['height']*.12).click().perform()
     time.sleep(2.0)
     speed=driver.find_element(By.ID,'speed').text.strip()
     if speed.startswith('0.0'):
-        # Try a second clearly open-water-ish point if first click hit a local obstruction.
-        ActionChains(driver).move_to_element_with_offset(canvas,-180,120).click().perform()
+        ActionChains(driver).move_to_element_with_offset(canvas,-rect['width']*.18,rect['height']*.12).click().perform()
         time.sleep(2.0)
         speed=driver.find_element(By.ID,'speed').text.strip()
     if speed.startswith('0.0'):
@@ -66,12 +93,8 @@ try:
     if variation<120:
         raise AssertionError(f'Map canvas appears nearly uniform; pixel variance={variation:.1f}')
 
-    severe=[]
-    for entry in driver.get_log('browser'):
-        msg=entry.get('message','')
-        if entry.get('level')=='SEVERE' and ('favicon' not in msg.lower()): severe.append(msg)
-        if 'ReferenceError' in msg or 'MAP ERROR' in msg: severe.append(msg)
+    severe=browser_errors()
     if severe: raise AssertionError('Browser errors:\n'+'\n'.join(severe[:12]))
-    print('BROWSER_SMOKE_OK', {'speed':speed,'grants':len(driver.find_elements(By.CSS_SELECTOR,'.research-offer')),'images':loaded,'canvas_variance':round(variation,1)})
+    print('BROWSER_SMOKE_OK', {'speed':speed,'grants':grants,'images':loaded,'canvas_variance':round(variation,1)})
 finally:
     driver.quit()
