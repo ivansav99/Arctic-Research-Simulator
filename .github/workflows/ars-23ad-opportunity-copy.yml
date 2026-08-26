@@ -1,0 +1,39 @@
+name: ARS 23ad opportunity copy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ars-23ad-opportunity-copy.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Apply copy fix
+        run: python .github/ars-23ad-opportunity-copy.py
+      - name: Validate JavaScript
+        run: node --check expedition.js
+      - name: Validate copy
+        run: grep -q "scientistNames=names.length>2" expedition.js
+      - name: Commit copy fix
+        run: |
+          git config user.name "Ivan Savelyev"
+          git config user.email "ivansav@gmail.com"
+          git add expedition.js
+          git commit -m "Fix research opportunity scientist summary"
+          git push origin main
+      - name: Remove temporary patch machinery
+        if: success()
+        run: |
+          rm -f .github/ars-23ad-opportunity-copy.py .github/workflows/ars-23ad-opportunity-copy.yml
+          git add -A
+          git commit -m "Remove ARS 23ad patch runner"
+          git push origin main
