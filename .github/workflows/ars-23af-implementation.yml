@@ -1,0 +1,55 @@
+name: ARS 23af gameplay pass
+on:
+  push:
+    paths:
+      - '.github/workflows/ars-23af-implementation.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Configure git
+        run: |
+          git config user.name "Ivan Savelyev"
+          git config user.email "ivansav@gmail.com"
+      - name: Rebuild clean Global RV artwork
+        run: |
+          cat .github/globalrv23af.part00 .github/globalrv23af.part01 .github/globalrv23af.part02 .github/globalrv23af.part03 | base64 -d > assets/vessels/global-rv-clean.webp
+          echo '2d13a75e23a1238b878ccfc4eb957440ff21edf16bf2579879f9989dff29a67d  assets/vessels/global-rv-clean.webp' | sha256sum -c -
+          file assets/vessels/global-rv-clean.webp | grep -qi 'Web/P image'
+      - name: Apply gameplay patch
+        run: |
+          python .github/ars-23af-patch.py
+          sed -i 's/modestSingleProfessor?.92:1/modestSingleProfessor ? .92 : 1/' expedition.js
+      - name: Validate JavaScript
+        run: |
+          node --check expedition.js
+          node --check game.js
+      - name: Validate requested changes
+        run: |
+          grep -Fq "global:'assets/vessels/global-rv-clean.webp?v=23af'" expedition.js
+          grep -Fq "professorCount>=2&&heavyDuty?1.15" expedition.js
+          grep -Fq "global:playerCareerLevel()>=3?[600,3000]:[180,900]" expedition.js
+          grep -Fq 'FIELD JOURNAL ACHIEVEMENT · ARTICLE ACCEPTED' expedition.js
+          grep -Fq 'SCIENTISTS MAKING THIS POSSIBLE' expedition.js
+          grep -Fq 'EQUIPMENT MAKING THIS POSSIBLE' expedition.js
+          grep -Fq "document.addEventListener('touchend',()=>sound.unlock()" game.js
+          grep -Fq "vesselIceId()==='global'&&siteIce!=='open'" game.js
+          grep -Fq 'chartRadius=terrainLatitudeRadius(MIN_LAT)' game.js
+          grep -Fq 'expedition-23af-audio-rewards-journal-map' index.html
+          ! grep -Fq 'cash-status' index.html
+      - name: Commit gameplay pass
+        run: |
+          git add expedition.js game.js index.html assets/vessels/global-rv-clean.webp
+          git commit -m "Refine ARS audio rewards journal and map"
+          git push origin HEAD:main
+      - name: Remove temporary patch machinery
+        run: |
+          git rm .github/ars-23af-patch.py .github/globalrv23af.part00 .github/globalrv23af.part01 .github/globalrv23af.part02 .github/globalrv23af.part03 .github/workflows/ars-23af-implementation.yml
+          git commit -m "Remove ARS 23af patch runner"
+          git push origin HEAD:main
