@@ -130,10 +130,10 @@
   const DATA_SCALE_BY_VESSEL = {fishing:3,trawler:5,coastal:12,global:40,icebreaker:100,nuclear:180};
 
   const VESSEL_IMAGES = {
-    coastal:'assets/vessels/coastal-rv.webp?v=23ac',
-    global:'assets/vessels/global-rv.webp?v=23ac',
-    icebreaker:'assets/vessels/icebreaker.webp?v=23ac',
-    nuclear:'assets/vessels/nuclear-icebreaker.webp?v=23ac'
+    coastal:'assets/vessels/coastal-rv.webp?v=23ae',
+    global:'assets/vessels/global-rv.webp?v=23ae',
+    icebreaker:'assets/vessels/icebreaker.webp?v=23ae',
+    nuclear:'assets/vessels/nuclear-icebreaker.webp?v=23ae'
   };
   const VESSELS = {
     fishing: {
