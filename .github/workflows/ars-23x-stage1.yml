@@ -1,0 +1,46 @@
+name: ARS 23x stage 1 safe
+
+on:
+  push:
+    branches: [reimplement-23x-safe]
+    paths:
+      - '.github/workflows/ars-23x-stage1.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: reimplement-23x-safe
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Apply stage 1
+        run: python .github/ars-23x-stage1.py
+      - name: Validate JavaScript syntax
+        run: |
+          node --check expedition.js
+          node --check game.js
+      - name: Validate stage 1 markers
+        run: |
+          grep -F "coastal:'assets/vessels/coastal-rv.webp?v=23x'" expedition.js
+          grep -F "global:'assets/vessels/global-rv.webp?v=23x'" expedition.js
+          grep -F "icebreaker:'assets/vessels/icebreaker.webp?v=23x'" expedition.js
+          grep -F "nuclear:'assets/vessels/nuclear-icebreaker.webp?v=23x'" expedition.js
+          grep -F "unlockChimed" game.js
+          grep -F "viewRadius" game.js
+          grep -F "PUBLISH ${level.label.toUpperCase()}" expedition.js
+          grep -F "article-ready" expedition.js
+          grep -F "expedition-23x-stage1-safe" index.html
+      - name: Commit validated stage 1
+        run: |
+          rm -f .github/ars-23x-stage1.py .github/workflows/ars-23x-stage1.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add expedition.js game.js index.html .github
+          git commit -m 'Add vessel art sound round minimap and publication cues'
+          git push origin HEAD:reimplement-23x-safe
