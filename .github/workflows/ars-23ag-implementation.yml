@@ -1,0 +1,54 @@
+name: ARS 23ag smooth ice ambience
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ars-23ag-implementation.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Configure git
+        run: |
+          git config user.name "Ivan Savelyev"
+          git config user.email "ivansav@gmail.com"
+      - name: Apply gameplay patch
+        run: python .github/ars-23ag-patch.py
+      - name: Validate JavaScript
+        run: |
+          node --check expedition.js
+          node --check game.js
+      - name: Validate requested changes
+        run: |
+          grep -Fq "refreshMs=IS_COARSE_POINTER?95:80" game.js
+          grep -Fq "if(floeUpdateAccumulator>=.035)" game.js
+          ! grep -Fq "strokeText(label.toUpperCase(),p.x,p.y-19)" game.js
+          grep -Fq "SEASONAL ARCTIC AMBIENCE" game.js
+          grep -Fq "function missionSpecificSteps" expedition.js
+          grep -Fq "MEDIA.helicopter" expedition.js
+          grep -Fq "expedition-23ag-smooth-ambient-specific" index.html
+          grep -Fq "max-width:1200px" expedition.js
+          grep -Fq "max-width:1200px" style.css
+      - name: Measure current and offline app size
+        continue-on-error: true
+        run: python .github/ars-23ag-size.py
+      - name: Commit gameplay pass
+        run: |
+          git add expedition.js game.js style.css index.html
+          git commit -m "Smooth Arctic motion and enrich research ambience"
+          git push origin HEAD:main
+      - name: Remove temporary patch machinery
+        run: |
+          git pull --rebase origin main
+          git rm .github/ars-23ag-patch.py .github/ars-23ag-size.py .github/workflows/ars-23ag-implementation.yml
+          git commit -m "Remove ARS 23ag patch runner"
+          git push origin HEAD:main
