@@ -131,7 +131,7 @@
 
   const VESSEL_IMAGES = {
     coastal:'assets/vessels/coastal-rv.webp?v=23ae',
-    global:'assets/vessels/global-rv.webp?v=23ae',
+    global:'assets/vessels/global-rv-clean.webp?v=23af',
     icebreaker:'assets/vessels/icebreaker.webp?v=23ae',
     nuclear:'assets/vessels/nuclear-icebreaker.webp?v=23ae'
   };
@@ -353,6 +353,7 @@
   let callbacks = {};
   let catalog = {};
   let root = null;
+  let pendingWildlifeArticle = null;
   let portOpen = false;
   let activePortTab = 'vessel';
   let portScrollTop = 0;
@@ -710,7 +711,7 @@
   }
   function researchDistanceWindow(template,kind,options={}) {
     const vesselId=state.currentVessel,official=kind==='grant'||kind==='contract';
-    const grantRanges={fishing:[25,150],trawler:[70,350],coastal:[120,650],global:[180,900],icebreaker:[220,1350],nuclear:[260,1700]};
+    const grantRanges={fishing:[25,150],trawler:[70,350],coastal:[120,650],global:playerCareerLevel()>=3?[600,3000]:[180,900],icebreaker:[220,1350],nuclear:[260,1700]};
     const opportunityRanges={fishing:[25,100],trawler:[45,160],coastal:[70,240],global:[100,320],icebreaker:[120,400],nuclear:[140,480]};
     const nearbyRanges={fishing:[20,70],trawler:[35,110],coastal:[55,160],global:[75,220],icebreaker:[95,280],nuclear:[110,330]};
     const range=(options.nearby?nearbyRanges:official?grantRanges:opportunityRanges)[vesselId]||(official?grantRanges.fishing:opportunityRanges.fishing);
@@ -758,7 +759,13 @@
     const careerFactor=playerCareerLevel()>=3?2.4:playerCareerLevel()===2?1.55:1;
     const vesselFactor={fishing:1,trawler:1.25,coastal:1.8,global:3,icebreaker:4.5,nuclear:6}[state.currentVessel]||1;
     const templateFactor=1+Math.max(0,templateCareerLevel(template)-1)*.18;
-    const value=(base[0]+(base[1]-base[0])*score)*careerFactor*vesselFactor*templateFactor;
+    const durableItems=[...new Set(template.equipment||[])].map(id=>EQUIPMENT[id]).filter(Boolean);
+    const durableValue=durableItems.reduce((sum,item)=>sum+(Number(item.price)||0),0);
+    const professorCount=missionSpecialistRequirements(template).filter(item=>item.minCareer==='professor').reduce((sum,item)=>sum+(item.count||1),0);
+    const heavyDuty=durableItems.some(item=>item.slotType==='heavy'||(item.slots||0)>=3)||durableValue>=250000;
+    const modestSingleProfessor=professorCount<=1&&!heavyDuty&&durableValue<140000;
+    const complexityFactor=official&&playerCareerLevel()>=3?(professorCount>=2&&heavyDuty?1.15:modestSingleProfessor ? .92 : 1):1;
+    const value=(base[0]+(base[1]-base[0])*score)*careerFactor*vesselFactor*templateFactor*complexityFactor;
     return Math.round(value/500)*500;
   }
   const GEOGRAPHIC_RESEARCH_ANCHORS=[
@@ -1379,6 +1386,12 @@
     const decline=opportunity?`<button class="${accepted?'danger':'ghost'}" data-arx-action="cancel-opportunity" data-id="${target.id}" ${running||complete?'disabled':''}>${accepted?'ABANDON OPPORTUNITY':'DECLINE'}</button>`:(target.kind==='grant'||target.kind==='contract')?`<button class="danger" data-arx-action="drop-grant" data-id="${target.id}" ${running||programFinished||(target.deploymentId&&target.missionMode!=='staged-recovery')?'disabled':''}>${target.missionMode==='staged-recovery'?'DROP RETURN PICKUP':'DROP GRANT'}</button>`:'<button class="ghost" disabled>NO DROP ACTION</button>';
     const result=resultTitle||'Research result',modal=root.querySelector('#arx-target-modal');
     const navigateAction=accepted&&!atSite&&!target.anywhere?`<button data-arx-action="navigate-target" data-id="${target.id}">NAVIGATE TO SITE</button>`:'';
+    const guidancePreview=!!(state.lastTargetContext?.id===target.id&&state.lastTargetContext?.previewOnly&&!atSite&&!running&&!complete);
+    if(guidancePreview){
+      modal.innerHTML=`<div class="arx-modal-card arx-target-card arx-research-unified arx-guidance-preview"><button class="arx-close" data-arx-action="close-target" aria-label="Close research preview">×</button><small>ACTIVE RESEARCH GRANT · COURSE PREVIEW</small><h2>${escapeHtml(target.title)}</h2>${mediaMarkup(target,'hero')}<p>${escapeHtml(target.description)}</p><div class="arx-target-facts arx-research-facts"><span><small>CASH AWARD</small><b>${cash(target.reward||0)}</b></span><span><small>DATA AWARD</small><b>+${target.data} data</b></span><span><small>DISTANCE</small><b>${Number.isFinite(distance)?`${Math.round(distance)} km`:'OFF-SCREEN SITE'}</b></span></div><h3 class="arx-operation-subhead">SCIENTISTS MAKING THIS POSSIBLE</h3>${operationScientistsMarkup(target)}<h3 class="arx-operation-subhead">EQUIPMENT MAKING THIS POSSIBLE</h3>${operationEquipmentMarkup(target)}<div class="arx-research-review-actions">${decline}${navigateAction}</div></div>`;
+      modal.classList.add('open');
+      return;
+    }
     const workActions=complete?'<button data-arx-action="acknowledge-research">OKAY</button>':navigateAction?`${decline}${navigateAction}`:`${decline}<button data-arx-action="complete-target" data-id="${target.id}" ${canBegin?'':'disabled'}>${escapeHtml(primaryLabel)}</button>`;
 
     if(!accepted){
@@ -1622,6 +1635,26 @@
     modal.classList.add('open'); checkPromotions(); changed();
   }
 
+  function publishWildlifeJournalArticle(group) {
+    const level=PAPER_LEVELS.find(item=>item.id==='national')||PAPER_LEVELS[1];
+    const award=level.award,initialCitations=level.initialCitations,potential=level.potential,title=`Article: ${group} of the Arctic`;
+    adjustMoney(award);state.citations+=initialCitations;
+    state.papers.push({id:`wildlife-paper-${Date.now()}`,title,journal:level.journal,tier:level.label,data:0,award,initialCitations,potential,citations:initialCitations,ageDays:0,citationRemainder:0,wildlifeGroup:group});
+    for(const scientist of state.scientists){scientist.papers=(scientist.papers||0)+1;recordScientist(scientist);}
+    state.claimedGroups=state.claimedGroups||[];state.claimedGroups.push(group);state.claimedGroups=state.claimedGroups.slice(-40);
+    state.observed=(state.observed||[]).filter(key=>catalog[key]?.group!==group);
+    pendingWildlifeArticle={group,title,journal:level.journal,award,initialCitations};
+    addLog(`Field journal complete: ${group}. Article published in ${level.journal}; checklist reset for a new survey cycle.`);
+    callbacks.onSound?.('paper-accepted');checkPromotions();
+  }
+  function showPendingWildlifeArticle() {
+    if(!pendingWildlifeArticle||!root)return false;
+    const article=pendingWildlifeArticle;pendingWildlifeArticle=null;
+    const modal=root.querySelector('#arx-publish-modal');if(!modal)return false;
+    modal.innerHTML=`<div class="arx-modal-card arx-result-card accepted"><button class="arx-close" data-arx-action="close-publish">×</button><small>FIELD JOURNAL ACHIEVEMENT · ARTICLE ACCEPTED</small><h2>${escapeHtml(article.group)} article published</h2><p>Your completed field journal on <b>${escapeHtml(article.group)}</b> has been published as a peer-reviewed article in ${escapeHtml(article.journal)}. The ${escapeHtml(article.group)} checklist has been reset, so a new survey cycle can begin.</p><div class="arx-award"><span>${cash(article.award)}</span><small>JOURNAL ARTICLE AWARD · +${article.initialCitations} INITIAL CITATIONS</small></div><button data-arx-action="close-publish">CONTINUE EXPEDITION</button></div>`;
+    modal.classList.add('open');changed();return true;
+  }
+
   function groupProgress(group) {
     const species=Object.entries(catalog).filter(([,item])=>item.group===group), seen=species.filter(([key])=>state.observed.includes(key));
     return {total:species.length,seen:seen.length,complete:species.length>0&&seen.length===species.length};
@@ -1636,10 +1669,9 @@
     if (firstSpecies) state.observed.push(key);
     if (firstIndividual) { state.observedIndividuals=state.observedIndividuals||[]; state.observedIndividuals.push(individualId); addData(dataValue); addLog(`${item.displayName} observation archived · +${dataValue} data.`); }
     const progress=groupProgress(item.group);
-    if (progress.complete&&!state.claimedGroups.includes(item.group)) {
-      state.claimedGroups.push(item.group); adjustMoney(GROUP_REWARDS[item.group]||30000); state.citations+=5;
-      addLog(`Field assignment complete: ${item.group}. Illustrated article published in Northern Field Notes.`);
-      toast(`${item.group.toUpperCase()} COMPLETE · NORTHERN FIELD NOTES PUBLISHED`);
+    if (progress.complete) {
+      publishWildlifeJournalArticle(item.group);
+      toast(`${item.group.toUpperCase()} COMPLETE · JOURNAL ARTICLE PUBLISHED`);
     }
     const tone=item.photoTone==='dark'?'dark':'';
     const modal=root?.querySelector('#arx-wildlife-modal'); if(!modal)return false;
@@ -1648,7 +1680,7 @@
   }
   function openFieldGuide() {
     const groups=[...new Set(Object.values(catalog).map(item=>item.group))], modal=root.querySelector('#arx-guide-modal');
-    modal.innerHTML=`<div class="arx-modal-card arx-guide-card"><button class="arx-close" data-arx-action="close-guide">×</button><small>ARCTIC FIELD GUIDE</small><h2>Photographic Research Checklists</h2><p>Click wildlife on the chart to add a real photograph and species record. Completed assignments are celebrated in the field journal; their sponsor recognition is revealed at completion.</p>${groups.map(group=>{const progress=groupProgress(group);return`<section><header><div><b>${escapeHtml(group)}</b><small>${progress.seen}/${progress.total} observed</small></div><em>${state.claimedGroups.includes(group)?'PUBLISHED':'IN PROGRESS'}</em></header><div>${Object.entries(catalog).filter(([,item])=>item.group===group).map(([key,item])=>`<span class="${state.observed.includes(key)?'seen':''}">${state.observed.includes(key)?'✓':'○'} ${escapeHtml(item.displayName)}</span>`).join('')}</div></section>`;}).join('')}</div>`;
+    modal.innerHTML=`<div class="arx-modal-card arx-guide-card"><button class="arx-close" data-arx-action="close-guide">×</button><small>ARCTIC FIELD GUIDE</small><h2>Photographic Research Checklists</h2><p>Click wildlife on the chart to add a real photograph and species record. Completed assignments are celebrated in the field journal; their sponsor recognition is revealed at completion.</p>${groups.map(group=>{const progress=groupProgress(group);return`<section><header><div><b>${escapeHtml(group)}</b><small>${progress.seen}/${progress.total} observed</small></div><em>${progress.complete?'COMPLETE':'IN PROGRESS'}</em></header><div>${Object.entries(catalog).filter(([,item])=>item.group===group).map(([key,item])=>`<span class="${state.observed.includes(key)?'seen':''}">${state.observed.includes(key)?'✓':'○'} ${escapeHtml(item.displayName)}</span>`).join('')}</div></section>`;}).join('')}</div>`;
     modal.classList.add('open');
   }
 
@@ -1946,7 +1978,7 @@ function vesselOverlay() {
     else if (action==='apply-dev-state') applyDevState();
     else if (action==='close-target'&&!activeOperation) root.querySelector('#arx-target-modal').classList.remove('open');
     else if (action==='acknowledge-research') { root.querySelector('#arx-target-modal').classList.remove('open'); if(!maybePublicationIntro()){showNextPromotion();setTimeout(maybeAutoPublish,0);} }
-    else if (action==='close-wildlife') { root.querySelector('#arx-wildlife-modal').classList.remove('open'); setTimeout(maybeAutoPublish,0); }
+    else if (action==='close-wildlife') { root.querySelector('#arx-wildlife-modal').classList.remove('open'); if(!showPendingWildlifeArticle())setTimeout(maybeAutoPublish,0); }
     else if (action==='close-guide') root.querySelector('#arx-guide-modal').classList.remove('open');
     else if (action==='close-publish') { root.querySelector('#arx-publish-modal').classList.remove('open'); showNextPromotion(); }
     else if (action==='close-publication-intro') { root.querySelector('#arx-publish-modal').classList.remove('open'); showNextPromotion(); setTimeout(maybeAutoPublish,0); }
