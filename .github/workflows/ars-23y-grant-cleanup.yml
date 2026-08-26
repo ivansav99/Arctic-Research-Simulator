@@ -29,6 +29,11 @@ jobs:
           if s.count(old)!=1:
               raise SystemExit(f'expected one bad helper call, found {s.count(old)}')
           s=s.replace(old,new,1)
+          old_prof='"""+prof_end\nexp=replace_between(exp,prof_start,prof_end,prof_func,\'professor grant cooldown\')'
+          new_prof='"""\nexp=replace_between(exp,prof_start,prof_end,prof_func,\'professor grant cooldown\')'
+          if s.count(old_prof)!=1:
+              raise SystemExit(f'expected one duplicated professor end marker, found {s.count(old_prof)}')
+          s=s.replace(old_prof,new_prof,1)
           # An earlier generic fast-ice sweep already removes this exact frozen-state fragment
           # before the dedicated portIceInfo replacement runs. Match that intermediate form.
           old_frag="frozen=type==='fast'||type==='packed'||type==='cracked'"
@@ -56,6 +61,7 @@ jobs:
           grep -q "vesselProgressionRank" expedition.js
           grep -q 'data-arx-action="shop-equipment"' expedition.js
           test "$(grep -c 'function capturePortView' expedition.js)" -eq 1
+          test "$(grep -c 'function liveFieldOpportunities' expedition.js)" -eq 1
           ! grep -q "fastIceGrowth" game.js
           ! grep -q "iceTextures.fast" game.js
           ! grep -q "FAST ICE" game.js
