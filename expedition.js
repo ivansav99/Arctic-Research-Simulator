@@ -347,7 +347,7 @@
     scientists:[initialScientist], playerConfigured:false, installedEquipment:[], inventory:{}, port:null, portVisits:0,
     candidates:[], offers:[], targets:[], completed:[], deployments:[], weatherEventsSeen:[], droppedGrantTemplates:[],
     observed:[], observedIndividuals:[], claimedGroups:[], papers:[], publicationCooldown:0, publishAttempts:0, lastPublicationRejected:false, publicationIntroShown:false,
-    economyDays:0, elapsedDays:0, log:['Expedition commissioned in Longyearbyen.'], navigation:null, lastTargetContext:null,
+    economyDays:0, elapsedDays:0, publicationRewardMultiplier:1, netWorthBaseline:null, netWorthBaselineDay:0, netWorthHistory:[], log:['Expedition commissioned in Longyearbyen.'], navigation:null, lastTargetContext:null,
     scientistRecords:{}, promotions:[], recentGrantTemplates:[], recentGrantSites:[], recentOpportunityTemplates:[], lastOpportunitySpawnPosition:null, grantCooldowns:{}, grantMarketReady:{}, assistedByVessels:[], bridgeSupportNotice:null, lastPortId:null, lastProfessorGrantDay:-999, lastExpiredGrantRemovalDay:-999, remoteOffer:null, helicopterFoodReminderShown:false
   };
 
@@ -1633,6 +1633,24 @@
     if(!target)return null;target.selected=false;state.targets.push(target);recordOpportunitySpawn(target,payload.position);toast(`NEW RESEARCH OPPORTUNITY · ${target.shortTitle}`);changed({port:false});return target;
   }
 
+  function programNetWorth() {
+    const vesselAssets=(state.ownedVessels||[]).reduce((sum,id)=>{const ship=VESSELS[id];return sum+(ship?(Number(ship.marketPrice??ship.price)||0):0);},0);
+    const durableAssets=(state.installedEquipment||[]).reduce((sum,id)=>{const item=EQUIPMENT[id];return sum+(item&&!item.consumable&&!item.builtIn?(Number(item.price)||0):0);},0);
+    const consumableAssets=Object.entries(state.inventory||{}).reduce((sum,[id,count])=>{const item=EQUIPMENT[id];if(!item?.consumable)return sum;const unitValue=(Number(item.price)||0)/Math.max(1,Number(item.units)||1);return sum+Math.max(0,Number(count)||0)*unitValue;},0);
+    return Math.max(1,Math.round((Number(state.money)||0)+vesselAssets+durableAssets+consumableAssets));
+  }
+  function adaptivePublicationMultiplier(){return clamp(Number(state.publicationRewardMultiplier)||1,.5,2);}
+  function adaptivePublicationAward(baseAward){return Math.max(0,Math.round((Number(baseAward)||0)*adaptivePublicationMultiplier()));}
+  function updatePublicationEconomy() {
+    const worth=programNetWorth();
+    if(!Number.isFinite(state.netWorthBaseline)||state.netWorthBaseline<=0){state.netWorthBaseline=worth;state.netWorthBaselineDay=state.elapsedDays;state.netWorthHistory=[{day:state.elapsedDays,netWorth:worth,multiplier:adaptivePublicationMultiplier()}];return;}
+    const period=Math.max(0,state.elapsedDays-(Number(state.netWorthBaselineDay)||0));if(period<30)return;
+    const ratio=Math.max(.01,worth/Math.max(1,state.netWorthBaseline)),monthlyGrowth=Math.pow(ratio,30/period)-1;
+    const desired=clamp(1.25-5*monthlyGrowth,.5,2),current=adaptivePublicationMultiplier(),step=clamp(desired-current,-.20,.20),next=clamp(current+step,.5,2);
+    state.publicationRewardMultiplier=Math.round(next*100)/100;state.netWorthHistory=[...(state.netWorthHistory||[]),{day:state.elapsedDays,netWorth:worth,monthlyGrowth:Math.round(monthlyGrowth*10000)/10000,multiplier:state.publicationRewardMultiplier}].slice(-12);state.netWorthBaseline=worth;state.netWorthBaselineDay=state.elapsedDays;
+    addLog(`Publication funding index reviewed: ${Math.round(monthlyGrowth*100)}% monthly-equivalent net-worth growth · paper awards ${Math.round(state.publicationRewardMultiplier*100)}% of standard.`);
+  }
+
   function publishPaper(automatic=false) {
     const level=currentPaperLevel(); if (!level||state.publicationCooldown>0) return;
     if (!automatic&&!level.next) automatic=true;
@@ -1641,7 +1659,7 @@
     let heading,message,award=0,initialCitations=0;
     if (accepted) {
       const factor=(.85+quality*.25)*(connected?1.08:1), recent=state.completed.slice(-3).map(item=>item.shortTitle).filter(Boolean).join(', ');
-      award=Math.round(level.award*factor); initialCitations=Math.max(1,Math.round(level.initialCitations*factor)); const potential=Math.max(initialCitations+1,Math.round(level.potential*factor));
+      award=Math.round(level.award*factor*adaptivePublicationMultiplier()); initialCitations=Math.max(1,Math.round(level.initialCitations*factor)); const potential=Math.max(initialCitations+1,Math.round(level.potential*factor));
       const paperTitle=recent?`${level.label}: ${recent}`:`${level.label}: Arctic Field Observations`;
       adjustMoney(award); state.citations+=initialCitations; state.data=Math.max(0,state.data-used);
       state.papers.push({id:`paper-${Date.now()}`,title:paperTitle,journal:level.journal,tier:level.label,data:used,award,initialCitations,potential,citations:initialCitations,ageDays:0,citationRemainder:0});
@@ -1659,7 +1677,7 @@
 
   function publishWildlifeJournalArticle(group) {
     const level=PAPER_LEVELS.find(item=>item.id==='national')||PAPER_LEVELS[1];
-    const award=level.award,initialCitations=level.initialCitations,potential=level.potential,title=`Article: ${group} of the Arctic`;
+    const award=adaptivePublicationAward(level.award),initialCitations=level.initialCitations,potential=level.potential,title=`Article: ${group} of the Arctic`;
     adjustMoney(award);state.citations+=initialCitations;
     state.papers.push({id:`wildlife-paper-${Date.now()}`,title,journal:level.journal,tier:level.label,data:0,award,initialCitations,potential,citations:initialCitations,ageDays:0,citationRemainder:0,wildlifeGroup:group});
     for(const scientist of state.scientists){scientist.papers=(scientist.papers||0)+1;recordScientist(scientist);}
@@ -1723,6 +1741,7 @@
   function tickDays(days,environment={}) {
     if (!Number.isFinite(days)||days<=0) return;
     state.elapsedDays=(Number(state.elapsedDays)||0)+days;
+    updatePublicationEconomy();
     state.recentGrantSites=(state.recentGrantSites||[]).filter(site=>state.elapsedDays-(site.day||0)<90).slice(0,18);
     const expiredCandidates=state.targets.filter(target=>(target.kind==='grant'||target.kind==='contract')&&!['completed','failed','dropped'].includes(target.status)&&Number.isFinite(target.expiresAtDay)&&state.elapsedDays>=target.expiresAtDay&&activeOperation?.targetId!==target.id).sort((a,b)=>(a.expiresAtDay||0)-(b.expiresAtDay||0));
     const expiryThrottleReady=state.elapsedDays-(Number(state.lastExpiredGrantRemovalDay??-999))>=7;
@@ -2133,7 +2152,7 @@ function vesselOverlay() {
     root?.querySelectorAll('.arx-modal.open').forEach(modal=>modal.classList.remove('open'));
     for (const key of Object.keys(state)) if (Object.prototype.hasOwnProperty.call(snapshot,key)) state[key]=clone(snapshot[key]);
     state.inventory=state.inventory||{}; state.deployments=state.deployments||[]; state.weatherEventsSeen=state.weatherEventsSeen||[]; state.droppedGrantTemplates=state.droppedGrantTemplates||[]; state.scientistRecords=state.scientistRecords||{};
-    state.observed=state.observed||[]; state.observedIndividuals=state.observedIndividuals||[]; state.homePortId=state.homePortId||'longyearbyen'; state.recentGrantTemplates=state.recentGrantTemplates||[]; state.recentGrantSites=state.recentGrantSites||[]; state.recentOpportunityTemplates=state.recentOpportunityTemplates||[]; state.lastOpportunitySpawnPosition=state.lastOpportunitySpawnPosition||null; state.grantCooldowns=state.grantCooldowns||{}; state.grantMarketReady=state.grantMarketReady||{}; state.assistedByVessels=state.assistedByVessels||[]; state.bridgeSupportNotice=state.bridgeSupportNotice||null; state.lastPortId=state.lastPortId||null; state.lastProfessorGrantDay=Number(state.lastProfessorGrantDay??-999); state.lastExpiredGrantRemovalDay=Number(state.lastExpiredGrantRemovalDay??-999); state.remoteOffer=state.remoteOffer||null; state.helicopterFoodReminderShown=!!state.helicopterFoodReminderShown; state.elapsedDays=Number(state.elapsedDays)||0; state.playerConfigured=!!state.playerConfigured;
+    state.observed=state.observed||[]; state.observedIndividuals=state.observedIndividuals||[]; state.homePortId=state.homePortId||'longyearbyen'; state.recentGrantTemplates=state.recentGrantTemplates||[]; state.recentGrantSites=state.recentGrantSites||[]; state.recentOpportunityTemplates=state.recentOpportunityTemplates||[]; state.lastOpportunitySpawnPosition=state.lastOpportunitySpawnPosition||null; state.grantCooldowns=state.grantCooldowns||{}; state.grantMarketReady=state.grantMarketReady||{}; state.assistedByVessels=state.assistedByVessels||[]; state.bridgeSupportNotice=state.bridgeSupportNotice||null; state.lastPortId=state.lastPortId||null; state.lastProfessorGrantDay=Number(state.lastProfessorGrantDay??-999); state.lastExpiredGrantRemovalDay=Number(state.lastExpiredGrantRemovalDay??-999); state.remoteOffer=state.remoteOffer||null; state.helicopterFoodReminderShown=!!state.helicopterFoodReminderShown; state.elapsedDays=Number(state.elapsedDays)||0; state.publicationRewardMultiplier=clamp(Number(state.publicationRewardMultiplier)||1,.5,2); state.netWorthBaseline=Number(state.netWorthBaseline)||null; state.netWorthBaselineDay=Number(state.netWorthBaselineDay)||state.elapsedDays; state.netWorthHistory=Array.isArray(state.netWorthHistory)?state.netWorthHistory.slice(-12):[]; state.playerConfigured=!!state.playerConfigured;
     state.installedEquipment=(state.installedEquipment||[]).filter(id=>EQUIPMENT[id]&&!EQUIPMENT[id].builtIn);
     state.scientists=(state.scientists||[]).map(item=>({...item,missions:item.missions||0,papers:item.papers||0,recruitmentPool:item.recruitmentPool||profileFor(item).recruitmentPool||'international'}));
     for (const scientist of state.scientists) recordScientist(scientist);
