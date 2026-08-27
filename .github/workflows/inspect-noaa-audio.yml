@@ -1,0 +1,21 @@
+name: Inspect NOAA wildlife audio source
+on:
+  push:
+    paths:
+      - '.github/workflows/inspect-noaa-audio.yml'
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect NOAA sound board assets
+        shell: bash
+        run: |
+          set -e
+          base='https://apps-afsc.fisheries.noaa.gov/Audio/Alaska-Marine-Mammal-Acoustic-Studies/'
+          curl -L --fail -sS "${base}index.html" -o /tmp/noaa.html
+          echo '--- audio-looking references in HTML ---'
+          grep -Eoi "[^\"']+\.(mp3|wav|ogg|m4a)(\?[^\"']*)?" /tmp/noaa.html || true
+          echo '--- script/style references ---'
+          grep -Eoi "(src|href)=[\"'][^\"']+[\"']" /tmp/noaa.html | head -100 || true
+          echo '--- lines mentioning ribbon/gray/bowhead/audio ---'
+          grep -Ein 'ribbon|gray|bowhead|audio|sound' /tmp/noaa.html | head -160 || true
