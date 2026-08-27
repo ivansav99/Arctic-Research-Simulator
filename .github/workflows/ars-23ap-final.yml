@@ -1,0 +1,71 @@
+name: ARS 23ap approved wildlife audio final
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ars-23ap-final.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Configure git
+        run: |
+          git config user.name "Ivan Savelyev"
+          git config user.email "ivansav@gmail.com"
+      - name: Install ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Fetch approved recordings
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ars-audio assets/audio/wildlife
+          UA='Mozilla/5.0 ArcticResearchSimulator/1.0'
+          curl -A "$UA" -L --fail --retry 3 -o /tmp/ars-audio/beluga.mp3 'https://www.fisheries.noaa.gov/s3/2023-04/Dele-multisound-NOAA-Castellote-01-beluga-clip.mp3'
+          curl -A "$UA" -L --fail --retry 3 -o /tmp/ars-audio/bearded-seal.mp3 'https://www.fisheries.noaa.gov/s3/2023-04/Erba-Multisound-Cornell-OrnithologyLab-01-bearded-seal-clip.mp3'
+          curl -A "$UA" -L --fail --retry 3 -o /tmp/ars-audio/harp-seal.mp3 'https://www.fisheries.noaa.gov/s3/2023-04/Pagr-call-NPI-Van-Parijs-02-harp-seal-clip.mp3'
+          if ! curl -A "$UA" -L --fail --retry 2 -o /tmp/ars-audio/bowhead.mp3 'https://voicesinthesea.ucsd.edu/species/spectrogramPlayerComponents/audio/baleenWhales/bowheadWhale/bowhead_song.mp3'; then
+            curl -A "$UA" -L --fail --retry 3 -o /tmp/ars-audio/bowhead.mp3 'https://admin.arcticwwf.org/app/uploads/2024/09/Bowhead-audio-Audio-via-K.M.-Stafford-University-of-Washington.mp3'
+          fi
+          curl -A "$UA" -L --fail --retry 3 -o /tmp/ars-audio/common-eider.ogg 'https://commons.wikimedia.org/wiki/Special:Redirect/file/Common_Eider_(Somateria_mollissima)_(W1CDR0001491_BD11).ogg'
+          curl -A "$UA" -L --fail --retry 3 -o /tmp/ars-audio/pink-footed-goose.ogg 'https://commons.wikimedia.org/wiki/Special:Redirect/file/Pink-footed_Geese_(Anser_brachyrhynchus)_(W1CDR0001376_BD33).ogg'
+          curl -A "$UA" -L --fail --retry 3 -o /tmp/ars-audio/brent-goose.ogg 'https://commons.wikimedia.org/wiki/Special:Redirect/file/Brent_Goose_(Branta_bernicla)_(W_BRANTA_BERNICLA_R1_C11).ogg'
+      - name: Normalize recordings
+        shell: bash
+        run: |
+          set -euo pipefail
+          for item in beluga bearded-seal harp-seal bowhead common-eider pink-footed-goose brent-goose; do
+            input=$(find /tmp/ars-audio -maxdepth 1 -type f -name "$item.*" | head -1)
+            ffmpeg -hide_banner -loglevel error -y -i "$input" -af "silenceremove=start_periods=1:start_threshold=-46dB,loudnorm=I=-16:TP=-1.5:LRA=7" -t 6 -ac 1 -ar 44100 -codec:a libmp3lame -b:a 72k "assets/audio/wildlife/$item.mp3"
+            test -s "assets/audio/wildlife/$item.mp3"
+          done
+      - name: Apply game patch
+        run: python .github/ars-23ap-final.py
+      - name: Validate
+        shell: bash
+        run: |
+          node --check game.js
+          grep -Fq "'BOWHEAD':'assets/audio/wildlife/bowhead.mp3'" game.js
+          grep -Fq "'BEARDED SEAL':'assets/audio/wildlife/bearded-seal.mp3'" game.js
+          grep -Fq "'HARP SEAL':'assets/audio/wildlife/harp-seal.mp3'" game.js
+          grep -Fq "'COMMON EIDER':'assets/audio/wildlife/common-eider.mp3'" game.js
+          grep -Fq "'PINK-FOOTED GOOSE':'assets/audio/wildlife/pink-footed-goose.mp3'" game.js
+          grep -Fq "'BRENT GOOSE':'assets/audio/wildlife/brent-goose.mp3'" game.js
+          grep -Fq "g.gain.value=ambient?.12:1" game.js
+          grep -Fq "playAnimal(species,{ambient:true})" game.js
+          grep -Fq "sound.playAnimal?.(animal.species)" game.js
+          grep -Fq "game.js?v=expedition-23ap-approved-wildlife-audio" index.html
+          for f in beluga bowhead bearded-seal harp-seal common-eider pink-footed-goose brent-goose humpback walrus arctic-tern; do test -s "assets/audio/wildlife/$f.mp3"; done
+      - name: Commit gameplay and recordings
+        run: |
+          git add game.js index.html assets/audio/wildlife
+          git commit -m "Expand approved wildlife recordings and ambience"
+          git push origin HEAD:main
