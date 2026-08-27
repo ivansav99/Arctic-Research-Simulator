@@ -1,4 +1,4 @@
-name: Package iOS Test App
+name: Package iOS Offline Test App
 
 on:
   workflow_dispatch:
@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'ios/ArcticResearch/**'
+      - 'ios/prepare-offline-ios-package.py'
       - '.github/workflows/package-ios-test-app.yml'
 
 permissions:
@@ -13,19 +14,45 @@ permissions:
 
 jobs:
   package:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
-      - name: Validate project contents
+
+      - name: Prepare offline game snapshot and Svalbard terrain
+        run: python3 ios/prepare-offline-ios-package.py
+
+      - name: Validate offline package
+        shell: bash
         run: |
           set -euo pipefail
           test -f ios/ArcticResearch/ArcticResearch.xcodeproj/project.pbxproj
           test -f ios/ArcticResearch/ArcticResearch/ArcticResearchApp.swift
           test -f ios/ArcticResearch/ArcticResearch/ContentView.swift
-          grep -q 'PBXNativeTarget' ios/ArcticResearch/ArcticResearch.xcodeproj/project.pbxproj
-      - name: Upload Xcode project
+          test -f ios/ArcticResearch/ArcticResearch/WebApp/index.html
+          test -f ios/ArcticResearch/ArcticResearch/WebApp/assets/map/arctic-overview-2048.jpg
+          test -f ios/ArcticResearch/ArcticResearch/WebApp/mobile-package.json
+          grep -q 'arsapp://local/_terrain' ios/ArcticResearch/ArcticResearch/WebApp/game.js
+          test "$(find ios/ArcticResearch/ArcticResearch/WebApp/assets/map/svalbard -name 'terrain-2024-*.png' | wc -l | tr -d ' ')" = "25"
+          test "$(find ios/ArcticResearch/ArcticResearch/WebApp/assets/audio -type f | wc -l | tr -d ' ')" -ge "14"
+          grep -q 'WebApp in Resources' ios/ArcticResearch/ArcticResearch.xcodeproj/project.pbxproj
+
+      - name: Compile-check iOS shell
+        run: |
+          xcodebuild \
+            -project ios/ArcticResearch/ArcticResearch.xcodeproj \
+            -target ArcticResearch \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -derivedDataPath "$RUNNER_TEMP/ars-derived" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Upload installable-test Xcode package
         uses: actions/upload-artifact@v4
         with:
-          name: ArcticResearch-iOS-TestApp
+          name: ArcticResearch-iOS-Offline-Test-23aq
           path: ios/ArcticResearch
           if-no-files-found: error
+          compression-level: 6
+          retention-days: 30
