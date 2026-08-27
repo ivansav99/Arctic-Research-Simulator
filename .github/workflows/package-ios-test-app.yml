@@ -44,7 +44,6 @@ jobs:
             -target ArcticResearch \
             -sdk iphonesimulator \
             -configuration Debug \
-            -derivedDataPath "$RUNNER_TEMP/ars-derived" \
             CODE_SIGNING_ALLOWED=NO \
             build
 
