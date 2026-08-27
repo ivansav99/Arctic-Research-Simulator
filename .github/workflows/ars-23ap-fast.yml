@@ -1,0 +1,62 @@
+name: ARS 23ap bounded wildlife audio
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ars-23ap-fast.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Configure git
+        run: |
+          git config user.name "Ivan Savelyev"
+          git config user.email "ivansav@gmail.com"
+      - name: Ensure ffmpeg
+        run: |
+          command -v ffmpeg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
+      - name: Fetch approved recordings with timeouts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ars-audio assets/audio/wildlife
+          get(){ echo "FETCH $2"; curl -A 'Mozilla/5.0' --connect-timeout 10 --max-time 60 -L --fail --retry 1 -o "/tmp/ars-audio/$1" "$2"; }
+          get beluga.mp3 'https://www.fisheries.noaa.gov/s3/2023-04/Dele-multisound-NOAA-Castellote-01-beluga-clip.mp3'
+          get bearded-seal.mp3 'https://www.fisheries.noaa.gov/s3/2023-04/Erba-Multisound-Cornell-OrnithologyLab-01-bearded-seal-clip.mp3'
+          get harp-seal.mp3 'https://www.fisheries.noaa.gov/s3/2023-04/Pagr-call-NPI-Van-Parijs-02-harp-seal-clip.mp3'
+          get bowhead.mp3 'https://www.north-slope.org/wp-content/uploads/2022/03/Bowhead_Whale.mp3'
+          get common-eider.ogg 'https://commons.wikimedia.org/wiki/Special:Redirect/file/Common_Eider_(Somateria_mollissima)_(W1CDR0001491_BD11).ogg'
+          get pink-footed-goose.ogg 'https://commons.wikimedia.org/wiki/Special:Redirect/file/Pink-footed_Geese_(Anser_brachyrhynchus)_(W1CDR0001376_BD33).ogg'
+          get brent-goose.ogg 'https://commons.wikimedia.org/wiki/Special:Redirect/file/Brent_Goose_(Branta_bernicla)_(W_BRANTA_BERNICLA_R1_C11).ogg'
+      - name: Normalize recordings
+        shell: bash
+        run: |
+          set -euo pipefail
+          for item in beluga bearded-seal harp-seal bowhead common-eider pink-footed-goose brent-goose; do
+            input=$(find /tmp/ars-audio -maxdepth 1 -type f -name "$item.*" | head -1)
+            ffmpeg -hide_banner -loglevel error -y -i "$input" -af "silenceremove=start_periods=1:start_threshold=-46dB,loudnorm=I=-16:TP=-1.5:LRA=7" -t 6 -ac 1 -ar 44100 -codec:a libmp3lame -b:a 72k "assets/audio/wildlife/$item.mp3"
+          done
+      - name: Apply and validate
+        run: |
+          python .github/ars-23ap-final.py
+          node --check game.js
+          grep -Fq "g.gain.value=ambient?.12:1" game.js
+          grep -Fq "playAnimal(species,{ambient:true})" game.js
+          grep -Fq "sound.playAnimal?.(animal.species)" game.js
+          grep -Fq "game.js?v=expedition-23ap-approved-wildlife-audio" index.html
+          for f in beluga bowhead bearded-seal harp-seal common-eider pink-footed-goose brent-goose humpback walrus arctic-tern; do test -s "assets/audio/wildlife/$f.mp3"; done
+      - name: Commit
+        run: |
+          git add game.js index.html assets/audio/wildlife
+          git commit -m "Expand approved wildlife recordings and ambience"
+          git pull --rebase origin main
+          git push origin HEAD:main
