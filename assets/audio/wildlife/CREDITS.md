@@ -29,3 +29,16 @@ The player reviewed and approved these field recordings for the prototype. Short
 Existing approved files retained: `humpback.mp3`, `walrus.mp3`, and `arctic-tern.mp3`.
 
 Before commercial App Store release, re-check redistribution/attribution terms for the NOAA, UCSD/WWF, and Brent Goose sources. Provenance is intentionally retained here for that audit.
+
+## Weather + wildlife expansion — 23aq
+
+- `bowhead.mp3` — **Bowhead Whale song** from NOAA Alaska Fisheries Science Center's *Acoustic Studies Sound Board of Marine Mammals in Alaska* (`assets/bowhead-song.mp3`). This replaces the earlier narrated prototype clip so gameplay contains no spoken identification.
+- `gray-whale.mp3` — **Gray Whale pops/calls** from the same NOAA Alaska Fisheries Science Center sound board (`assets/gray-whale-pops.mp3`).
+- `ribbon-seal.mp3` — **Ribbon Seal vocalization** from the same NOAA Alaska Fisheries Science Center sound board (`assets/ribbon-seal.mp3`).
+- `barnacle-goose.mp3` — **Barnacle Goose** field recording `Branta leucopsis - Barnacle Goose XC466464.mp3`, via Wikimedia Commons / Xeno-canto. Retain source-page attribution/license metadata for release audit.
+- `snow-goose.mp3` — **Snow Goose** field recording `Artis, blauwe en witte sneeuwgans - SoundCloud - Beeld en Geluid.ogg`, via Wikimedia Commons / Netherlands Institute for Sound & Vision. Retain source-page attribution/license metadata for release audit.
+
+NOAA sound-board landing page: https://www.fisheries.noaa.gov/resource/outreach-and-education/acoustic-studies-sound-board-marine-mammals-alaska
+Legacy interactive sound board: https://apps-afsc.fisheries.noaa.gov/Audio/Alaska-Marine-Mammal-Acoustic-Studies/index.html
+Wikimedia source pages should be re-checked for the exact current license/attribution text before a commercial store release.
+
