@@ -1,0 +1,63 @@
+name: ARS 23aq weather and wildlife audio
+on:
+  push:
+    paths:
+      - '.github/workflows/ars-23aq-weather-wildlife-audio.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Configure git
+        run: |
+          git config user.name "Ivan Savelyev"
+          git config user.email "ivansav@gmail.com"
+      - name: Install audio tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Download clean and expanded wildlife recordings
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ars23aq assets/audio/wildlife
+          noaa='https://apps-afsc.fisheries.noaa.gov/Audio/Alaska-Marine-Mammal-Acoustic-Studies/assets'
+          curl -L --fail --retry 3 -o /tmp/ars23aq/bowhead.mp3 "$noaa/bowhead-song.mp3"
+          curl -L --fail --retry 3 -o /tmp/ars23aq/gray-whale.mp3 "$noaa/gray-whale-pops.mp3"
+          curl -L --fail --retry 3 -o /tmp/ars23aq/ribbon-seal.mp3 "$noaa/ribbon-seal.mp3"
+          curl -L --fail --retry 3 -o /tmp/ars23aq/barnacle-goose.mp3 'https://commons.wikimedia.org/wiki/Special:Redirect/file/Branta%20leucopsis%20-%20Barnacle%20Goose%20XC466464.mp3'
+          curl -L --fail --retry 3 -o /tmp/ars23aq/snow-goose.ogg 'https://commons.wikimedia.org/wiki/Special:Redirect/file/Artis%2C_blauwe_en_witte_sneeuwgans_-_SoundCloud_-_Beeld_en_Geluid.ogg'
+          for item in bowhead gray-whale ribbon-seal barnacle-goose snow-goose; do
+            input=$(find /tmp/ars23aq -maxdepth 1 -type f -name "$item.*" | head -1)
+            ffmpeg -hide_banner -loglevel error -y -i "$input" -af "silenceremove=start_periods=1:start_threshold=-48dB,loudnorm=I=-17:TP=-1.5:LRA=8" -t 6 -ac 1 -ar 44100 -codec:a libmp3lame -b:a 72k "assets/audio/wildlife/$item.mp3"
+            test -s "assets/audio/wildlife/$item.mp3"
+          done
+          ffprobe -v error -show_entries format=filename,duration -of default=nw=1 assets/audio/wildlife/{bowhead,gray-whale,ribbon-seal,barnacle-goose,snow-goose}.mp3
+      - name: Patch gameplay and review page
+        run: python3 .github/ars-23aq-weather-wildlife.py
+      - name: Validate JavaScript and requested behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check game.js
+          node --check expedition.js
+          grep -F "g.gain.value=ambient?.06:.5" game.js
+          grep -F "weather.type==='high-wind'" game.js
+          grep -F "nextFogHorn=now+35000+Math.random()*45000" game.js
+          grep -F "replay-wildlife-sound" expedition.js
+          grep -F "'GRAY WHALE':'assets/audio/wildlife/gray-whale.mp3'" game.js
+          grep -F "'RIBBON SEAL':'assets/audio/wildlife/ribbon-seal.mp3'" game.js
+          grep -F "'BARNACLE GOOSE':'assets/audio/wildlife/barnacle-goose.mp3'" game.js
+          grep -F "'SNOW GOOSE':'assets/audio/wildlife/snow-goose.mp3'" game.js
+          test -s wildlife-audio-review.html
+      - name: Commit gameplay pass and remove helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add game.js expedition.js index.html wildlife-audio-review.html assets/audio/wildlife
+          git rm -f .github/ars-23aq-weather-wildlife.py .github/workflows/ars-23aq-weather-wildlife-audio.yml .github/workflows/inspect-noaa-audio.yml
+          git commit -m "Refine weather and wildlife audio"
+          git push origin main
