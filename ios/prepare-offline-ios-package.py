@@ -137,9 +137,10 @@ def fetch_tile(tile: tuple[int, int]) -> tuple[str, int]:
         headers={"User-Agent": "ArcticResearchSimulator/0.1 offline-test-packager"},
     )
     last_error: Exception | None = None
-    for attempt in range(1, 4):
+    max_attempts = 6
+    for attempt in range(1, max_attempts + 1):
         try:
-            with urllib.request.urlopen(request, timeout=45) as response:
+            with urllib.request.urlopen(request, timeout=60) as response:
                 data = response.read()
             if not is_png(data):
                 raise RuntimeError(f"response was not a PNG ({len(data)} bytes)")
@@ -147,8 +148,8 @@ def fetch_tile(tile: tuple[int, int]) -> tuple[str, int]:
             return destination.name, len(data)
         except Exception as exc:
             last_error = exc
-            if attempt < 3:
-                time.sleep(1.5 * attempt)
+            if attempt < max_attempts:
+                time.sleep(2.0 * attempt)
     raise RuntimeError(f"Failed Svalbard tile {ix},{iy}: {last_error}")
 
 
@@ -160,7 +161,9 @@ def download_svalbard_tiles() -> list[dict[str, int | str]]:
         for iy in range(center_y - SVALBARD_RADIUS_TILES, center_y + SVALBARD_RADIUS_TILES + 1)
     ]
     results: list[dict[str, int | str]] = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+    # GEBCO occasionally closes bursts of WMS requests. Keep concurrency low so
+    # package generation is reliable and courteous to the public service.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         future_map = {executor.submit(fetch_tile, tile): tile for tile in tiles}
         for future in concurrent.futures.as_completed(future_map):
             ix, iy = future_map[future]
