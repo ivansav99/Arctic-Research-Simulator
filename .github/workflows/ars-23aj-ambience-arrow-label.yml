@@ -1,0 +1,60 @@
+name: ARS 23aj ambience and arrow label
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ars-23aj-ambience-arrow-label.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Configure git
+        run: |
+          git config user.name "Ivan Savelyev"
+          git config user.email "ivansav@gmail.com"
+      - name: Patch ambience and arrow labels
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p=Path('game.js')
+          s=p.read_text()
+
+          old="{autumn:.0034,winter:.0024,spring:.0038,summer:.0032}"
+          new="{autumn:.0060,winter:.0043,spring:.0068,summer:.0058}"
+          if s.count(old)!=1: raise SystemExit(f'ambient level count={s.count(old)}')
+          s=s.replace(old,new,1)
+
+          old="const title=(target.shortTitle||target.title||'RESEARCH').toUpperCase().slice(0,18),label=`${title} · ${Math.round(item.distance)} KM`;"
+          new="const label=`${Math.round(item.distance)} KM`;"
+          if s.count(old)!=1: raise SystemExit(f'guidance label count={s.count(old)}')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+
+          p=Path('index.html')
+          s=p.read_text()
+          old='expedition-23ai-quiet-ambience'
+          if old not in s: raise SystemExit('cache token not found')
+          p.write_text(s.replace(old,'expedition-23aj-ambience-distance-only'))
+          PY
+      - name: Validate
+        run: |
+          node --check game.js
+          grep -Fq "{autumn:.0060,winter:.0043,spring:.0068,summer:.0058}" game.js
+          grep -Fq 'const label=`${Math.round(item.distance)} KM`;' game.js
+          ! grep -Fq "label=\`${title} · \${Math.round(item.distance)} KM\`" game.js
+          grep -Fq "expedition-23aj-ambience-distance-only" index.html
+      - name: Commit
+        run: |
+          git add game.js index.html
+          git commit -m "Raise quiet ambience and simplify grant arrows"
+          git push origin HEAD:main
