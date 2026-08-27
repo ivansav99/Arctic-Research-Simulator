@@ -1,0 +1,139 @@
+name: ARS 23ao real wildlife audio
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ars-23ao-real-wildlife-audio.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Configure git
+        run: |
+          git config user.name "Ivan Savelyev"
+          git config user.email "ivansav@gmail.com"
+      - name: Install audio tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+      - name: Download and prepare real wildlife recordings
+        run: |
+          set -euo pipefail
+          mkdir -p assets/audio/wildlife /tmp/ars-audio
+
+          curl -L --fail --retry 3 -o /tmp/ars-audio/beluga.ogg \
+            'https://commons.wikimedia.org/wiki/Special:Redirect/file/Beluga_vocalizations.ogg'
+          curl -L --fail --retry 3 -o /tmp/ars-audio/humpback.ogg \
+            'https://commons.wikimedia.org/wiki/Special:Redirect/file/Humpbackwhale2.ogg'
+          curl -L --fail --retry 3 -o /tmp/ars-audio/walrus.mp3 \
+            'https://d9-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/atoms/audio/PointLayWalrus2013_1.mp3'
+          curl -L --fail --retry 3 -o /tmp/ars-audio/arctic-tern.mp3 \
+            'https://commons.wikimedia.org/wiki/Special:Redirect/file/Sterna_paradisaea_-_Arctic_Tern_XC564600.mp3'
+
+          for item in beluga humpback walrus arctic-tern; do
+            input=$(find /tmp/ars-audio -maxdepth 1 -type f -name "$item.*" | head -1)
+            ffmpeg -hide_banner -loglevel error -y -i "$input" \
+              -af "silenceremove=start_periods=1:start_threshold=-45dB,loudnorm=I=-18:TP=-2:LRA=7" \
+              -t 5 -ac 1 -ar 44100 -codec:a libmp3lame -b:a 64k \
+              "assets/audio/wildlife/$item.mp3"
+            test -s "assets/audio/wildlife/$item.mp3"
+            ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "assets/audio/wildlife/$item.mp3"
+          done
+
+          cat > assets/audio/wildlife/CREDITS.md <<'EOF'
+          # Wildlife audio credits
+
+          These are short, normalized derivatives prepared for Arctic Research Simulator.
+
+          - `beluga.mp3` — **Beluga vocalizations**. Source: NOAA National Marine Fisheries Service, via Wikimedia Commons `Beluga vocalizations.ogg`. Public domain (PD-US-NOAA). Original recording credited on Commons to Fisheries Research Agency, Japan, with contract support from NOAA to Hubbs-SeaWorld Research Institute.
+          - `humpback.mp3` — **Song of Humpback Whales**. Source: Wikimedia Commons `Humpbackwhale2.ogg`, author Spyrogumas. CC0 1.0 public-domain dedication.
+          - `walrus.mp3` — **Walruses Hauled Out on the Northwest Coast of Alaska**. Source/credit: Anthony Fischbach, U.S. Geological Survey Alaska Science Center. Public domain.
+          - `arctic-tern.mp3` — **Arctic Tern XC564600**. Recordist: Doug Hynes; source Xeno-canto, mirrored on Wikimedia Commons. Creative Commons Attribution-ShareAlike 4.0. This trimmed/normalized derivative remains under CC BY-SA 4.0.
+
+          Source pages:
+          - https://commons.wikimedia.org/wiki/File:Beluga_vocalizations.ogg
+          - https://commons.wikimedia.org/wiki/File:Humpbackwhale2.ogg
+          - https://www.usgs.gov/media/audio/walruses-hauled-out-northwest-coast-alaska
+          - https://commons.wikimedia.org/wiki/File:Sterna_paradisaea_-_Arctic_Tern_XC564600.mp3
+          EOF
+      - name: Patch game to use real species recordings
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def repl(s,old,new,label):
+              n=s.count(old)
+              if n!=1: raise SystemExit(f'{label}: expected 1 match, found {n}')
+              return s.replace(old,new,1)
+
+          p=Path('game.js'); s=p.read_text()
+
+          s=repl(s,
+            "let ac=null,waveSource=null,waveGain=null,ambientWindGain=null,ambientPadGain=null,ambientPadOsc=[],lastCrack=0,lastAnimal=0,unlockChimed=false,unlockPromise=null,nextAnimal=0;",
+            "let ac=null,waveSource=null,waveGain=null,ambientWindGain=null,ambientPadGain=null,ambientPadOsc=[],lastCrack=0,lastAnimal=0,unlockChimed=false,unlockPromise=null,nextAnimal=0,animalLoading=false;const animalBuffers={};",
+            'animal audio state')
+
+          sample_code="""    const ANIMAL_SAMPLE_SOURCES={\n      'BELUGA':'assets/audio/wildlife/beluga.mp3',\n      'HUMPBACK':'assets/audio/wildlife/humpback.mp3',\n      'WALRUS':'assets/audio/wildlife/walrus.mp3',\n      'ARCTIC TERN':'assets/audio/wildlife/arctic-tern.mp3'\n    };\n    const loadAnimalSamples=c=>{if(animalLoading)return;animalLoading=true;for(const[species,src]of Object.entries(ANIMAL_SAMPLE_SOURCES)){if(animalBuffers[species])continue;fetch(src).then(r=>{if(!r.ok)throw new Error(`audio ${r.status}`);return r.arrayBuffer();}).then(data=>c.decodeAudioData(data)).then(buffer=>{animalBuffers[species]=buffer;}).catch(error=>console.warn('WILDLIFE AUDIO LOAD FAILED',species,error));}};\n    const playAnimal=species=>{const c=ensure(),key=String(species||'').toUpperCase(),buffer=animalBuffers[key];if(!c||!ANIMAL_SAMPLE_SOURCES[key])return false;if(!buffer){loadAnimalSamples(c);return false;}const src=c.createBufferSource(),g=c.createGain();src.buffer=buffer;g.gain.value=.42;src.connect(g).connect(c.destination);const run=()=>src.start();if(c.state!=='running'){Promise.resolve(c.resume()).then(()=>{if(c.state==='running')run();}).catch(()=>{});}else run();return true;};\n"""
+          marker="    const setupAmbience=c=>{};\n"
+          if s.count(marker)!=1: raise SystemExit('setup ambience marker mismatch')
+          s=s.replace(marker,marker+sample_code,1)
+
+          s=repl(s,
+            "waveSource.connect(filter).connect(waveGain).connect(ac.destination);waveSource.start();setupAmbience(ac);",
+            "waveSource.connect(filter).connect(waveGain).connect(ac.destination);waveSource.start();setupAmbience(ac);loadAnimalSamples(ac);",
+            'preload animal samples')
+
+          old="case'whale':tone(165,1.0,.075,0,'sine');tone(118,1.35,.060,.38,'sine');break;case'bird':burst(.16,.022,1700,4600);tone(2450,.045,.012,.025,'triangle');tone(1980,.04,.010,.105,'triangle');break;case'seal':burst(.20,.055,420,1500);tone(360,.20,.040,.04,'triangle');break;case'walrus':burst(.34,.045,100,700);tone(165,.42,.048,.02,'triangle');tone(126,.30,.034,.25,'sine');break;"
+          new="case'whale':case'bird':case'seal':case'walrus':break;"
+          s=repl(s,old,new,'remove synthesized animal cases')
+
+          old="const nearbyAnimal=()=>{let best=null,bestDist=Infinity;try{forEachWildlifeVisual((entity,species,category,w)=>{if(!['whale','seal','walrus','bird'].includes(category))return;const p=worldToScreen(w.x,w.y);if(p.x<0||p.x>width||p.y<70||p.y>height)return;const d=Math.hypot(w.x-state.x,w.y-state.y);if(d<bestDist){bestDist=d;best=category;}});}catch(e){}return best;};"
+          new="const nearbyAnimal=()=>{let best=null,bestDist=Infinity;try{forEachWildlifeVisual((entity,species,category,w)=>{const key=String(species||'').toUpperCase();if(!ANIMAL_SAMPLE_SOURCES[key])return;const p=worldToScreen(w.x,w.y);if(p.x<0||p.x>width||p.y<70||p.y>height)return;const d=Math.hypot(w.x-state.x,w.y-state.y);if(d<bestDist){bestDist=d;best=key;}});}catch(e){}return best;};"
+          s=repl(s,old,new,'species-aware visible animal selector')
+
+          old="if(!nextAnimal)nextAnimal=now+7000+Math.random()*7000;if(now>=nextAnimal){const animal=nearbyAnimal(),type=animal==='walrus'?'walrus':animal;if(['whale','seal','walrus','bird'].includes(type)){play(type);lastAnimal=now;nextAnimal=now+18000+Math.random()*18000;}else nextAnimal=now+7000+Math.random()*6000;}"
+          new="if(!nextAnimal)nextAnimal=now+7000+Math.random()*7000;if(now>=nextAnimal){const species=nearbyAnimal();if(species&&playAnimal(species)){lastAnimal=now;nextAnimal=now+22000+Math.random()*22000;}else nextAnimal=now+6000+Math.random()*5000;}"
+          s=repl(s,old,new,'real animal schedule')
+
+          s=repl(s,
+            "return{unlock,play,update};",
+            "return{unlock,play,update,playAnimal};",
+            'expose animal player')
+
+          old="if(animal&&research?.openWildlife){const pos=unpolar(animal.world.x,animal.world.y);let opened=false;try{opened=research.openWildlife(animal.species,{individualId:animal.individualId,category:animal.category,lat:pos.lat,lon:pos.lon,dataValue:wildlifeObservationDataValue()})===true;}catch(error){console.error('WILDLIFE OPEN FAILED',error);}if(opened){observedWildlifeFallback.add(animal.individualId);wildlifeEncounterClock=1;invalidateWorldCache();return;}"
+          new="if(animal&&research?.openWildlife){sound.playAnimal?.(animal.species);const pos=unpolar(animal.world.x,animal.world.y);let opened=false;try{opened=research.openWildlife(animal.species,{individualId:animal.individualId,category:animal.category,lat:pos.lat,lon:pos.lon,dataValue:wildlifeObservationDataValue()})===true;}catch(error){console.error('WILDLIFE OPEN FAILED',error);}if(opened){observedWildlifeFallback.add(animal.individualId);wildlifeEncounterClock=1;invalidateWorldCache();return;}"
+          s=repl(s,old,new,'play real sound on wildlife click')
+          p.write_text(s)
+
+          p=Path('index.html'); s=p.read_text()
+          import re
+          s,n=re.subn(r"game\.js\?v=[^\"']+","game.js?v=expedition-23ao-real-wildlife-audio",s,count=1)
+          if n!=1: raise SystemExit(f'game cache tag replacements={n}')
+          p.write_text(s)
+          PY
+      - name: Validate
+        run: |
+          node --check game.js
+          grep -Fq "ANIMAL_SAMPLE_SOURCES" game.js
+          grep -Fq "assets/audio/wildlife/beluga.mp3" game.js
+          grep -Fq "sound.playAnimal?.(animal.species)" game.js
+          grep -Fq "game.js?v=expedition-23ao-real-wildlife-audio" index.html
+          ! grep -Fq "case'whale':tone(165" game.js
+          test -s assets/audio/wildlife/beluga.mp3
+          test -s assets/audio/wildlife/humpback.mp3
+          test -s assets/audio/wildlife/walrus.mp3
+          test -s assets/audio/wildlife/arctic-tern.mp3
+      - name: Commit
+        run: |
+          git add game.js index.html assets/audio/wildlife
+          git commit -m "Use real wildlife field recordings"
+          git push origin HEAD:main
