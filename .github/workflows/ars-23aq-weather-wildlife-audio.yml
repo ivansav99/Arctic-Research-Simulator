@@ -35,7 +35,9 @@ jobs:
             ffmpeg -hide_banner -loglevel error -y -i "$input" -af "silenceremove=start_periods=1:start_threshold=-48dB,loudnorm=I=-17:TP=-1.5:LRA=8" -t 6 -ac 1 -ar 44100 -codec:a libmp3lame -b:a 72k "assets/audio/wildlife/$item.mp3"
             test -s "assets/audio/wildlife/$item.mp3"
           done
-          ffprobe -v error -show_entries format=filename,duration -of default=nw=1 assets/audio/wildlife/{bowhead,gray-whale,ribbon-seal,barnacle-goose,snow-goose}.mp3
+          for file in assets/audio/wildlife/{bowhead,gray-whale,ribbon-seal,barnacle-goose,snow-goose}.mp3; do
+            ffprobe -v error -show_entries format=filename,duration -of default=nw=1 "$file"
+          done
       - name: Patch gameplay and review page
         run: python3 .github/ars-23aq-weather-wildlife.py
       - name: Validate JavaScript and requested behavior
