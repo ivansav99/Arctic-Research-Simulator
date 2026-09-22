@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import StoreKit
 
 struct ContentView: View {
     var body: some View {
@@ -22,10 +23,35 @@ struct GameWebView: UIViewRepresentable {
 
         let controller = WKUserContentController()
         controller.addUserScript(WKUserScript(
-            source: "window.AR_IOS_OFFLINE_SHELL=true; if(document.documentElement){document.documentElement.classList.add('ios-native-shell');}",
+            source: """
+            window.AR_IOS_OFFLINE_SHELL=true;
+            window.ArcticResearchIAP={
+              _callbacks:{},
+              purchase:function(productId){
+                return new Promise((resolve)=>{
+                  const requestId='iap-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+                  this._callbacks[requestId]=resolve;
+                  try{
+                    window.webkit.messageHandlers.iapPurchase.postMessage({requestId:requestId,productId:String(productId||'')});
+                  }catch(error){
+                    delete this._callbacks[requestId];
+                    resolve({success:false,message:error&&error.message?error.message:'App Store purchase service is unavailable'});
+                  }
+                });
+              },
+              _complete:function(requestId,result){
+                const callback=this._callbacks[requestId];
+                if(!callback)return;
+                delete this._callbacks[requestId];
+                callback(result||{success:false,message:'Purchase was not completed'});
+              }
+            };
+            if(document.documentElement){document.documentElement.classList.add('ios-native-shell');}
+            """,
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true
         ))
+        controller.add(context.coordinator, name: "iapPurchase")
         configuration.userContentController = controller
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
@@ -36,16 +62,90 @@ struct GameWebView: UIViewRepresentable {
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.bounces = false
         webView.allowsBackForwardNavigationGestures = false
+        #if DEBUG
         if #available(iOS 16.4, *) { webView.isInspectable = true }
+        #endif
 
+        context.coordinator.webView = webView
         webView.load(URLRequest(url: Self.gameURL, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 30))
         return webView
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {}
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         let appSchemeHandler = OfflineAppSchemeHandler()
+        weak var webView: WKWebView?
+        private let allowedProductIDs: Set<String> = [
+            "ars.private_funding.1m",
+            "ars.private_funding.10m",
+            "ars.private_funding.50m"
+        ]
+
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.name == "iapPurchase",
+                  let body = message.body as? [String: Any],
+                  let requestId = body["requestId"] as? String,
+                  let productId = body["productId"] as? String else { return }
+
+            Task { [weak self] in
+                guard let self else { return }
+                let result = await self.purchase(productId: productId)
+                await self.completePurchaseRequest(requestId: requestId, result: result)
+            }
+        }
+
+        private func purchase(productId: String) async -> [String: Any] {
+            guard allowedProductIDs.contains(productId) else {
+                return ["success": false, "message": "Unknown App Store product"]
+            }
+
+            do {
+                let products = try await Product.products(for: [productId])
+                guard let product = products.first else {
+                    return ["success": false, "message": "This purchase is not available yet"]
+                }
+                guard product.type == .consumable else {
+                    return ["success": false, "message": "App Store product is misconfigured"]
+                }
+
+                let purchaseResult = try await product.purchase()
+                switch purchaseResult {
+                case .success(let verification):
+                    switch verification {
+                    case .verified(let transaction):
+                        await transaction.finish()
+                        return [
+                            "success": true,
+                            "transactionId": String(transaction.id),
+                            "productId": transaction.productID
+                        ]
+                    case .unverified(_, let error):
+                        return ["success": false, "message": "The App Store could not verify this purchase: \(error.localizedDescription)"]
+                    }
+                case .pending:
+                    return ["success": false, "message": "Purchase is pending approval"]
+                case .userCancelled:
+                    return ["success": false, "message": "Purchase cancelled"]
+                @unknown default:
+                    return ["success": false, "message": "Purchase was not completed"]
+                }
+            } catch {
+                return ["success": false, "message": error.localizedDescription]
+            }
+        }
+
+        @MainActor
+        private func completePurchaseRequest(requestId: String, result: [String: Any]) {
+            guard let webView,
+                  let requestData = try? JSONSerialization.data(withJSONObject: requestId),
+                  let requestJSON = String(data: requestData, encoding: .utf8),
+                  let resultData = try? JSONSerialization.data(withJSONObject: result),
+                  let resultJSON = String(data: resultData, encoding: .utf8) else { return }
+
+            let script = "window.ArcticResearchIAP && window.ArcticResearchIAP._complete(\(requestJSON), \(resultJSON));"
+            webView.evaluateJavaScript(script, completionHandler: nil)
+        }
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             guard let url = navigationAction.request.url else {
