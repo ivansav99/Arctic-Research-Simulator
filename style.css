@@ -189,6 +189,7 @@ body { overscroll-behavior: none; touch-action: none; }
 .title-screen p { max-width: none; margin: 0; text-align: left; }
 .title-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 22px; }
 .title-actions button { width: 100%; margin: 0; min-height: 43px; }
+.title-actions button.hidden { display: none; }
 .title-actions .primary { grid-column: 1 / -1; }
 .secondary, .title-back { padding: 11px 15px; border: 1px solid rgba(166,230,244,.22); border-radius: 8px; background: rgba(24,69,88,.62); color: #d9f5fb; font-size: 9px; font-weight: 900; letter-spacing: .1em; cursor: pointer; }
 .secondary:hover, .title-back:hover { background: rgba(44,101,121,.7); }

@@ -99,7 +99,7 @@ def patch_native_map_transport() -> None:
 
     old_version = "const GAME_VERSION='expedition-23p2-photo-review'"
     if old_version in text:
-        text = text.replace(old_version, "const GAME_VERSION='expedition-23aq-ios-offline1'", 1)
+        text = text.replace(old_version, "const GAME_VERSION='expedition-24a-appstore-rc1'", 1)
 
     path.write_text(text, encoding="utf-8")
 
@@ -176,8 +176,8 @@ def download_svalbard_tiles() -> list[dict[str, int | str]]:
 def write_manifest(tiles: list[dict[str, int | str]]) -> None:
     asset_bytes = sum(p.stat().st_size for p in (WEBAPP / "assets").rglob("*") if p.is_file())
     manifest = {
-        "package": "Arctic Research iOS Offline Test",
-        "packageVersion": "23aq-ios-offline1",
+        "package": "Arctic Research iOS App Store RC",
+        "packageVersion": "1.0-rc1",
         "sourceRevision": source_revision(),
         "offline": {
             "gameLogic": True,

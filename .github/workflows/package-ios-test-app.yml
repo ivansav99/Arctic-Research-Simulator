@@ -1,10 +1,38 @@
-name: Package iOS Offline Test App
+name: Package iOS App Store RC
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'style.css'
+      - 'game.js'
+      - 'expedition.js'
+      - 'coast-data.js'
+      - 'river-data.js'
+      - 'wildlife-data.js'
+      - 'visual-assets-data.js'
+      - 'sprite-atlas-data.js'
+      - 'glacier-data.js'
+      - 'assets/**'
+      - 'ios/ArcticResearch/**'
+      - 'ios/prepare-offline-ios-package.py'
+      - '.github/workflows/package-ios-test-app.yml'
   push:
     branches: [main]
     paths:
+      - 'index.html'
+      - 'style.css'
+      - 'game.js'
+      - 'expedition.js'
+      - 'coast-data.js'
+      - 'river-data.js'
+      - 'wildlife-data.js'
+      - 'visual-assets-data.js'
+      - 'sprite-atlas-data.js'
+      - 'glacier-data.js'
+      - 'assets/**'
       - 'ios/ArcticResearch/**'
       - 'ios/prepare-offline-ios-package.py'
       - '.github/workflows/package-ios-test-app.yml'
@@ -18,6 +46,11 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate JavaScript syntax
+        run: |
+          node --check game.js
+          node --check expedition.js
 
       - name: Prepare offline game snapshot and Svalbard terrain
         run: python3 ios/prepare-offline-ios-package.py
@@ -33,11 +66,13 @@ jobs:
           test -f ios/ArcticResearch/ArcticResearch/WebApp/assets/map/arctic-overview-2048.jpg
           test -f ios/ArcticResearch/ArcticResearch/WebApp/mobile-package.json
           grep -q 'arsapp://local/_terrain' ios/ArcticResearch/ArcticResearch/WebApp/game.js
+          grep -q 'import StoreKit' ios/ArcticResearch/ArcticResearch/ContentView.swift
+          grep -q 'ars.private_funding.1m' ios/ArcticResearch/ArcticResearch/ContentView.swift
           test "$(find ios/ArcticResearch/ArcticResearch/WebApp/assets/map/svalbard -name 'terrain-2024-*.png' | wc -l | tr -d ' ')" = "25"
           test "$(find ios/ArcticResearch/ArcticResearch/WebApp/assets/audio -type f | wc -l | tr -d ' ')" -ge "14"
           grep -q 'WebApp in Resources' ios/ArcticResearch/ArcticResearch.xcodeproj/project.pbxproj
 
-      - name: Compile-check iOS shell
+      - name: Compile-check iOS shell (Debug simulator)
         run: |
           xcodebuild \
             -project ios/ArcticResearch/ArcticResearch.xcodeproj \
@@ -47,10 +82,20 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
-      - name: Upload installable-test Xcode package
+      - name: Compile-check release device build
+        run: |
+          xcodebuild \
+            -project ios/ArcticResearch/ArcticResearch.xcodeproj \
+            -target ArcticResearch \
+            -sdk iphoneos \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Upload App Store RC Xcode package
         uses: actions/upload-artifact@v4
         with:
-          name: ArcticResearch-iOS-Offline-Test-23aq
+          name: ArcticResearch-iOS-AppStore-RC1
           path: ios/ArcticResearch
           if-no-files-found: error
           compression-level: 6

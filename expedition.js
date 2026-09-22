@@ -348,7 +348,7 @@
     candidates:[], offers:[], targets:[], completed:[], deployments:[], weatherEventsSeen:[], droppedGrantTemplates:[],
     observed:[], observedIndividuals:[], claimedGroups:[], papers:[], publicationCooldown:0, publishAttempts:0, lastPublicationRejected:false, publicationIntroShown:false,
     economyDays:0, elapsedDays:0, publicationRewardMultiplier:1, netWorthBaseline:null, netWorthBaselineDay:0, netWorthHistory:[], log:['Expedition commissioned in Longyearbyen.'], navigation:null, lastTargetContext:null,
-    scientistRecords:{}, promotions:[], recentGrantTemplates:[], recentGrantSites:[], recentOpportunityTemplates:[], lastOpportunitySpawnPosition:null, grantCooldowns:{}, grantMarketReady:{}, assistedByVessels:[], bridgeSupportNotice:null, lastPortId:null, lastProfessorGrantDay:-999, lastExpiredGrantRemovalDay:-999, remoteOffer:null, helicopterFoodReminderShown:false
+    scientistRecords:{}, promotions:[], recentGrantTemplates:[], recentGrantSites:[], recentOpportunityTemplates:[], lastOpportunitySpawnPosition:null, grantCooldowns:{}, grantMarketReady:{}, assistedByVessels:[], bridgeSupportNotice:null, lastPortId:null, lastProfessorGrantDay:-999, lastExpiredGrantRemovalDay:-999, remoteOffer:null, helicopterFoodReminderShown:false, iapTransactions:[]
   };
 
   let callbacks = {};
@@ -1195,9 +1195,9 @@
   }
   function offerCard(item) {
     const specialty=item.anyScientist?'Any scientist aboard':item.specialties.map(id=>specialtyById[id]?.name).filter(Boolean).join(' / '),media=canonicalMissionMedia(item);
-    const projection=missionFoodProjection(item),cap=grantLoad()>=grantCapacity(),foodUnsafe=projection.remaining<15,fuelUnsafe=!vessel().nuclearFuel&&projection.fuelRemaining<10,ready=eligible(item),missingGear=missingMissionEquipment(item),readiness=missionReadiness(item);
-    const blocked=!ready||cap||foodUnsafe||fuelUnsafe;
-    const label=cap?`ACTIVE GRANT LIMIT ${grantLoad()}/${grantCapacity()}`:foodUnsafe?`INSUFFICIENT FOOD · PROJECTED ${Math.max(0,Math.floor(projection.remaining))}%`:fuelUnsafe?`INSUFFICIENT FUEL · PROJECTED ${Math.max(0,Math.floor(projection.fuelRemaining))}%`:!ready?'GRANT NOT READY':'ACCEPT RESEARCH GRANT';
+    const projection=missionFoodProjection(item),cap=grantLoad()>=grantCapacity(),ready=eligible(item),missingGear=missingMissionEquipment(item),readiness=missionReadiness(item);
+    const blocked=!ready||cap;
+    const label=cap?`ACTIVE GRANT LIMIT ${grantLoad()}/${grantCapacity()}`:!ready?'GRANT NOT READY':'ACCEPT RESEARCH GRANT';
     const gearLinks=missingGear.length?`<div class="arx-grant-shop-links"><small>MISSING EQUIPMENT · CLICK TO SHOP</small>${missingGear.map(id=>`<button type="button" data-arx-action="shop-equipment" data-id="${id}">EQUIPMENT SHOP · ${escapeHtml(EQUIPMENT[id]?.name||id)}</button>`).join('')}</div>`:'';
     return `<article class="arx-card offer research-offer ${ready?'':'unready'}"><div class="arx-offer-thumb">${mediaVisualMarkup(media||MEDIA.fieldKit,media?.alt||item.title,'offer')}</div><div class="arx-card-head"><div><b>${escapeHtml(item.title)}</b><small>${escapeHtml(specialty)}</small></div><em>${cash(item.reward)}</em></div><p>${escapeHtml(item.description)}</p><div class="arx-grant-advance"><span><small>PAYMENT ON COMPLETION</small><b>${cash(item.reward)}</b></span></div><h4 class="arx-mini-label">RESPONSIBLE SCIENTISTS</h4>${operationScientistsMarkup(item)}<h4 class="arx-mini-label">EQUIPMENT USED</h4>${operationEquipmentMarkup(item)}${!ready?`<h4 class="arx-mini-label">WHY THIS GRANT IS LOCKED</h4>${readinessMarkup(readiness)}${gearLinks}`:''}<div class="arx-stats"><span>+${item.data} data</span><span>${item.minCrew||missionMinCrew(item)} people minimum</span><span>${item.supplies} supplies</span><span>${item.workHours} person-hours</span><span>~${projection.days} field days</span>${item.iceValueMultiplier>1?`<span>ICE DATA VALUE ×${item.iceValueMultiplier.toFixed(2)}</span>`:''}<span>Food on return ~${Math.max(0,Math.floor(projection.remaining))}%</span><span>Fuel on return ~${Math.max(0,Math.floor(projection.fuelRemaining))}%</span></div><button data-arx-action="accept" data-id="${item.id}" ${blocked?'disabled':''}>${label}</button></article>`;
   }
@@ -1260,32 +1260,79 @@
     const fCost=fuelStepCost(ship), provisionCost=foodStepCost(ship), fuelAmount=ship.nuclearFuel?'REACTOR':formatCapacity(ship.fuelCapacity*resources.fuel/100,'L'), foodAmount=formatCapacity(ship.foodCapacity*resources.food/100,'kg');
     return `<div class="arx-resupply-block arx-resupply-top"><h3>Consumables & stores</h3><button class="arx-resupply-all" data-arx-action="resupply-all" ${quote<=0||state.money<quote?'disabled':''}>RESUPPLY ALL · ${cash(quote)}</button><div class="arx-resupply"><article><small>FUEL · ${Math.ceil(resources.fuel)}%</small><b>${fuelAmount}</b><span>${ship.nuclearFuel?'Indefinite reactor endurance':`${ship.fuelEnduranceDays} days at 50% cruise`}</span><button data-arx-action="fuel" ${ship.nuclearFuel||resources.fuel>=99||state.money<fCost?'disabled':''}>${ship.nuclearFuel?'NO REFUELING NEEDED':`+10% · ${cash(fCost)}`}</button></article><article><small>FOOD · ${Math.ceil(resources.food)}%</small><b>${foodAmount}</b><span>${ship.foodEnduranceDays} days from full</span><button data-arx-action="food" ${resources.food>=99||state.money<provisionCost?'disabled':''}>+10% · ${cash(provisionCost)}</button></article><article><small>LAB SUPPLIES</small><b>${state.supplies}/${ship.supplyCapacity}</b><span>Consumed by field stations</span><button data-arx-action="supplies" ${state.supplies>=ship.supplyCapacity||state.money<2500?'disabled':''}>+10 · ${cash(2500)}</button></article><article><small>DAILY PAYROLL</small><b>${cash(payroll())}</b><span>Includes your Chief Scientist salary</span></article></div></div><div class="arx-port-vessel-dashboard compact-dashboard"><section class="crew-orbit"><h3>Team · ${state.scientists.length}/${ship.berths}</h3><div class="arx-dashboard-thumbs">${scientistTiles}${emptyBerths}</div></section><div class="arx-dashboard-ship"><small>${escapeHtml(ship.className)}</small><h2>${escapeHtml(ship.shipName||ship.name)}</h2><img src="${escapeHtml(ship.image||'assets/vessels/base-vessel.png')}" alt=""><div class="arx-dashboard-stats"><span>${slotSummary(ship,usage)}</span><span>Payroll ${cash(payroll())}/day</span></div></div><section class="equipment-orbit"><h3>Equipment</h3><div class="arx-dashboard-thumbs">${equipmentTiles}${emptySlotMarkup(ship)}</div></section></div>`;
   }
+  function nativePrivateFundingAdapter() {
+    const adapter=window.ArcticResearchIAP;
+    return window.AR_IOS_OFFLINE_SHELL===true&&adapter&&typeof adapter.purchase==='function'?adapter:null;
+  }
+  async function refreshPrivateFundingPrices() {
+    const adapter=nativePrivateFundingAdapter(); if(!adapter||typeof adapter.products!=='function')return;
+    try{
+      const result=await adapter.products(PRIVATE_FUNDING_PACKAGES.map(item=>item.productId));
+      if(!result?.success||!Array.isArray(result.products))return;
+      const prices=new Map(result.products.map(product=>[product.productId,product.displayPrice]));
+      root?.querySelectorAll('[data-arx-action="buy-private-funding"]').forEach(button=>{
+        const item=PRIVATE_FUNDING_PACKAGES.find(pack=>pack.id===button.dataset.id),price=item&&prices.get(item.productId);
+        if(price)button.textContent=price;
+      });
+    }catch(error){console.warn('STOREKIT PRODUCT LOAD FAILED',error);}
+  }
   function openPrivateFunding() {
     if (!root||!state.port) return;
-    const modal=root.querySelector('#arx-funding-modal');
-    modal.innerHTML=`<div class="arx-modal-card arx-funding-card"><button class="arx-close" data-arx-action="close-private-funding" aria-label="Close private funding">×</button><small>PRIVATE RESEARCH BACKING</small><h2>Apply for Private Funding</h2><p>Accelerate the expedition with an unrestricted private research contribution.</p><div class="arx-web-preview"><b>WEB PREVIEW · NO REAL CHARGE</b><span>Purchases are simulated in this browser build. In the iOS app, these same product IDs will be fulfilled through StoreKit.</span></div><div class="arx-funding-balance"><small>CURRENT EXPEDITION CASH</small><b data-arx-cash>${cash(state.money)}</b></div><div class="arx-funding-grid">${PRIVATE_FUNDING_PACKAGES.map((item,index)=>`<article class="${index===1?'featured':''}"><small>${index===0?'STARTER BACKING':index===1?'POPULAR':'MAJOR SPONSOR'}</small><b>${item.label}</b><span>game cash</span><button data-arx-action="buy-private-funding" data-id="${item.id}">${item.price}</button></article>`).join('')}</div><p class="arx-funding-note">Private funding is a consumable purchase: each successful transaction adds the selected amount to expedition cash and does not alter research progress, career level, or vessel requirements.</p></div>`;
+    const modal=root.querySelector('#arx-funding-modal'),native=!!nativePrivateFundingAdapter();
+    const notice=native
+      ? '<div class="arx-web-preview"><b>APPLE IN-APP PURCHASE</b><span>Payments are processed securely by Apple. The selected private backing is added to this expedition after StoreKit verifies the purchase.</span></div>'
+      : '<div class="arx-web-preview"><b>WEB PREVIEW · NO REAL CHARGE</b><span>Purchases are simulated only in the browser preview. The iOS App Store build uses Apple In-App Purchase.</span></div>';
+    modal.innerHTML=`<div class="arx-modal-card arx-funding-card"><button class="arx-close" data-arx-action="close-private-funding" aria-label="Close private funding">×</button><small>PRIVATE RESEARCH BACKING</small><h2>Apply for Private Funding</h2><p>Accelerate the expedition with an unrestricted private research contribution.</p>${notice}<div class="arx-funding-balance"><small>CURRENT EXPEDITION CASH</small><b data-arx-cash>${cash(state.money)}</b></div><div class="arx-funding-grid">${PRIVATE_FUNDING_PACKAGES.map((item,index)=>`<article class="${index===1?'featured':''}"><small>${index===0?'STARTER BACKING':index===1?'POPULAR':'MAJOR SPONSOR'}</small><b>${item.label}</b><span>game cash</span><button data-arx-action="buy-private-funding" data-id="${item.id}">${item.price}</button></article>`).join('')}</div><p class="arx-funding-note">Private funding is a consumable purchase: each successful transaction adds the selected amount to expedition cash and does not alter research progress, career level, or vessel requirements.</p></div>`;
     modal.classList.add('open');
+    if(native)refreshPrivateFundingPrices();
+  }
+  async function finishPrivateFundingTransaction(transactionId) {
+    const adapter=nativePrivateFundingAdapter(); if(!adapter||!transactionId||typeof adapter.finish!=='function')return false;
+    try{const result=await adapter.finish(String(transactionId));return result?.success!==false;}catch(error){console.warn('STOREKIT FINISH FAILED',error);return false;}
+  }
+  async function deliverPrivateFunding(item,result,{recovered=false}={}) {
+    const native=!!nativePrivateFundingAdapter(),transactionId=result?.transactionId!=null?String(result.transactionId):null;
+    if(native&&!transactionId)return false;
+    state.iapTransactions=Array.isArray(state.iapTransactions)?state.iapTransactions.map(String):[];
+    if(transactionId&&state.iapTransactions.includes(transactionId)){
+      const saved=callbacks.flushSave?.();
+      if(saved!==false)await finishPrivateFundingTransaction(transactionId);
+      return true;
+    }
+    adjustMoney(item.gameCash);
+    if(transactionId){state.iapTransactions.push(transactionId);if(state.iapTransactions.length>500)state.iapTransactions=state.iapTransactions.slice(-500);}
+    addLog(`Private funding received: ${cash(item.gameCash)}${recovered?' · recovered StoreKit transaction':result?.mode==='web-preview'?' · web preview transaction':''}.`);
+    changed();
+    const saved=transactionId?callbacks.flushSave?.():true;
+    if(transactionId&&saved!==false)await finishPrivateFundingTransaction(transactionId);
+    return true;
   }
   async function purchasePrivateFunding(id,button) {
     const item=PRIVATE_FUNDING_PACKAGES.find(pack=>pack.id===id); if(!item)return;
-    const originalLabel=button?.textContent||item.price;
+    const originalLabel=button?.textContent||item.price,native=window.AR_IOS_OFFLINE_SHELL===true,adapter=nativePrivateFundingAdapter();
     if(button){button.disabled=true;button.textContent='PROCESSING…';}
-    let result={success:true,mode:'web-preview'};
+    let result=native?{success:false,mode:'storekit',message:'Apple purchase service is unavailable'}:{success:true,mode:'web-preview'};
     try {
-      const adapter=window.ArcticResearchIAP;
-      if(adapter&&typeof adapter.purchase==='function') {
-        const response=await adapter.purchase(item.productId);
-        if(response===false||response?.success===false) result={success:false,mode:'storekit',message:response?.message||'Purchase was not completed'};
-        else result={success:true,mode:'storekit',transactionId:response?.transactionId||null};
-      }
+      if(adapter) result=await adapter.purchase(item.productId);
     } catch(error) {
       result={success:false,mode:'storekit',message:error?.message||'Purchase failed'};
     }
-    if(!result.success){if(button){button.disabled=false;button.textContent=originalLabel;}toast((result.message||'PURCHASE NOT COMPLETED').toUpperCase());return;}
-    adjustMoney(item.gameCash);
-    addLog(`Private funding received: ${cash(item.gameCash)}${result.mode==='web-preview'?' · web preview transaction':''}.`);
+    if(!result?.success){if(button){button.disabled=false;button.textContent=originalLabel;}toast((result?.message||'PURCHASE NOT COMPLETED').toUpperCase());return;}
+    const delivered=await deliverPrivateFunding(item,result);
+    if(!delivered){if(button){button.disabled=false;button.textContent=originalLabel;}toast('PURCHASE COULD NOT BE VERIFIED');return;}
     root.querySelector('#arx-funding-modal')?.classList.remove('open');
-    toast(`PRIVATE FUNDING SECURED · ${cash(item.gameCash)}`); changed();
+    toast(`PRIVATE FUNDING SECURED · ${cash(item.gameCash)}`);
+  }
+  async function recoverPrivateFundingPurchases() {
+    const adapter=nativePrivateFundingAdapter(); if(!adapter||typeof adapter.unfinished!=='function')return false;
+    try{
+      const result=await adapter.unfinished(); if(!result?.success||!Array.isArray(result.transactions))return false;
+      for(const transaction of result.transactions){
+        const item=PRIVATE_FUNDING_PACKAGES.find(pack=>pack.productId===transaction.productId); if(!item)continue;
+        await deliverPrivateFunding(item,{success:true,mode:'storekit',transactionId:transaction.transactionId,productId:transaction.productId},{recovered:true});
+      }
+      return true;
+    }catch(error){console.warn('STOREKIT RECOVERY FAILED',error);return false;}
   }
 
   function updatePortTabHints(tabs) {
@@ -1874,9 +1921,6 @@
     if(activeGrantTemplateExists(offer.templateId)){toast('THAT RESEARCH GRANT IS ALREADY ACTIVE');return;}
     if(grantLoad()>=HARD_ACTIVE_GRANT_LIMIT&&!makeRoomForNewGrant()){toast('ACTIVE GRANT LIMIT · COMPLETE OR DROP A GRANT FIRST');return;}
     if (grantLoad()>=grantCapacity()) { toast(`ACTIVE RESEARCH GRANT LIMIT · ${grantLoad()}/${grantCapacity()}`); return; }
-    const projection=missionFoodProjection(offer);
-    if (projection.remaining<15) { toast('INSUFFICIENT FOOD SUPPLY ONBOARD TO COMPLETE THE WORK'); return; }
-    if (!vessel().nuclearFuel&&projection.fuelRemaining<10) { toast('INSUFFICIENT FUEL TO COMPLETE THE WORK AND RETURN'); return; }
     state.targets.forEach(item=>item.selected=false);offer.selected=true;offer.upfront=0;offer.advancePaid=0;offer.acceptedAtDay=state.elapsedDays;offer.expiresAtDay=state.elapsedDays+21;state.targets.push(offer);
     state.offers=state.offers.filter(item=>item.id!==id);recordGrantUse(offer.templateId,offer);addLog(`Research grant accepted: ${offer.title}. Payment due on completion.`);
     toast(`RESEARCH GRANT ACCEPTED · ${offer.shortTitle}`);changed();
@@ -2082,7 +2126,7 @@ function vesselOverlay() {
   function ensureUI() {
     if (root) return;
     root=document.createElement('div'); root.id='arx-root';
-    root.innerHTML=`<button id="arx-mobile-toggle" data-arx-action="mobile-toggle">RESEARCH</button><button id="arx-dev-toggle" data-arx-action="dev-console">${devIsUnlocked()?'TEST':'TEST 🔒'}</button><aside id="arx-sidebar" class="arx-sidebar" aria-label="Research program"></aside><div id="arx-port-modal" class="arx-modal"></div><div id="arx-target-modal" class="arx-modal"></div><div id="arx-wildlife-modal" class="arx-modal"></div><div id="arx-guide-modal" class="arx-modal"></div><div id="arx-publish-modal" class="arx-modal"></div><div id="arx-promotion-modal" class="arx-modal"></div><div id="arx-vessel-modal" class="arx-modal"></div><div id="arx-departure-modal" class="arx-modal"></div><div id="arx-character-modal" class="arx-modal"></div><div id="arx-npc-modal" class="arx-modal"></div><div id="arx-funding-modal" class="arx-modal"></div><div id="arx-dev-modal" class="arx-modal"></div>`;
+    root.innerHTML=`<button id="arx-mobile-toggle" data-arx-action="mobile-toggle">RESEARCH</button><aside id="arx-sidebar" class="arx-sidebar" aria-label="Research program"></aside><div id="arx-port-modal" class="arx-modal"></div><div id="arx-target-modal" class="arx-modal"></div><div id="arx-wildlife-modal" class="arx-modal"></div><div id="arx-guide-modal" class="arx-modal"></div><div id="arx-publish-modal" class="arx-modal"></div><div id="arx-promotion-modal" class="arx-modal"></div><div id="arx-vessel-modal" class="arx-modal"></div><div id="arx-departure-modal" class="arx-modal"></div><div id="arx-character-modal" class="arx-modal"></div><div id="arx-npc-modal" class="arx-modal"></div><div id="arx-funding-modal" class="arx-modal"></div>`;
     document.body.appendChild(root);
     syncGlobalCash();
     const style=document.createElement('style'); style.id='arx-expedition-style'; style.textContent=`
@@ -2153,7 +2197,7 @@ function vesselOverlay() {
     root?.querySelectorAll('.arx-modal.open').forEach(modal=>modal.classList.remove('open'));
     for (const key of Object.keys(state)) if (Object.prototype.hasOwnProperty.call(snapshot,key)) state[key]=clone(snapshot[key]);
     state.inventory=state.inventory||{}; state.deployments=state.deployments||[]; state.weatherEventsSeen=state.weatherEventsSeen||[]; state.droppedGrantTemplates=state.droppedGrantTemplates||[]; state.scientistRecords=state.scientistRecords||{};
-    state.observed=state.observed||[]; state.observedIndividuals=state.observedIndividuals||[]; state.homePortId=state.homePortId||'longyearbyen'; state.recentGrantTemplates=state.recentGrantTemplates||[]; state.recentGrantSites=state.recentGrantSites||[]; state.recentOpportunityTemplates=state.recentOpportunityTemplates||[]; state.lastOpportunitySpawnPosition=state.lastOpportunitySpawnPosition||null; state.grantCooldowns=state.grantCooldowns||{}; state.grantMarketReady=state.grantMarketReady||{}; state.assistedByVessels=state.assistedByVessels||[]; state.bridgeSupportNotice=state.bridgeSupportNotice||null; state.lastPortId=state.lastPortId||null; state.lastProfessorGrantDay=Number(state.lastProfessorGrantDay??-999); state.lastExpiredGrantRemovalDay=Number(state.lastExpiredGrantRemovalDay??-999); state.remoteOffer=state.remoteOffer||null; state.helicopterFoodReminderShown=!!state.helicopterFoodReminderShown; state.elapsedDays=Number(state.elapsedDays)||0; state.publicationRewardMultiplier=clamp(Number(state.publicationRewardMultiplier)||1,.5,2); state.netWorthBaseline=Number(state.netWorthBaseline)||null; state.netWorthBaselineDay=Number(state.netWorthBaselineDay)||state.elapsedDays; state.netWorthHistory=Array.isArray(state.netWorthHistory)?state.netWorthHistory.slice(-12):[]; state.playerConfigured=!!state.playerConfigured;
+    state.observed=state.observed||[]; state.observedIndividuals=state.observedIndividuals||[]; state.homePortId=state.homePortId||'longyearbyen'; state.recentGrantTemplates=state.recentGrantTemplates||[]; state.recentGrantSites=state.recentGrantSites||[]; state.recentOpportunityTemplates=state.recentOpportunityTemplates||[]; state.lastOpportunitySpawnPosition=state.lastOpportunitySpawnPosition||null; state.grantCooldowns=state.grantCooldowns||{}; state.grantMarketReady=state.grantMarketReady||{}; state.assistedByVessels=state.assistedByVessels||[]; state.bridgeSupportNotice=state.bridgeSupportNotice||null; state.lastPortId=state.lastPortId||null; state.lastProfessorGrantDay=Number(state.lastProfessorGrantDay??-999); state.lastExpiredGrantRemovalDay=Number(state.lastExpiredGrantRemovalDay??-999); state.remoteOffer=state.remoteOffer||null; state.helicopterFoodReminderShown=!!state.helicopterFoodReminderShown; state.iapTransactions=Array.isArray(state.iapTransactions)?state.iapTransactions.map(String):[]; state.elapsedDays=Number(state.elapsedDays)||0; state.publicationRewardMultiplier=clamp(Number(state.publicationRewardMultiplier)||1,.5,2); state.netWorthBaseline=Number(state.netWorthBaseline)||null; state.netWorthBaselineDay=Number(state.netWorthBaselineDay)||state.elapsedDays; state.netWorthHistory=Array.isArray(state.netWorthHistory)?state.netWorthHistory.slice(-12):[]; state.playerConfigured=!!state.playerConfigured;
     state.installedEquipment=(state.installedEquipment||[]).filter(id=>EQUIPMENT[id]&&!EQUIPMENT[id].builtIn);
     state.scientists=(state.scientists||[]).map(item=>({...item,missions:item.missions||0,papers:item.papers||0,recruitmentPool:item.recruitmentPool||profileFor(item).recruitmentPool||'international'}));
     for (const scientist of state.scientists) recordScientist(scientist);
@@ -2167,7 +2211,7 @@ function vesselOverlay() {
   const api={
     initialize,enterPort,leavePort,tickDays,getVesselModifiers,getMapTargets,selectTarget,updateNavigation,openTarget,openNavigationPrompt,
     completeTarget,openWildlife,openVessel,openNpcVessel,openCharacterSetup,confirmDeparture,getState,createCheckpoint,restoreCheckpoint,
-    restoreSnapshot:restoreCheckpoint,ensureMinimumSupplies,maybeSpawnOpportunity,maybeHelicopterFoodReminder,isWildlifeObserved:id=>(state.observedIndividuals||[]).includes(String(id)),resetWildlifeObservations,
+    restoreSnapshot:restoreCheckpoint,ensureMinimumSupplies,recoverPurchases:recoverPrivateFundingPurchases,maybeSpawnOpportunity,maybeHelicopterFoodReminder,isWildlifeObserved:id=>(state.observedIndividuals||[]).includes(String(id)),resetWildlifeObservations,
     isBusy:()=>!!activeOperation||!!root?.querySelector('.arx-modal.open')||!!root?.querySelector('.arx-sidebar.open')
   };
   window.ArcticResearch=api;

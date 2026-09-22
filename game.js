@@ -122,7 +122,7 @@
     const animalSampleKey=species=>String(species||'').toUpperCase().replace(/ SCHOOL$/,'').trim();
     const hasAnimal=species=>!!ANIMAL_SAMPLE_SOURCES[animalSampleKey(species)];
     const playAnimal=(species,{ambient=false}={})=>{const c=ensure(),key=animalSampleKey(species),buffer=animalBuffers[key];if(!c||!ANIMAL_SAMPLE_SOURCES[key])return false;if(!buffer){loadAnimalSamples(c);return false;}const src=c.createBufferSource(),g=c.createGain();src.buffer=buffer;g.gain.value=ambient?.06:.5;src.connect(g).connect(c.destination);const run=()=>src.start();if(c.state!=='running'){Promise.resolve(c.resume()).then(()=>{if(c.state==='running')run();}).catch(()=>{});}else run();if(!ambient)nextAnimal=performance.now()+26000+Math.random()*16000;return true;};
-    const ensure=()=>{if(ac)return ac;try{ac=new(window.AudioContext||window.webkitAudioContext)();const seconds=5,buffer=ac.createBuffer(1,ac.sampleRate*seconds,ac.sampleRate),data=buffer.getChannelData(0);for(let i=0;i<data.length;i++)data[i]=(Math.random()*2-1)*(.38+.28*Math.sin(i/6200));waveSource=ac.createBufferSource();waveSource.buffer=buffer;waveSource.loop=true;const filter=ac.createBiquadFilter();filter.type='lowpass';filter.frequency.value=430;waveGain=ac.createGain();waveGain.gain.value=0;waveSource.connect(filter).connect(waveGain).connect(ac.destination);waveSource.start();setupAmbience(ac);loadAnimalSamples(ac);}catch(e){}return ac;};
+    const ensure=()=>{if(ac?.state==='closed'){ac=null;waveSource=null;waveGain=null;ambientWindGain=null;ambientPadGain=null;ambientPadOsc=[];unlockPromise=null;unlockChimed=false;animalLoading=false;}if(ac)return ac;try{ac=new(window.AudioContext||window.webkitAudioContext)();const seconds=5,buffer=ac.createBuffer(1,ac.sampleRate*seconds,ac.sampleRate),data=buffer.getChannelData(0);for(let i=0;i<data.length;i++)data[i]=(Math.random()*2-1)*(.38+.28*Math.sin(i/6200));waveSource=ac.createBufferSource();waveSource.buffer=buffer;waveSource.loop=true;const filter=ac.createBiquadFilter();filter.type='lowpass';filter.frequency.value=430;waveGain=ac.createGain();waveGain.gain.value=0;waveSource.connect(filter).connect(waveGain).connect(ac.destination);waveSource.start();setupAmbience(ac);loadAnimalSamples(ac);}catch(e){}return ac;};
     const unlock=()=>{const c=ensure();if(!c)return;try{if(navigator.audioSession)navigator.audioSession.type='playback';}catch(error){}try{const primer=c.createOscillator(),primerGain=c.createGain();primerGain.gain.value=.0001;primer.connect(primerGain).connect(c.destination);primer.start(c.currentTime);primer.stop(c.currentTime+.025);}catch(error){}const confirm=()=>{if(unlockChimed||c.state!=='running')return;unlockChimed=true;};if(c.state!=='running'){if(!unlockPromise)unlockPromise=Promise.resolve(c.resume()).catch(()=>{}).finally(()=>{unlockPromise=null;});unlockPromise.then(confirm).catch(()=>{});}else confirm();};
     const tone=(freq=440,duration=.15,gain=.08,when=0,type='sine')=>{const c=ensure();if(!c)return;const o=c.createOscillator(),g=c.createGain();o.type=type;o.frequency.setValueAtTime(freq,c.currentTime+when);g.gain.setValueAtTime(.0001,c.currentTime+when);g.gain.exponentialRampToValueAtTime(gain,c.currentTime+when+.012);g.gain.exponentialRampToValueAtTime(.0001,c.currentTime+when+duration);o.connect(g).connect(c.destination);o.start(c.currentTime+when);o.stop(c.currentTime+when+duration+.02);};
     const burst=(duration=.3,gain=.06,low=300,high=2200,when=0)=>{const c=ensure();if(!c)return;const b=c.createBuffer(1,Math.ceil(c.sampleRate*duration),c.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length);const src=c.createBufferSource(),f=c.createBiquadFilter(),g=c.createGain();src.buffer=b;f.type='bandpass';f.frequency.value=(low+high)/2;f.Q.value=.7;g.gain.value=gain;src.connect(f).connect(g).connect(c.destination);src.start(c.currentTime+when);};
@@ -137,6 +137,10 @@
   document.addEventListener('touchend',()=>sound.unlock(),{capture:true,passive:true});
   document.addEventListener('click',()=>sound.unlock(),{capture:true,passive:true});
   document.addEventListener('keydown',()=>sound.unlock(),{capture:true});
+  window.ARResumeAudio=()=>{try{sound.unlock();}catch(error){}};
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')window.ARResumeAudio();});
+  addEventListener('pageshow',()=>window.ARResumeAudio());
+  addEventListener('arctic-iap-update',()=>research?.recoverPurchases?.());
 
   // Simplified but geographically ordered coastlines and the major islands
   // that define navigable Arctic waters.
@@ -513,6 +517,7 @@
       ui.gameOver.classList.add('hidden');ui.fuelLevel.style.width=state.fuel+'%';ui.foodLevel.style.width=state.food+'%';updateResourceBarColors();updateResourceWarning();
       updateVesselButton(research?.getVesselModifiers?.()||vesselModifiers());zoomLevel=(research?.getVesselModifiers?.()||vesselModifiers()).minZoom||zoomLevel;setZoom(0,true);
       if(currentPortCity&&state.dockedPort)research?.enterPort?.(currentPortCity,{resume:true});else research?.leavePort?.();
+      research?.recoverPurchases?.();
       menuOpen=false;ui.welcome.classList.add('hidden');lastResearchAnalytics=research?.getState?.()||null;showToast(`EXPEDITION LOADED — ${payload.meta?.location||'ARCTIC OCEAN'}`,2400);
       analytics.track(source==='auto'?'continue_game':'load_game',{save_slot:source,save_age_hours:Math.round((Date.now()-Date.parse(payload.savedAt||Date.now()))/360000)/10});scheduleAutosave(900);return true;
     }catch(error){showToast('COULD NOT LOAD THIS SAVE',2600);return false;}
@@ -1286,6 +1291,7 @@
     onCharacterReady:beginExpedition,
     onProgressionChanged:()=>{researchOpportunityClock=999;if(!currentPortCity){researchOpportunityClock=0;setTimeout(()=>research?.maybeSpawnOpportunity?.(researchEnvironment(currentWeather())),0);}},
     onToast:showToast,
+    flushSave:()=>saveGame('auto','iap'),
     hasWildlifeSound:species=>sound.hasAnimal?.(species)===true,
     onSound:(type,payload)=>type==='wildlife'?sound.playAnimal?.(payload?.species):sound.play(type),
     onStateChange:()=>{if(currentPortCity)saveCheckpoint(currentPortCity);semanticAnalytics();if(!autosaveSuspended)scheduleAutosave();}
@@ -1295,7 +1301,7 @@
   function clampResource(value){return Math.max(0,Math.min(100,value));}
   function openMinimap(){if(!minimapPanel||minimapExpanded)return;minimapExpanded=true;miniViewX=state.x;miniViewY=state.y;miniPan=null;miniZoomLevel=zoomLevel;syncMiniZoomControls();minimapPanel.classList.add('expanded');document.body.classList.add('nav-chart-open');miniLastDraw=0;drawMiniMap();}
   function closeMinimap(){if(!minimapPanel)return;minimapExpanded=false;miniViewX=state.x;miniViewY=state.y;miniPan=null;minimapPanel.classList.remove('expanded');document.body.classList.remove('nav-chart-open');drawMiniMap();}
-  function beginExpedition(){if(state.started)return;startFlowPending=false;state.started=true;menuOpen=false;ui.welcome.classList.add('hidden');if(currentPortCity){const berth=findPortTeleportPosition(currentPortCity)||findPortApproach(currentPortCity);if(berth){state.x=berth.x;state.y=berth.y;state.tx=berth.x;state.ty=berth.y;state.track=[{x:berth.x,y:berth.y}];invalidateWorldCache();}enterPort(currentPortCity,{immediate:true});}analytics.track('game_started');scheduleAutosave(800);}
+  function beginExpedition(){if(state.started)return;startFlowPending=false;state.started=true;menuOpen=false;ui.welcome.classList.add('hidden');if(currentPortCity){const berth=findPortTeleportPosition(currentPortCity)||findPortApproach(currentPortCity);if(berth){state.x=berth.x;state.y=berth.y;state.tx=berth.x;state.ty=berth.y;state.track=[{x:berth.x,y:berth.y}];invalidateWorldCache();}enterPort(currentPortCity,{immediate:true});}research?.recoverPurchases?.();analytics.track('game_started');scheduleAutosave(800);}
   function requestExpeditionStart(){menuOpen=false;ui.welcome.classList.add('hidden');if(research?.openCharacterSetup){startFlowPending=true;const opened=research.openCharacterSetup();if(opened)return;}beginExpedition();}
   const mapTouchPointers=new Map();let mapTouchTap=null,mapPinchDistance=0,mapPinchActive=false;
   function mapPinchStep(){if(mapTouchPointers.size<2)return;const points=[...mapTouchPointers.values()],distance=Math.hypot(points[0].x-points[1].x,points[0].y-points[1].y);if(!mapPinchDistance){mapPinchDistance=distance;return;}const ratio=distance/Math.max(1,mapPinchDistance);if(ratio>1.16){setZoom(1);mapPinchDistance=distance;analytics.track('zoom_changed',{zoom_direction:'pinch-in-detail'});}else if(ratio<.86){setZoom(-1);mapPinchDistance=distance;analytics.track('zoom_changed',{zoom_direction:'pinch-out-overview'});}}
