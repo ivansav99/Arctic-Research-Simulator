@@ -1,5 +1,7 @@
 import SwiftUI
 import WebKit
+import StoreKit
+import AVFoundation
 
 struct ContentView: View {
     var body: some View {
@@ -11,6 +13,48 @@ struct ContentView: View {
 
 struct GameWebView: UIViewRepresentable {
     static let gameURL = URL(string: "arsapp://local/index.html?app=ios&offline=1")!
+    static let supportedFundingProductIDs: Set<String> = [
+        "ars.private_funding.1m",
+        "ars.private_funding.10m",
+        "ars.private_funding.50m"
+    ]
+
+    private static let nativeBridgeScript = #"""
+    window.AR_IOS_OFFLINE_SHELL = true;
+    if (document.documentElement) document.documentElement.classList.add('ios-native-shell');
+    (() => {
+      let nextRequestId = 1;
+      const pending = new Map();
+      window.__arsIAPResolve = (requestId, payload) => {
+        const entry = pending.get(String(requestId));
+        if (!entry) return;
+        pending.delete(String(requestId));
+        entry.resolve(payload || {success:false, message:'Empty StoreKit response'});
+      };
+      const callNative = (action, payload = {}) => new Promise(resolve => {
+        const requestId = String(nextRequestId++);
+        pending.set(requestId, {resolve});
+        const handler = window.webkit?.messageHandlers?.arcticIAP;
+        if (!handler) {
+          pending.delete(requestId);
+          resolve({success:false, message:'Apple purchase service is unavailable'});
+          return;
+        }
+        try {
+          handler.postMessage({requestId, action, ...payload});
+        } catch (error) {
+          pending.delete(requestId);
+          resolve({success:false, message:error?.message || 'Could not contact StoreKit'});
+        }
+      });
+      window.ArcticResearchIAP = {
+        products: productIds => callNative('products', {productIds}),
+        purchase: productId => callNative('purchase', {productId}),
+        finish: transactionId => callNative('finish', {transactionId:String(transactionId)}),
+        unfinished: () => callNative('unfinished')
+      };
+    })();
+    """#
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -21,8 +65,9 @@ struct GameWebView: UIViewRepresentable {
         configuration.setURLSchemeHandler(context.coordinator.appSchemeHandler, forURLScheme: "arsapp")
 
         let controller = WKUserContentController()
+        controller.add(context.coordinator, name: "arcticIAP")
         controller.addUserScript(WKUserScript(
-            source: "window.AR_IOS_OFFLINE_SHELL=true; if(document.documentElement){document.documentElement.classList.add('ios-native-shell');}",
+            source: Self.nativeBridgeScript,
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true
         ))
@@ -36,16 +81,188 @@ struct GameWebView: UIViewRepresentable {
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.bounces = false
         webView.allowsBackForwardNavigationGestures = false
+        #if DEBUG
         if #available(iOS 16.4, *) { webView.isInspectable = true }
+        #endif
 
+        context.coordinator.attach(webView)
         webView.load(URLRequest(url: Self.gameURL, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 30))
         return webView
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {}
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         let appSchemeHandler = OfflineAppSchemeHandler()
+        weak var webView: WKWebView?
+        private var pendingTransactions: [UInt64: Transaction] = [:]
+        private var transactionUpdatesTask: Task<Void, Never>?
+
+        override init() {
+            super.init()
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(appDidBecomeActive),
+                name: UIApplication.didBecomeActiveNotification,
+                object: nil
+            )
+        }
+
+        deinit {
+            transactionUpdatesTask?.cancel()
+            NotificationCenter.default.removeObserver(self)
+        }
+
+        func attach(_ webView: WKWebView) {
+            self.webView = webView
+            activateAudioSession()
+            startTransactionUpdates()
+        }
+
+        @objc private func appDidBecomeActive() {
+            activateAudioSession()
+            webView?.evaluateJavaScript("window.ARResumeAudio && window.ARResumeAudio();")
+        }
+
+        private func activateAudioSession() {
+            let session = AVAudioSession.sharedInstance()
+            try? session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+            try? session.setActive(true)
+        }
+
+        private func startTransactionUpdates() {
+            guard transactionUpdatesTask == nil else { return }
+            transactionUpdatesTask = Task { @MainActor [weak self] in
+                for await result in Transaction.updates {
+                    guard !Task.isCancelled, let self else { break }
+                    guard case .verified(let transaction) = result,
+                          Self.supports(transaction.productID) else { continue }
+                    self.pendingTransactions[transaction.id] = transaction
+                    self.webView?.evaluateJavaScript("window.dispatchEvent(new Event('arctic-iap-update'));")
+                }
+            }
+        }
+
+        private static func supports(_ productID: String) -> Bool {
+            GameWebView.supportedFundingProductIDs.contains(productID)
+        }
+
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.name == "arcticIAP",
+                  let body = message.body as? [String: Any],
+                  let requestID = body["requestId"] as? String,
+                  let action = body["action"] as? String else { return }
+            Task { @MainActor [weak self] in
+                await self?.handleIAP(action: action, body: body, requestID: requestID)
+            }
+        }
+
+        @MainActor
+        private func handleIAP(action: String, body: [String: Any], requestID: String) async {
+            switch action {
+            case "products":
+                let ids = (body["productIds"] as? [String] ?? []).filter(Self.supports)
+                do {
+                    let products = try await Product.products(for: ids)
+                    let values: [[String: Any]] = products.map {
+                        ["productId": $0.id, "displayPrice": $0.displayPrice]
+                    }
+                    reply(requestID, ["success": true, "products": values])
+                } catch {
+                    reply(requestID, ["success": false, "message": error.localizedDescription])
+                }
+
+            case "purchase":
+                guard let productID = body["productId"] as? String, Self.supports(productID) else {
+                    reply(requestID, ["success": false, "message": "Unknown private funding product"])
+                    return
+                }
+                do {
+                    guard let product = try await Product.products(for: [productID]).first else {
+                        reply(requestID, ["success": false, "message": "This purchase is not available from the App Store yet"])
+                        return
+                    }
+                    let result = try await product.purchase()
+                    switch result {
+                    case .success(let verification):
+                        switch verification {
+                        case .verified(let transaction):
+                            pendingTransactions[transaction.id] = transaction
+                            reply(requestID, [
+                                "success": true,
+                                "productId": transaction.productID,
+                                "transactionId": String(transaction.id),
+                                "displayPrice": product.displayPrice
+                            ])
+                        case .unverified(_, let error):
+                            reply(requestID, ["success": false, "message": "Apple could not verify this purchase: \(error.localizedDescription)"])
+                        }
+                    case .userCancelled:
+                        reply(requestID, ["success": false, "cancelled": true, "message": "Purchase cancelled"])
+                    case .pending:
+                        reply(requestID, ["success": false, "pending": true, "message": "Purchase is awaiting approval"])
+                    @unknown default:
+                        reply(requestID, ["success": false, "message": "Unknown App Store purchase state"])
+                    }
+                } catch {
+                    reply(requestID, ["success": false, "message": error.localizedDescription])
+                }
+
+            case "unfinished":
+                var transactions: [[String: Any]] = []
+                for await result in Transaction.unfinished {
+                    guard case .verified(let transaction) = result,
+                          Self.supports(transaction.productID) else { continue }
+                    pendingTransactions[transaction.id] = transaction
+                    transactions.append([
+                        "productId": transaction.productID,
+                        "transactionId": String(transaction.id)
+                    ])
+                }
+                reply(requestID, ["success": true, "transactions": transactions])
+
+            case "finish":
+                guard let value = body["transactionId"] as? String, let transactionID = UInt64(value) else {
+                    reply(requestID, ["success": false, "message": "Invalid transaction identifier"])
+                    return
+                }
+                if let transaction = pendingTransactions[transactionID] {
+                    await transaction.finish()
+                    pendingTransactions.removeValue(forKey: transactionID)
+                    reply(requestID, ["success": true])
+                    return
+                }
+                for await result in Transaction.unfinished {
+                    guard case .verified(let transaction) = result else { continue }
+                    if transaction.id == transactionID {
+                        await transaction.finish()
+                        reply(requestID, ["success": true])
+                        return
+                    }
+                }
+                // If it is no longer unfinished, StoreKit has already accepted the finish.
+                reply(requestID, ["success": true])
+
+            default:
+                reply(requestID, ["success": false, "message": "Unknown StoreKit action"])
+            }
+        }
+
+        @MainActor
+        private func reply(_ requestID: String, _ payload: [String: Any]) {
+            guard let data = try? JSONSerialization.data(withJSONObject: payload),
+                  let payloadJSON = String(data: data, encoding: .utf8),
+                  let idData = try? JSONSerialization.data(withJSONObject: [requestID]),
+                  var idJSON = String(data: idData, encoding: .utf8) else { return }
+            idJSON.removeFirst()
+            idJSON.removeLast()
+            webView?.evaluateJavaScript("window.__arsIAPResolve && window.__arsIAPResolve(\(idJSON), \(payloadJSON));")
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            activateAudioSession()
+            webView.evaluateJavaScript("window.ARResumeAudio && window.ARResumeAudio();")
+        }
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             guard let url = navigationAction.request.url else {
