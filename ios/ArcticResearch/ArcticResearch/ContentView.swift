@@ -95,7 +95,7 @@ struct GameWebView: UIViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         let appSchemeHandler = OfflineAppSchemeHandler()
         weak var webView: WKWebView?
-        private var pendingTransactions: [UInt64: Transaction] = [:]
+        private var pendingTransactions: [UInt64: StoreKit.Transaction] = [:]
         private var transactionUpdatesTask: Task<Void, Never>?
 
         override init() {
@@ -133,7 +133,7 @@ struct GameWebView: UIViewRepresentable {
         private func startTransactionUpdates() {
             guard transactionUpdatesTask == nil else { return }
             transactionUpdatesTask = Task { @MainActor [weak self] in
-                for await result in Transaction.updates {
+                for await result in StoreKit.Transaction.updates {
                     guard !Task.isCancelled, let self else { break }
                     guard case .verified(let transaction) = result,
                           Self.supports(transaction.productID) else { continue }
@@ -210,7 +210,7 @@ struct GameWebView: UIViewRepresentable {
 
             case "unfinished":
                 var transactions: [[String: Any]] = []
-                for await result in Transaction.unfinished {
+                for await result in StoreKit.Transaction.unfinished {
                     guard case .verified(let transaction) = result,
                           Self.supports(transaction.productID) else { continue }
                     pendingTransactions[transaction.id] = transaction
@@ -232,7 +232,7 @@ struct GameWebView: UIViewRepresentable {
                     reply(requestID, ["success": true])
                     return
                 }
-                for await result in Transaction.unfinished {
+                for await result in StoreKit.Transaction.unfinished {
                     guard case .verified(let transaction) = result else { continue }
                     if transaction.id == transactionID {
                         await transaction.finish()
