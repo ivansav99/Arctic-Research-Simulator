@@ -92,16 +92,27 @@ try:
     time.sleep(1.0)
     rect=canvas.rect
     ActionChains(driver).move_to_element_with_offset(canvas,rect['width']*.18,rect['height']*.12).click().perform()
+    time.sleep(.4)
+    depart=driver.find_elements(By.CSS_SELECTOR,'[data-arx-action="depart-anyway"]')
+    if depart and depart[0].is_displayed():
+        depart[0].click()
     time.sleep(2.0)
     speed=driver.find_element(By.ID,'speed').text.strip()
     if speed.startswith('0.0'):
         ActionChains(driver).move_to_element_with_offset(canvas,-rect['width']*.18,rect['height']*.12).click().perform()
+        time.sleep(.4)
+        depart=driver.find_elements(By.CSS_SELECTOR,'[data-arx-action="depart-anyway"]')
+        if depart and depart[0].is_displayed():
+            depart[0].click()
         time.sleep(2.0)
         speed=driver.find_element(By.ID,'speed').text.strip()
     if speed.startswith('0.0'):
         # Port markers/land can legitimately intercept a map click near Longyearbyen.
-        # Use the game's keyboard navigation path as a deterministic final smoke check.
         driver.find_element(By.TAG_NAME,'body').send_keys(Keys.ARROW_RIGHT)
+        time.sleep(.4)
+        depart=driver.find_elements(By.CSS_SELECTOR,'[data-arx-action="depart-anyway"]')
+        if depart and depart[0].is_displayed():
+            depart[0].click()
         time.sleep(2.0)
         speed=driver.find_element(By.ID,'speed').text.strip()
     if speed.startswith('0.0'):
