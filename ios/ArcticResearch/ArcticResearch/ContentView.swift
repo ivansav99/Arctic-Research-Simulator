@@ -138,7 +138,7 @@ struct GameWebView: UIViewRepresentable {
                     guard case .verified(let transaction) = result,
                           Self.supports(transaction.productID) else { continue }
                     self.pendingTransactions[transaction.id] = transaction
-                    self.webView?.evaluateJavaScript("window.dispatchEvent(new Event('arctic-iap-update'));")
+                    try? await self.webView?.evaluateJavaScript("window.dispatchEvent(new Event('arctic-iap-update'));")
                 }
             }
         }
