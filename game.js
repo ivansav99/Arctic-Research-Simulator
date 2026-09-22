@@ -450,14 +450,12 @@
   if(currentPortCity)state.dockedPort=currentPortCity.name;
 
   // Expedition 13: local saves, title/pause menu, and analytics instrumentation.
-  const GAME_VERSION='expedition-23p2-photo-review',SAVE_VERSION=1;
+  const GAME_VERSION='1.0.0',SAVE_VERSION=1;
   const SAVE_KEYS={auto:'arctic-research-save-auto-v1',slot1:'arctic-research-save-slot-1-v1',slot2:'arctic-research-save-slot-2-v1',slot3:'arctic-research-save-slot-3-v1'};
   const AUTO_NEW_KEY='arctic-research-start-new-v1';
-  const PLAYTEST_BUILD_KEY='arctic-research-playtest-build';
-  try{const previousBuild=localStorage.getItem(PLAYTEST_BUILD_KEY);if(previousBuild!==GAME_VERSION){Object.values(SAVE_KEYS).forEach(key=>localStorage.removeItem(key));localStorage.removeItem(AUTO_NEW_KEY);localStorage.setItem(PLAYTEST_BUILD_KEY,GAME_VERSION);}}catch(error){}
   let menuOpen=true,autosaveSuspended=false,autosaveTimer=0,lastResearchAnalytics=null;
   const safeJson=value=>{try{return JSON.parse(JSON.stringify(value));}catch(error){return null;}};
-  const readSave=slot=>{try{const raw=localStorage.getItem(SAVE_KEYS[slot]);if(!raw)return null;const parsed=JSON.parse(raw);return parsed?.version===SAVE_VERSION&&parsed?.gameVersion===GAME_VERSION?parsed:null;}catch(error){return null;}};
+  const readSave=slot=>{try{const raw=localStorage.getItem(SAVE_KEYS[slot]);if(!raw)return null;const parsed=JSON.parse(raw);return parsed?.version===SAVE_VERSION?parsed:null;}catch(error){return null;}};
   const hasAnySave=()=>Object.keys(SAVE_KEYS).some(slot=>!!readSave(slot));
   const activeClock={total:0,since:document.visibilityState==='visible'?performance.now():null};
   const updateActiveClock=()=>{if(activeClock.since!=null){activeClock.total+=performance.now()-activeClock.since;activeClock.since=null;}if(document.visibilityState==='visible')activeClock.since=performance.now();};
@@ -522,10 +520,10 @@
   function showTitlePane(id='title-main'){['title-main','title-load','title-save','title-help'].forEach(name=>document.getElementById(name)?.classList.toggle('hidden',name!==id));}
   function refreshMenu(){
     const auto=readSave('auto'),continueButton=document.getElementById('continue-button'),saveButton=document.getElementById('save-button'),summary=document.getElementById('continue-summary'),loadSlots=document.getElementById('load-slots'),saveSlots=document.getElementById('save-slots');
-    const validAuto=!!(auto?.research?.playerConfigured&&auto?.navigation?.started);
-    if(continueButton){continueButton.textContent=state.started?'RETURN TO EXPEDITION':'CONTINUE EXPEDITION';continueButton.classList.toggle('hidden',!state.started&&!validAuto);}
-    saveButton?.classList.toggle('hidden',!state.started);
-    if(summary)summary.textContent=state.started?'Game paused. Return when ready.':validAuto?saveDescription(auto):'';
+    const livePlayable=!!(state.started&&research?.getState?.()?.playerConfigured),validAuto=!!(auto?.research?.playerConfigured&&auto?.navigation?.started);
+    if(continueButton){continueButton.textContent=livePlayable?'RETURN TO EXPEDITION':'CONTINUE EXPEDITION';continueButton.classList.toggle('hidden',!livePlayable&&!validAuto);}
+    saveButton?.classList.toggle('hidden',!livePlayable);
+    if(summary)summary.textContent=livePlayable?'Game paused. Return when ready.':validAuto?saveDescription(auto):'';
     const slots=['slot1','slot2','slot3'];if(loadSlots)loadSlots.innerHTML=slots.map(slot=>slotMarkup(slot,'load')).join('');if(saveSlots)saveSlots.innerHTML=slots.map(slot=>slotMarkup(slot,'save')).join('');
   }
   function openGameMenu(){menuOpen=true;ui.welcome.classList.remove('hidden');showTitlePane('title-main');refreshMenu();analytics.track('game_menu_opened',{menu_context:state.started?'in_game':'title'});}
@@ -1333,7 +1331,9 @@
   document.getElementById('restart-button').addEventListener('click',()=>{analytics.track('checkpoint_restore');restoreCheckpoint();});
   ui.vesselButton.addEventListener('click',()=>research?.openVessel?.());
   addEventListener('keydown',e=>{if(e.key==='Escape'&&minimapExpanded){closeMinimap();return;}if(e.key==='Escape'&&state.started&&!menuOpen){openGameMenu();return;}const d=180/scale;if(e.key==='ArrowUp')setDestination(width/2,height/2-d);if(e.key==='ArrowDown')setDestination(width/2,height/2+d);if(e.key==='ArrowLeft')setDestination(width/2-d,height/2);if(e.key==='ArrowRight')setDestination(width/2+d,height/2);});
-  document.addEventListener('visibilitychange',()=>{updateActiveClock();if(document.visibilityState==='hidden'){if(!autosaveSuspended)saveGame('auto','visibility');analytics.track('session_pause',{active_seconds:activeSeconds()});}});
+  document.addEventListener('visibilitychange',()=>{updateActiveClock();if(document.visibilityState==='hidden'){if(!autosaveSuspended)saveGame('auto','visibility');analytics.track('session_pause',{active_seconds:activeSeconds()});}else sound.unlock();});
+  addEventListener('pageshow',()=>sound.unlock());
+  addEventListener('focus',()=>sound.unlock());
   addEventListener('pagehide',()=>{updateActiveClock();if(!autosaveSuspended)saveGame('auto','pagehide');analytics.track('session_summary',{active_seconds:activeSeconds()});});
   setInterval(()=>{if(state.started&&!menuOpen&&!autosaveSuspended)saveGame('auto','interval');},30000);
   addEventListener('resize',resize);resize();lastResearchAnalytics=research?.getState?.()||null;refreshMenu();analytics.track('game_open',{analytics_enabled:analytics.isEnabled()?1:0});
