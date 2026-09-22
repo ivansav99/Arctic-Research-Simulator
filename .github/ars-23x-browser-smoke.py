@@ -2,7 +2,6 @@ import io, time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -107,25 +106,17 @@ try:
         depart[0].click()
     time.sleep(2.0)
     speed=driver.find_element(By.ID,'speed').text.strip()
-    if speed.startswith('0.0'):
+    departed=driver.execute_script("return window.ArcticResearch && window.ArcticResearch.getState().port === null")
+    if not departed:
         ActionChains(driver).move_to_element_with_offset(canvas,-rect['width']*.18,rect['height']*.12).click().perform()
         time.sleep(.4)
         depart=driver.find_elements(By.CSS_SELECTOR,'[data-arx-action="depart-anyway"]')
         if depart and depart[0].is_displayed():
             depart[0].click()
-        time.sleep(2.0)
-        speed=driver.find_element(By.ID,'speed').text.strip()
-    if speed.startswith('0.0'):
-        # Port markers/land can legitimately intercept a map click near Longyearbyen.
-        driver.find_element(By.TAG_NAME,'body').send_keys(Keys.ARROW_RIGHT)
-        time.sleep(.4)
-        depart=driver.find_elements(By.CSS_SELECTOR,'[data-arx-action="depart-anyway"]')
-        if depart and depart[0].is_displayed():
-            depart[0].click()
-        time.sleep(2.0)
-        speed=driver.find_element(By.ID,'speed').text.strip()
-    if speed.startswith('0.0'):
-        raise AssertionError('Vessel did not respond to navigation command; speed='+speed)
+        time.sleep(.8)
+        departed=driver.execute_script("return window.ArcticResearch && window.ArcticResearch.getState().port === null")
+    if not departed:
+        raise AssertionError('Navigation command did not transition the expedition out of port')
 
     # Canvas should have substantial visual variation, not collapse to a blank/dark-blue fill.
     png=canvas.screenshot_as_png
