@@ -1195,9 +1195,9 @@
   }
   function offerCard(item) {
     const specialty=item.anyScientist?'Any scientist aboard':item.specialties.map(id=>specialtyById[id]?.name).filter(Boolean).join(' / '),media=canonicalMissionMedia(item);
-    const projection=missionFoodProjection(item),cap=grantLoad()>=grantCapacity(),foodUnsafe=projection.remaining<15,fuelUnsafe=!vessel().nuclearFuel&&projection.fuelRemaining<10,ready=eligible(item),missingGear=missingMissionEquipment(item),readiness=missionReadiness(item);
-    const blocked=!ready||cap||foodUnsafe||fuelUnsafe;
-    const label=cap?`ACTIVE GRANT LIMIT ${grantLoad()}/${grantCapacity()}`:foodUnsafe?`INSUFFICIENT FOOD · PROJECTED ${Math.max(0,Math.floor(projection.remaining))}%`:fuelUnsafe?`INSUFFICIENT FUEL · PROJECTED ${Math.max(0,Math.floor(projection.fuelRemaining))}%`:!ready?'GRANT NOT READY':'ACCEPT RESEARCH GRANT';
+    const projection=missionFoodProjection(item),cap=grantLoad()>=grantCapacity(),ready=eligible(item),missingGear=missingMissionEquipment(item),readiness=missionReadiness(item);
+    const blocked=!ready||cap;
+    const label=cap?`ACTIVE GRANT LIMIT ${grantLoad()}/${grantCapacity()}`:!ready?'GRANT NOT READY':'ACCEPT RESEARCH GRANT';
     const gearLinks=missingGear.length?`<div class="arx-grant-shop-links"><small>MISSING EQUIPMENT · CLICK TO SHOP</small>${missingGear.map(id=>`<button type="button" data-arx-action="shop-equipment" data-id="${id}">EQUIPMENT SHOP · ${escapeHtml(EQUIPMENT[id]?.name||id)}</button>`).join('')}</div>`:'';
     return `<article class="arx-card offer research-offer ${ready?'':'unready'}"><div class="arx-offer-thumb">${mediaVisualMarkup(media||MEDIA.fieldKit,media?.alt||item.title,'offer')}</div><div class="arx-card-head"><div><b>${escapeHtml(item.title)}</b><small>${escapeHtml(specialty)}</small></div><em>${cash(item.reward)}</em></div><p>${escapeHtml(item.description)}</p><div class="arx-grant-advance"><span><small>PAYMENT ON COMPLETION</small><b>${cash(item.reward)}</b></span></div><h4 class="arx-mini-label">RESPONSIBLE SCIENTISTS</h4>${operationScientistsMarkup(item)}<h4 class="arx-mini-label">EQUIPMENT USED</h4>${operationEquipmentMarkup(item)}${!ready?`<h4 class="arx-mini-label">WHY THIS GRANT IS LOCKED</h4>${readinessMarkup(readiness)}${gearLinks}`:''}<div class="arx-stats"><span>+${item.data} data</span><span>${item.minCrew||missionMinCrew(item)} people minimum</span><span>${item.supplies} supplies</span><span>${item.workHours} person-hours</span><span>~${projection.days} field days</span>${item.iceValueMultiplier>1?`<span>ICE DATA VALUE ×${item.iceValueMultiplier.toFixed(2)}</span>`:''}<span>Food on return ~${Math.max(0,Math.floor(projection.remaining))}%</span><span>Fuel on return ~${Math.max(0,Math.floor(projection.fuelRemaining))}%</span></div><button data-arx-action="accept" data-id="${item.id}" ${blocked?'disabled':''}>${label}</button></article>`;
   }
@@ -1262,15 +1262,16 @@
   }
   function openPrivateFunding() {
     if (!root||!state.port) return;
-    const modal=root.querySelector('#arx-funding-modal');
-    modal.innerHTML=`<div class="arx-modal-card arx-funding-card"><button class="arx-close" data-arx-action="close-private-funding" aria-label="Close private funding">×</button><small>PRIVATE RESEARCH BACKING</small><h2>Apply for Private Funding</h2><p>Accelerate the expedition with an unrestricted private research contribution.</p><div class="arx-web-preview"><b>WEB PREVIEW · NO REAL CHARGE</b><span>Purchases are simulated in this browser build. In the iOS app, these same product IDs will be fulfilled through StoreKit.</span></div><div class="arx-funding-balance"><small>CURRENT EXPEDITION CASH</small><b data-arx-cash>${cash(state.money)}</b></div><div class="arx-funding-grid">${PRIVATE_FUNDING_PACKAGES.map((item,index)=>`<article class="${index===1?'featured':''}"><small>${index===0?'STARTER BACKING':index===1?'POPULAR':'MAJOR SPONSOR'}</small><b>${item.label}</b><span>game cash</span><button data-arx-action="buy-private-funding" data-id="${item.id}">${item.price}</button></article>`).join('')}</div><p class="arx-funding-note">Private funding is a consumable purchase: each successful transaction adds the selected amount to expedition cash and does not alter research progress, career level, or vessel requirements.</p></div>`;
+    const modal=root.querySelector('#arx-funding-modal'),iapAvailable=!!window.ArcticResearchIAP?.purchase;
+    const storeNotice=iapAvailable?'<div class="arx-web-preview"><b>APPLE IN-APP PURCHASE</b><span>Payment is processed securely by the App Store. Expedition cash is added only after StoreKit verifies the transaction.</span></div>':'<div class="arx-web-preview"><b>IOS APP REQUIRED</b><span>Private funding purchases are available through the App Store version of Arctic Research.</span></div>';
+    modal.innerHTML=`<div class="arx-modal-card arx-funding-card"><button class="arx-close" data-arx-action="close-private-funding" aria-label="Close private funding">×</button><small>PRIVATE RESEARCH BACKING</small><h2>Apply for Private Funding</h2><p>Accelerate the expedition with an unrestricted private research contribution.</p>${storeNotice}<div class="arx-funding-balance"><small>CURRENT EXPEDITION CASH</small><b data-arx-cash>${cash(state.money)}</b></div><div class="arx-funding-grid">${PRIVATE_FUNDING_PACKAGES.map((item,index)=>`<article class="${index===1?'featured':''}"><small>${index===0?'STARTER BACKING':index===1?'POPULAR':'MAJOR SPONSOR'}</small><b>${item.label}</b><span>game cash</span><button data-arx-action="buy-private-funding" data-id="${item.id}" ${iapAvailable?'':'disabled'}>${item.price}</button></article>`).join('')}</div><p class="arx-funding-note">Private funding is a consumable purchase: each successful transaction adds the selected amount to expedition cash and does not alter research progress, career level, or vessel requirements.</p></div>`;
     modal.classList.add('open');
   }
   async function purchasePrivateFunding(id,button) {
     const item=PRIVATE_FUNDING_PACKAGES.find(pack=>pack.id===id); if(!item)return;
     const originalLabel=button?.textContent||item.price;
     if(button){button.disabled=true;button.textContent='PROCESSING…';}
-    let result={success:true,mode:'web-preview'};
+    let result={success:false,mode:'storekit',message:'App Store purchase service is unavailable'};
     try {
       const adapter=window.ArcticResearchIAP;
       if(adapter&&typeof adapter.purchase==='function') {
@@ -1283,7 +1284,7 @@
     }
     if(!result.success){if(button){button.disabled=false;button.textContent=originalLabel;}toast((result.message||'PURCHASE NOT COMPLETED').toUpperCase());return;}
     adjustMoney(item.gameCash);
-    addLog(`Private funding received: ${cash(item.gameCash)}${result.mode==='web-preview'?' · web preview transaction':''}.`);
+    addLog(`Private funding received: ${cash(item.gameCash)} · App Store transaction.`);
     root.querySelector('#arx-funding-modal')?.classList.remove('open');
     toast(`PRIVATE FUNDING SECURED · ${cash(item.gameCash)}`); changed();
   }
@@ -1874,9 +1875,6 @@
     if(activeGrantTemplateExists(offer.templateId)){toast('THAT RESEARCH GRANT IS ALREADY ACTIVE');return;}
     if(grantLoad()>=HARD_ACTIVE_GRANT_LIMIT&&!makeRoomForNewGrant()){toast('ACTIVE GRANT LIMIT · COMPLETE OR DROP A GRANT FIRST');return;}
     if (grantLoad()>=grantCapacity()) { toast(`ACTIVE RESEARCH GRANT LIMIT · ${grantLoad()}/${grantCapacity()}`); return; }
-    const projection=missionFoodProjection(offer);
-    if (projection.remaining<15) { toast('INSUFFICIENT FOOD SUPPLY ONBOARD TO COMPLETE THE WORK'); return; }
-    if (!vessel().nuclearFuel&&projection.fuelRemaining<10) { toast('INSUFFICIENT FUEL TO COMPLETE THE WORK AND RETURN'); return; }
     state.targets.forEach(item=>item.selected=false);offer.selected=true;offer.upfront=0;offer.advancePaid=0;offer.acceptedAtDay=state.elapsedDays;offer.expiresAtDay=state.elapsedDays+21;state.targets.push(offer);
     state.offers=state.offers.filter(item=>item.id!==id);recordGrantUse(offer.templateId,offer);addLog(`Research grant accepted: ${offer.title}. Payment due on completion.`);
     toast(`RESEARCH GRANT ACCEPTED · ${offer.shortTitle}`);changed();
@@ -2082,7 +2080,7 @@ function vesselOverlay() {
   function ensureUI() {
     if (root) return;
     root=document.createElement('div'); root.id='arx-root';
-    root.innerHTML=`<button id="arx-mobile-toggle" data-arx-action="mobile-toggle">RESEARCH</button><button id="arx-dev-toggle" data-arx-action="dev-console">${devIsUnlocked()?'TEST':'TEST 🔒'}</button><aside id="arx-sidebar" class="arx-sidebar" aria-label="Research program"></aside><div id="arx-port-modal" class="arx-modal"></div><div id="arx-target-modal" class="arx-modal"></div><div id="arx-wildlife-modal" class="arx-modal"></div><div id="arx-guide-modal" class="arx-modal"></div><div id="arx-publish-modal" class="arx-modal"></div><div id="arx-promotion-modal" class="arx-modal"></div><div id="arx-vessel-modal" class="arx-modal"></div><div id="arx-departure-modal" class="arx-modal"></div><div id="arx-character-modal" class="arx-modal"></div><div id="arx-npc-modal" class="arx-modal"></div><div id="arx-funding-modal" class="arx-modal"></div><div id="arx-dev-modal" class="arx-modal"></div>`;
+    root.innerHTML=`<button id="arx-mobile-toggle" data-arx-action="mobile-toggle">RESEARCH</button><aside id="arx-sidebar" class="arx-sidebar" aria-label="Research program"></aside><div id="arx-port-modal" class="arx-modal"></div><div id="arx-target-modal" class="arx-modal"></div><div id="arx-wildlife-modal" class="arx-modal"></div><div id="arx-guide-modal" class="arx-modal"></div><div id="arx-publish-modal" class="arx-modal"></div><div id="arx-promotion-modal" class="arx-modal"></div><div id="arx-vessel-modal" class="arx-modal"></div><div id="arx-departure-modal" class="arx-modal"></div><div id="arx-character-modal" class="arx-modal"></div><div id="arx-npc-modal" class="arx-modal"></div><div id="arx-funding-modal" class="arx-modal"></div><div id="arx-dev-modal" class="arx-modal"></div>`;
     document.body.appendChild(root);
     syncGlobalCash();
     const style=document.createElement('style'); style.id='arx-expedition-style'; style.textContent=`
