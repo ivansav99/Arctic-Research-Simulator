@@ -37,6 +37,12 @@ def decode_image(url):
 
 try:
     driver.get('http://127.0.0.1:8765/')
+    wait.until(EC.presence_of_element_located((By.ID,'continue-button')))
+    if driver.find_element(By.ID,'continue-button').is_displayed():
+        raise AssertionError('Continue Expedition is visible on a clean first launch')
+    visible_test=[el for el in driver.find_elements(By.ID,'arx-dev-toggle') if el.is_displayed()]
+    if visible_test:
+        raise AssertionError('Release UI still exposes the TEST button')
     wait.until(EC.element_to_be_clickable((By.ID,'start-button'))).click()
     wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR,'.arx-character-card')))
     name=driver.find_element(By.CSS_SELECTOR,'[data-arx-character-name]')
@@ -85,6 +91,9 @@ try:
     wait.until(lambda d: len(d.find_elements(By.CSS_SELECTOR,'.research-offer'))>0)
     grants=len(driver.find_elements(By.CSS_SELECTOR,'.research-offer'))
     if not grants: raise AssertionError('No research grants generated')
+    grant_action_text='\n'.join(el.text for el in driver.find_elements(By.CSS_SELECTOR,'.research-offer .arx-grant-actions button'))
+    if 'INSUFFICIENT FOOD' in grant_action_text or 'INSUFFICIENT FUEL' in grant_action_text:
+        raise AssertionError('Port grant acceptance is still blocked by projected food/fuel: '+grant_action_text)
 
     # Close port and issue a navigation command. Speed must respond and map must stay rendered.
     driver.find_element(By.CSS_SELECTOR,'[data-arx-action="close-port"]').click()
