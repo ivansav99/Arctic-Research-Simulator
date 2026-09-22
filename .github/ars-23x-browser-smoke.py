@@ -66,7 +66,7 @@ try:
     # correct three conventional-vessel drawings.
     urls={
       'coastal-rv.webp':'assets/vessels/coastal-rv.webp',
-      'global-rv.webp':'assets/vessels/global-rv.webp',
+      'global-rv-clean.webp':'assets/vessels/global-rv-clean.webp',
       'icebreaker.webp':'assets/vessels/icebreaker.webp',
       'nuclear-icebreaker.webp':'assets/vessels/nuclear-icebreaker.webp'
     }
@@ -76,7 +76,7 @@ try:
     driver.find_element(By.CSS_SELECTOR,'[data-arx-tab="fleet"]').click()
     wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR,'[data-arx-store-details^="vessel-"] img')))
     shipyard_src='\n'.join(img.get_attribute('src') or '' for img in driver.find_elements(By.CSS_SELECTOR,'[data-arx-store-details^="vessel-"] img'))
-    for expected in ('coastal-rv.webp','global-rv.webp','icebreaker.webp'):
+    for expected in ('coastal-rv.webp','global-rv-clean.webp','icebreaker.webp'):
         if expected not in shipyard_src: raise AssertionError('Shipyard is not wired to '+expected)
 
     # Grant board must not be empty on a fresh playable career.
