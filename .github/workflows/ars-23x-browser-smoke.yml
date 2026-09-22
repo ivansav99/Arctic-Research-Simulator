@@ -1,14 +1,25 @@
-name: ARS 23x browser smoke
+name: ARS browser smoke
 
 on:
-  push:
-    branches: [reimplement-23x-safe]
+  pull_request:
+    branches: [main]
     paths:
       - '.github/workflows/ars-23x-browser-smoke.yml'
       - '.github/ars-23x-browser-smoke.py'
       - 'expedition.js'
       - 'game.js'
       - 'index.html'
+      - 'style.css'
+      - 'assets/vessels/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ars-23x-browser-smoke.yml'
+      - '.github/ars-23x-browser-smoke.py'
+      - 'expedition.js'
+      - 'game.js'
+      - 'index.html'
+      - 'style.css'
       - 'assets/vessels/**'
 
 jobs:
@@ -16,8 +27,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: reimplement-23x-safe
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
