@@ -141,7 +141,7 @@ struct GameWebView: UIViewRepresentable {
 
             do {
                 let session = AVAudioSession.sharedInstance()
-                try? session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+                try? session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
                 try? session.setActive(true)
                 wildlifePlayers.removeAll { !$0.isPlaying }
                 let player = try AVAudioPlayer(contentsOf: url)
