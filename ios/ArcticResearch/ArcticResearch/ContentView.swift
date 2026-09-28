@@ -1,6 +1,7 @@
 import SwiftUI
 import WebKit
 import StoreKit
+import AVFoundation
 
 struct ContentView: View {
     var body: some View {
@@ -25,6 +26,16 @@ struct GameWebView: UIViewRepresentable {
         controller.addUserScript(WKUserScript(
             source: """
             window.AR_IOS_OFFLINE_SHELL=true;
+            window.ArcticResearchNativeAudio={
+              playWildlife:function(species,ambient){
+                try{
+                  window.webkit.messageHandlers.wildlifeSound.postMessage({species:String(species||''),ambient:!!ambient});
+                  return true;
+                }catch(error){
+                  return false;
+                }
+              }
+            };
             window.ArcticResearchIAP={
               _callbacks:{},
               purchase:function(productId){
@@ -52,6 +63,7 @@ struct GameWebView: UIViewRepresentable {
             forMainFrameOnly: true
         ))
         controller.add(context.coordinator, name: "iapPurchase")
+        controller.add(context.coordinator, name: "wildlifeSound")
         configuration.userContentController = controller
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
@@ -81,8 +93,33 @@ struct GameWebView: UIViewRepresentable {
             "ars.private_funding.10m",
             "ars.private_funding.50m"
         ]
+        private let wildlifeAudioFiles: [String: String] = [
+            "BELUGA": "beluga",
+            "HUMPBACK": "humpback",
+            "BOWHEAD": "bowhead",
+            "WALRUS": "walrus",
+            "BEARDED SEAL": "bearded-seal",
+            "HARP SEAL": "harp-seal",
+            "ARCTIC TERN": "arctic-tern",
+            "COMMON EIDER": "common-eider",
+            "PINK-FOOTED GOOSE": "pink-footed-goose",
+            "BRENT GOOSE": "brent-goose",
+            "BARNACLE GOOSE": "barnacle-goose",
+            "SNOW GOOSE": "snow-goose",
+            "GRAY WHALE": "gray-whale",
+            "RIBBON SEAL": "ribbon-seal"
+        ]
+        private var wildlifePlayers: [AVAudioPlayer] = []
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            if message.name == "wildlifeSound",
+               let body = message.body as? [String: Any],
+               let species = body["species"] as? String {
+                let ambient = body["ambient"] as? Bool ?? false
+                playWildlifeSound(species: species, ambient: ambient)
+                return
+            }
+
             guard message.name == "iapPurchase",
                   let body = message.body as? [String: Any],
                   let requestId = body["requestId"] as? String,
@@ -92,6 +129,30 @@ struct GameWebView: UIViewRepresentable {
                 guard let self else { return }
                 let result = await self.purchase(productId: productId)
                 await self.completePurchaseRequest(requestId: requestId, result: result)
+            }
+        }
+
+        private func playWildlifeSound(species: String, ambient: Bool) {
+            guard let basename = wildlifeAudioFiles[species.uppercased()],
+                  let resourceRoot = Bundle.main.resourceURL else { return }
+            let url = resourceRoot
+                .appendingPathComponent("WebApp/assets/audio/wildlife", isDirectory: true)
+                .appendingPathComponent("\(basename).mp3")
+
+            do {
+                let session = AVAudioSession.sharedInstance()
+                try? session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+                try? session.setActive(true)
+                wildlifePlayers.removeAll { !$0.isPlaying }
+                let player = try AVAudioPlayer(contentsOf: url)
+                player.volume = ambient ? 0.12 : 0.82
+                player.prepareToPlay()
+                wildlifePlayers.append(player)
+                player.play()
+            } catch {
+                #if DEBUG
+                print("Wildlife audio failed for \(species): \(error)")
+                #endif
             }
         }
 
