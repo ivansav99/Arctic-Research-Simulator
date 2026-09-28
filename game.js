@@ -2,11 +2,12 @@
   'use strict';
   const canvas=document.getElementById('map'),mainCtx=canvas.getContext('2d');
   let ctx=mainCtx;
-  const WORLD_CACHE_OVERSCAN=1.5;
+  const IS_COARSE_POINTER=typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches;
+  const IS_IOS_SHELL=!!window.AR_IOS_OFFLINE_SHELL;
+  const WORLD_CACHE_OVERSCAN=IS_COARSE_POINTER?1.45:1.5;
   const worldCacheCanvas=document.createElement('canvas'),worldCacheCtx=worldCacheCanvas.getContext('2d');
   let worldCacheValid=false,worldCacheX=0,worldCacheY=0,worldCacheScale=0,worldCacheAt=0;
   const invalidateWorldCache=()=>{worldCacheValid=false;};
-  const IS_COARSE_POINTER=typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches;
   const miniCanvas=document.getElementById('minimap'),mini=miniCanvas.getContext('2d');
   const lightCanvas=document.createElement('canvas'),light=lightCanvas.getContext('2d');
   const oceanCanvas=document.createElement('canvas'),ocean=oceanCanvas.getContext('2d');
@@ -338,7 +339,7 @@
   };
   const featureSizes={RUSSIA:6000,ALASKA:1800,CANADA:5000,GREENLAND:2600,NORWAY:1700,ICELAND:500,SPITSBERGEN:450,NORDAUSTLANDET:170,'EDGE\u00D8YA':100,'FRANZ JOSEF LAND':375,'NOVAYA ZEMLYA':900,'SEVERNAYA ZEMLYA':380,'NEW SIBERIAN ISLANDS':300,'WRANGEL ISLAND':150,'ELLESMERE ISLAND':830,'DEVON ISLAND':520,'BAFFIN ISLAND':1500,'VICTORIA ISLAND':700,'BANKS ISLAND':380};
 
-  function resize(){dpr=Math.min(devicePixelRatio||1,IS_COARSE_POINTER?1.25:2);width=innerWidth;height=innerHeight;canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);mainCtx.setTransform(dpr,0,0,dpr,0,0);worldCacheCanvas.width=Math.round(width*WORLD_CACHE_OVERSCAN*dpr);worldCacheCanvas.height=Math.round(height*WORLD_CACHE_OVERSCAN*dpr);worldCacheCtx.setTransform(dpr,0,0,dpr,0,0);invalidateWorldCache();lightCanvas.width=Math.round(width*dpr);lightCanvas.height=Math.round(height*dpr);light.setTransform(dpr,0,0,dpr,0,0);oceanCanvas.width=Math.max(1,Math.round(width));oceanCanvas.height=Math.max(1,Math.round(height));oceanPattern=null;baseScale=Math.max(3.4,Math.min(5.2,Math.min(width,height)/145));scale=baseScale*zoomLevel;const s=miniCanvas.clientWidth;miniCanvas.width=Math.round(s*dpr);miniCanvas.height=Math.round(s*dpr);mini.setTransform(dpr,0,0,dpr,0,0);}
+  function resize(){width=innerWidth;height=innerHeight;const touchDpr=Math.max(width,height)>=1000?1:1.12;dpr=Math.min(devicePixelRatio||1,IS_COARSE_POINTER?touchDpr:2);canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);mainCtx.setTransform(dpr,0,0,dpr,0,0);worldCacheCanvas.width=Math.round(width*WORLD_CACHE_OVERSCAN*dpr);worldCacheCanvas.height=Math.round(height*WORLD_CACHE_OVERSCAN*dpr);worldCacheCtx.setTransform(dpr,0,0,dpr,0,0);invalidateWorldCache();lightCanvas.width=Math.round(width*dpr);lightCanvas.height=Math.round(height*dpr);light.setTransform(dpr,0,0,dpr,0,0);oceanCanvas.width=Math.max(1,Math.round(width));oceanCanvas.height=Math.max(1,Math.round(height));oceanPattern=null;baseScale=Math.max(3.4,Math.min(5.2,Math.min(width,height)/145));scale=baseScale*zoomLevel;const s=miniCanvas.clientWidth;miniCanvas.width=Math.round(s*dpr);miniCanvas.height=Math.round(s*dpr);mini.setTransform(dpr,0,0,dpr,0,0);}
   const worldToScreen=(x,y)=>({x:width/2+(x-state.x)*scale,y:height/2+(y-state.y)*scale});
   function pathPolygon(c,pts,project){c.beginPath();pts.forEach((p,i)=>{const s=project(p.x,p.y);i?c.lineTo(s.x,s.y):c.moveTo(s.x,s.y);});c.closePath();}
   function pointInPolygon(x,y,pts){let inside=false;for(let i=0,j=pts.length-1;i<pts.length;j=i++){const a=pts[i],b=pts[j];if(((a.y>y)!==(b.y>y))&&x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x)inside=!inside;}return inside;}
@@ -453,7 +454,7 @@
   const GAME_VERSION='1.0.0-rc2',SAVE_VERSION=1;
   const SAVE_KEYS={auto:'arctic-research-save-auto-v1',slot1:'arctic-research-save-slot-1-v1',slot2:'arctic-research-save-slot-2-v1',slot3:'arctic-research-save-slot-3-v1'};
   const AUTO_NEW_KEY='arctic-research-start-new-v1';
-  let menuOpen=true,autosaveSuspended=false,autosaveTimer=0,lastResearchAnalytics=null;
+  let menuOpen=true,autosaveSuspended=false,autosaveTimer=0,lastResearchAnalytics=null,sessionExpeditionActive=false;
   const safeJson=value=>{try{return JSON.parse(JSON.stringify(value));}catch(error){return null;}};
   const readSave=slot=>{try{const raw=localStorage.getItem(SAVE_KEYS[slot]);if(!raw)return null;const parsed=JSON.parse(raw);return parsed?.version===SAVE_VERSION?parsed:null;}catch(error){return null;}};
   const hasAnySave=()=>Object.keys(SAVE_KEYS).some(slot=>!!readSave(slot));
@@ -512,7 +513,7 @@
       ui.gameOver.classList.add('hidden');ui.fuelLevel.style.width=state.fuel+'%';ui.foodLevel.style.width=state.food+'%';updateResourceBarColors();updateResourceWarning();
       updateVesselButton(research?.getVesselModifiers?.()||vesselModifiers());zoomLevel=(research?.getVesselModifiers?.()||vesselModifiers()).minZoom||zoomLevel;setZoom(0,true);
       if(currentPortCity&&state.dockedPort)research?.enterPort?.(currentPortCity,{resume:true});else research?.leavePort?.();
-      menuOpen=false;ui.welcome.classList.add('hidden');lastResearchAnalytics=research?.getState?.()||null;showToast(`EXPEDITION LOADED — ${payload.meta?.location||'ARCTIC OCEAN'}`,2400);
+      sessionExpeditionActive=true;menuOpen=false;ui.welcome.classList.add('hidden');lastResearchAnalytics=research?.getState?.()||null;showToast(`EXPEDITION LOADED — ${payload.meta?.location||'ARCTIC OCEAN'}`,2400);
       analytics.track(source==='auto'?'continue_game':'load_game',{save_slot:source,save_age_hours:Math.round((Date.now()-Date.parse(payload.savedAt||Date.now()))/360000)/10});scheduleAutosave(900);return true;
     }catch(error){showToast('COULD NOT LOAD THIS SAVE',2600);return false;}
   }
@@ -521,7 +522,7 @@
   function showTitlePane(id='title-main'){['title-main','title-load','title-save','title-help'].forEach(name=>document.getElementById(name)?.classList.toggle('hidden',name!==id));}
   function refreshMenu(){
     const continueButton=document.getElementById('continue-button'),saveButton=document.getElementById('save-button'),summary=document.getElementById('continue-summary'),loadSlots=document.getElementById('load-slots'),saveSlots=document.getElementById('save-slots');
-    const livePlayable=!!(state.started&&research?.getState?.()?.playerConfigured);
+    const livePlayable=!!(sessionExpeditionActive&&state.started&&research?.getState?.()?.playerConfigured);
     if(continueButton){continueButton.textContent='RETURN TO EXPEDITION';continueButton.classList.toggle('hidden',!livePlayable);}
     saveButton?.classList.toggle('hidden',!livePlayable);
     if(summary)summary.textContent=livePlayable?'Game paused. Return when ready.':'';
@@ -845,7 +846,7 @@
   function drawWorldCached(now){
     const scaleMatch=worldCacheValid&&Math.abs(worldCacheScale-scale)<.0001,dx=scaleMatch?(worldCacheX-state.x)*scale:0,dy=scaleMatch?(worldCacheY-state.y)*scale:0;
     const cacheCssWidth=worldCacheCanvas.width/dpr,cacheCssHeight=worldCacheCanvas.height/dpr,marginX=Math.max(0,(cacheCssWidth-width)/2),marginY=Math.max(0,(cacheCssHeight-height)/2);
-    const refreshMs=IS_COARSE_POINTER?95:80,safeX=Math.max(24,marginX-18),safeY=Math.max(24,marginY-18);
+    const refreshMs=IS_IOS_SHELL?(state.commandActive?900:1400):IS_COARSE_POINTER?(state.commandActive?700:1100):220,safeX=Math.max(24,marginX-18),safeY=Math.max(24,marginY-18);
     if(!scaleMatch||!worldCacheValid||now-worldCacheAt>=refreshMs||Math.abs(dx)>safeX||Math.abs(dy)>safeY)rebuildWorldCache(now);
     const freshMarginX=Math.max(0,(worldCacheCanvas.width/dpr-width)/2),freshMarginY=Math.max(0,(worldCacheCanvas.height/dpr-height)/2),freshDx=(worldCacheX-state.x)*scale,freshDy=(worldCacheY-state.y)*scale;
     const sx=Math.max(0,Math.min(worldCacheCanvas.width-canvas.width,Math.round((freshMarginX-freshDx)*dpr))),sy=Math.max(0,Math.min(worldCacheCanvas.height-canvas.height,Math.round((freshMarginY-freshDy)*dpr)));
@@ -1248,6 +1249,7 @@
   function setZoom(change,silent=false){
     const previousZoom=zoomLevel,minZoom=Math.max(.7,vesselModifiers().minZoom),steps=[.7,1.1,1.45,1.8,2.3,2.8].filter(value=>value>=minZoom-.001),direction=change>0?1:change<0?-1:0;let index=steps.reduce((best,value,i)=>Math.abs(value-zoomLevel)<Math.abs(steps[best]-zoomLevel)?i:best,0);if(direction)index=Math.max(0,Math.min(steps.length-1,index+direction));else index=Math.max(0,steps.findIndex(value=>value>=minZoom-.001));zoomLevel=steps[index]??minZoom;scale=baseScale*zoomLevel;if(zoomLevel!==previousZoom)iceFloes.length=0;ui.zoomLevel.textContent=Math.round(zoomLevel*100)+'%';ui.scaleDistance.textContent=Math.max(2,Math.round(15/zoomLevel))+' km';ui.zoomIn.disabled=index>=steps.length-1;ui.zoomOut.disabled=index<=0;if(!silent)showToast(zoomLevel>1?'CHART DETAIL '+Math.round(zoomLevel*100)+'%':'CHART OVERVIEW '+Math.round(zoomLevel*100)+'%');
   }
+  let perfWindowStart=performance.now(),perfRenderedFrames=0;
   function frame(now){
     const dt=Math.max(0,Math.min(.18,(now-last)/1000));last=now;
     let paused=state.gameOver||menuOpen||minimapExpanded||!!research?.isBusy?.();sound.update(paused);let weather;
@@ -1261,9 +1263,10 @@
     }else{updateCalendar(0);weather=currentWeather();ui.weatherValue.textContent=weather.type==='clear'?'CLEAR':`${weather.label} ${weather.rating}/10 · ${weather.visibilityKm} KM`;updateIceReadout();updateCompass();}
     updateResourceBarColors();updateResourceWarning();
     const renderDue=!IS_COARSE_POINTER||now-lastRender>=32||paused!==lastFramePaused;
-    if(!paused&&renderDue){lastRender=now;drawWorldCached(now);const chartCenter=worldToScreen(0,0),chartRadius=terrainLatitudeRadius(MIN_LAT)*scale;ctx.save();ctx.beginPath();ctx.arc(chartCenter.x,chartCenter.y,chartRadius,0,Math.PI*2);ctx.clip();drawResearchTargets();drawNpcVessels();drawSeasonalLighting();drawWeather(weather);drawPortMarkers();drawWildlifeObservationRings();drawFog(weather);drawResearchTargets(true);drawResearchGuidance();drawVessel();ctx.restore();}
+    if(!paused&&renderDue){lastRender=now;perfRenderedFrames++;drawWorldCached(now);const chartCenter=worldToScreen(0,0),chartRadius=terrainLatitudeRadius(MIN_LAT)*scale;ctx.save();ctx.beginPath();ctx.arc(chartCenter.x,chartCenter.y,chartRadius,0,Math.PI*2);ctx.clip();drawResearchTargets();drawNpcVessels();drawSeasonalLighting();drawWeather(weather);drawPortMarkers();drawWildlifeObservationRings();drawFog(weather);drawResearchTargets(true);drawResearchGuidance();drawVessel();ctx.restore();}
     if(minimapExpanded&&now-miniLastDraw>45){miniLastDraw=now;try{drawMiniMap();}catch(error){console.error('MINIMAP DRAW FAILED',error);}}
     else if(!minimapExpanded&&renderDue&&now-miniLastDraw>260){miniLastDraw=now;try{drawMiniMap();}catch(error){console.error('MINIMAP DRAW FAILED',error);}}
+    if(now-perfWindowStart>=30000){const seconds=(now-perfWindowStart)/1000,approxFps=Math.round(perfRenderedFrames/Math.max(.001,seconds));analytics.track('performance_sample',{approx_fps:approxFps,screen_class:Math.max(width,height)>=1000?'tablet':'phone',canvas_dpr:Math.round(dpr*100)/100});perfWindowStart=now;perfRenderedFrames=0;}
     lastFramePaused=paused;requestAnimationFrame(frame);
   }
   research?.initialize?.({
@@ -1294,7 +1297,7 @@
   function clampResource(value){return Math.max(0,Math.min(100,value));}
   function openMinimap(){if(!minimapPanel||minimapExpanded)return;minimapExpanded=true;miniViewX=state.x;miniViewY=state.y;miniPan=null;miniZoomLevel=zoomLevel;syncMiniZoomControls();minimapPanel.classList.add('expanded');document.body.classList.add('nav-chart-open');miniLastDraw=0;drawMiniMap();}
   function closeMinimap(){if(!minimapPanel)return;minimapExpanded=false;miniViewX=state.x;miniViewY=state.y;miniPan=null;minimapPanel.classList.remove('expanded');document.body.classList.remove('nav-chart-open');drawMiniMap();}
-  function beginExpedition(){if(state.started)return;startFlowPending=false;state.started=true;menuOpen=false;ui.welcome.classList.add('hidden');if(currentPortCity){const berth=findPortTeleportPosition(currentPortCity)||findPortApproach(currentPortCity);if(berth){state.x=berth.x;state.y=berth.y;state.tx=berth.x;state.ty=berth.y;state.track=[{x:berth.x,y:berth.y}];invalidateWorldCache();}enterPort(currentPortCity,{immediate:true});}const rs=research?.getState?.()||{},player=rs.scientists?.find?.(item=>item.isPlayer);analytics.track('game_started');analytics.track('onboarding_completed',{career:player?.career||'',specialty:player?.specialty||'',starting_vessel:rs.currentVessel||''});scheduleAutosave(800);}
+  function beginExpedition(){if(state.started&&sessionExpeditionActive)return;startFlowPending=false;state.started=true;sessionExpeditionActive=true;menuOpen=false;ui.welcome.classList.add('hidden');if(currentPortCity){const berth=findPortTeleportPosition(currentPortCity)||findPortApproach(currentPortCity);if(berth){state.x=berth.x;state.y=berth.y;state.tx=berth.x;state.ty=berth.y;state.track=[{x:berth.x,y:berth.y}];invalidateWorldCache();}enterPort(currentPortCity,{immediate:true});}const rs=research?.getState?.()||{},player=rs.scientists?.find?.(item=>item.isPlayer);analytics.track('game_started');analytics.track('onboarding_completed',{career:player?.career||'',specialty:player?.specialty||'',starting_vessel:rs.currentVessel||''});scheduleAutosave(800);}
   function requestExpeditionStart(){analytics.track('onboarding_started');menuOpen=false;ui.welcome.classList.add('hidden');if(research?.openCharacterSetup){startFlowPending=true;const opened=research.openCharacterSetup();if(opened)return;}beginExpedition();}
   const mapTouchPointers=new Map();let mapTouchTap=null,mapPinchDistance=0,mapPinchActive=false;
   function mapPinchStep(){if(mapTouchPointers.size<2)return;const points=[...mapTouchPointers.values()],distance=Math.hypot(points[0].x-points[1].x,points[0].y-points[1].y);if(!mapPinchDistance){mapPinchDistance=distance;return;}const ratio=distance/Math.max(1,mapPinchDistance);if(ratio>1.16){setZoom(1);mapPinchDistance=distance;analytics.track('zoom_changed',{zoom_direction:'pinch-in-detail'});}else if(ratio<.86){setZoom(-1);mapPinchDistance=distance;analytics.track('zoom_changed',{zoom_direction:'pinch-out-overview'});}}
