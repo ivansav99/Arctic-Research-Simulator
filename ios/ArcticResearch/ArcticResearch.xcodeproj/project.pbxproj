@@ -10,6 +10,7 @@
 		A10000000000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* ContentView.swift */; };
 		A10000000000000000000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* Assets.xcassets */; };
 		A10000000000000000000004 /* WebApp in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* WebApp */; };
+		A10000000000000000000005 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -18,6 +19,7 @@
 		A20000000000000000000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A20000000000000000000004 /* ArcticResearch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ArcticResearch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000000000000000000005 /* WebApp */ = {isa = PBXFileReference; lastKnownFileType = folder; path = WebApp; sourceTree = "<group>"; };
+		A20000000000000000000006 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -26,7 +28,7 @@
 
 /* Begin PBXGroup section */
 		A40000000000000000000001 = {isa = PBXGroup; children = (A40000000000000000000002 /* ArcticResearch */, A40000000000000000000003 /* Products */); sourceTree = "<group>"; };
-		A40000000000000000000002 /* ArcticResearch */ = {isa = PBXGroup; children = (A20000000000000000000001 /* ArcticResearchApp.swift */, A20000000000000000000002 /* ContentView.swift */, A20000000000000000000003 /* Assets.xcassets */, A20000000000000000000005 /* WebApp */); path = ArcticResearch; sourceTree = "<group>"; };
+		A40000000000000000000002 /* ArcticResearch */ = {isa = PBXGroup; children = (A20000000000000000000001 /* ArcticResearchApp.swift */, A20000000000000000000002 /* ContentView.swift */, A20000000000000000000003 /* Assets.xcassets */, A20000000000000000000006 /* PrivacyInfo.xcprivacy */, A20000000000000000000005 /* WebApp */); path = ArcticResearch; sourceTree = "<group>"; };
 		A40000000000000000000003 /* Products */ = {isa = PBXGroup; children = (A20000000000000000000004 /* ArcticResearch.app */); name = Products; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
@@ -39,7 +41,7 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		A80000000000000000000001 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000003 /* Assets.xcassets in Resources */, A10000000000000000000004 /* WebApp in Resources */); runOnlyForDeploymentPostprocessing = 0; };
+		A80000000000000000000001 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000003 /* Assets.xcassets in Resources */, A10000000000000000000004 /* WebApp in Resources */, A10000000000000000000005 /* PrivacyInfo.xcprivacy in Resources */); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
