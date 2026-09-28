@@ -93,10 +93,11 @@ The original 847 MB `IBCAO_v4_2_13_400m_bedrock.tif` in the separate Arctic Map 
 - Dark-season weather can produce aurora events and atmospheric research opportunities. Seasonal terrain overlay retains year-round high-elevation/glacier snow and strengthens snow cover into winter.
 - Successful publications no longer impose a submission cooldown. Research-operation windows show all qualified scientists and equipment in use.
 
-## Browser saves and PostHog analytics (Expedition 14)
+## Browser saves and PostHog analytics
 
-The game keeps one automatic save and three manual save slots in browser `localStorage`. Saves remain on the same browser/device and include both navigation state and the research-program state.
+The game keeps one automatic save and three manual save slots in local storage. Saves remain on the same device and include both navigation state and the research-program state.
 
-PostHog Product Analytics, Web Analytics, autocapture, and Session Replay are enabled for the production GitHub Pages build through the public project token and US Cloud host stored in `index.html`. The browser token is intentionally client-side and is not a private API secret.
+The iOS 1.0 release candidate uses privacy-minimized PostHog product analytics. Only explicit gameplay events are sent. Session Replay, autocapture, automatic pageview/pageleave capture, persistent person profiles, and cross-app tracking are disabled. Analytics are not intended to include a player name, email address, real-world GPS location, payment information, or screen coordinates.
 
-The game sends gameplay events such as game starts/loads/saves, session duration, menu and research UI actions, navigation interactions, port visits, grant activity, mission starts/completions, station completion, publications, scientist/equipment/vessel changes, wildlife observations, resupply actions, and game-over reasons. Custom events carry the full available gameplay context (game date, vessel, resources, money, citations, data, crew/equipment/grant counts, completed missions, papers, wildlife observations, active play time, viewport, and other event-specific parameters) rather than being limited to the former GA4 parameter cap. PostHog also records normal web page activity and, when permitted by the browser/project settings, anonymized session replay. The game does not intentionally send a player name or email address.
+Explicit events cover app/game opens, onboarding, session duration, menu and research UI actions, port visits, grant and mission progression, publications, scientist/equipment/vessel changes, wildlife observations, resupply actions, game-over reasons, and the Private Funding purchase funnel. Purchase analytics record product/outcome information only; StoreKit transaction IDs are not sent to PostHog.
+
