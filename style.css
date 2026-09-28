@@ -335,3 +335,121 @@ body:has(#welcome:not(.hidden)) #arx-dev-toggle{visibility:hidden!important;poin
   .cash-status small{display:block!important;margin:0!important;color:#93bdc8!important;font-size:5px!important;letter-spacing:.08em!important}
   .cash-status b{display:block!important;margin:3px 0 0!important;color:#f6d365!important;font-size:9px!important;letter-spacing:.02em!important}
 }
+
+
+/* RC3: keep the native iPhone/iPad shell on one compact touch layout.
+   iPad CSS widths can exceed the historical phone breakpoints, so these
+   overrides intentionally key off the native iOS shell rather than width. */
+.ios-native-shell .top-hud{
+  top:max(6px,env(safe-area-inset-top))!important;
+  left:max(6px,env(safe-area-inset-left))!important;
+  right:max(6px,env(safe-area-inset-right))!important;
+  min-height:70px!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+  pointer-events:none!important;
+}
+.ios-native-shell .brand{display:none!important}
+.ios-native-shell .status{position:relative!important;display:block!important;width:100%!important;height:70px!important;text-align:left!important;pointer-events:none!important}
+.ios-native-shell .status>*{pointer-events:auto!important}
+.ios-native-shell .ice-status,
+.ios-native-shell .weather-status,
+.ios-native-shell .date-status,
+.ios-native-shell .position-status,
+.ios-native-shell .speed-status{display:none!important}
+.ios-native-shell .top-hud .game-menu-button{
+  position:fixed!important;
+  left:max(10px,calc(env(safe-area-inset-left) + 8px))!important;
+  right:auto!important;
+  top:auto!important;
+  bottom:max(10px,calc(env(safe-area-inset-bottom) + 8px))!important;
+  width:34px!important;height:34px!important;padding:0!important;
+  border-radius:50%!important;font-size:0!important;
+  background:rgba(5,31,48,.72)!important;
+  backdrop-filter:blur(7px)!important;-webkit-backdrop-filter:blur(7px)!important;
+  pointer-events:auto!important;
+}
+.ios-native-shell .top-hud .game-menu-button::after{content:'☰';color:#d9f5fb;font:700 17px/1 system-ui}
+.ios-native-shell .top-hud .vessel-button{
+  position:fixed!important;
+  right:max(8px,calc(env(safe-area-inset-right) + 6px))!important;
+  top:max(7px,calc(env(safe-area-inset-top) + 6px))!important;
+  width:72px!important;height:43px!important;padding:2px!important;border-radius:9px!important;
+  pointer-events:auto!important;
+}
+.ios-native-shell .fuel-status,
+.ios-native-shell .food-status{
+  position:fixed!important;
+  right:max(8px,calc(env(safe-area-inset-right) + 6px))!important;
+  display:grid!important;
+  grid-template-columns:28px 1fr!important;
+  grid-template-rows:8px 3px!important;
+  align-items:center!important;
+  width:72px!important;height:11px!important;padding:0 2px!important;
+  border-radius:3px!important;background:rgba(5,31,48,.72)!important;
+  line-height:1!important;
+  backdrop-filter:blur(6px)!important;-webkit-backdrop-filter:blur(6px)!important;
+}
+.ios-native-shell .fuel-status{top:max(52px,calc(env(safe-area-inset-top) + 51px))!important}
+.ios-native-shell .food-status{top:max(65px,calc(env(safe-area-inset-top) + 64px))!important}
+.ios-native-shell .fuel-status small,.ios-native-shell .food-status small{display:block!important;margin:0!important;color:#93bdc8!important;font-size:5px!important;letter-spacing:.06em!important}
+.ios-native-shell .fuel-status b,.ios-native-shell .food-status b{display:block!important;margin:0!important;color:#eafaff!important;font-size:6px!important;text-align:right!important;letter-spacing:.02em!important}
+.ios-native-shell .fuel-status>i,.ios-native-shell .food-status>i{grid-column:1/-1!important;display:block!important;width:68px!important;height:3px!important;margin:0!important}
+.ios-native-shell .compass,.ios-native-shell .zoom-controls{display:none!important}
+.ios-native-shell .scale{display:none!important}
+.ios-native-shell .minimap:not(.expanded){
+  position:fixed!important;
+  left:max(10px,calc(env(safe-area-inset-left) + 8px))!important;
+  right:auto!important;
+  top:max(8px,calc(env(safe-area-inset-top) + 6px))!important;
+  bottom:auto!important;
+  width:129px!important;height:129px!important;padding:0!important;
+  border:0!important;border-radius:50%!important;background:transparent!important;
+  box-shadow:none!important;overflow:hidden!important;
+}
+.ios-native-shell .minimap:not(.expanded)>div,
+.ios-native-shell .minimap:not(.expanded)>.minimap-close,
+.ios-native-shell .minimap:not(.expanded)>.minimap-nav-details{display:none!important}
+.ios-native-shell .minimap:not(.expanded) #minimap{width:129px!important;height:129px!important;border-radius:50%!important}
+.ios-native-shell #arx-root #arx-mobile-toggle{
+  display:block!important;
+  position:fixed!important;
+  right:max(10px,calc(env(safe-area-inset-right) + 8px))!important;
+  bottom:max(10px,calc(env(safe-area-inset-bottom) + 8px))!important;
+}
+.ios-native-shell #arx-root .arx-sidebar{
+  display:none!important;
+  left:auto!important;right:10px!important;top:76px!important;
+  width:min(286px,calc(100vw - 20px))!important;
+  max-height:calc(100dvh - 150px)!important;
+}
+.ios-native-shell #arx-root .arx-sidebar.open{display:block!important}
+.ios-native-shell #arx-root .arx-side-head button{display:block!important}
+.ios-native-shell .arx-modal{padding:10px!important}
+.ios-native-shell .arx-modal-card{max-height:calc(100dvh - 20px)!important}
+.ios-native-shell .arx-research-unified{width:min(780px,calc(100vw - 20px))!important;max-height:calc(100dvh - 20px)!important}
+.ios-native-shell .arx-research-facts{grid-template-columns:1fr 1fr!important}
+.ios-native-shell .arx-research-actions{grid-template-columns:1fr 1fr!important}
+.ios-native-shell .arx-research-unified .arx-media.hero{height:145px!important}
+.ios-native-shell .arx-grant-advance{grid-template-columns:1fr!important}
+.ios-native-shell .arx-readiness{grid-template-columns:1fr!important}
+.ios-native-shell .arx-operation{padding:15px 12px!important}
+.ios-native-shell .arx-operation h2{font-size:19px!important}
+.ios-native-shell .arx-operation ol{grid-template-columns:1fr!important}
+.ios-native-shell .arx-operation li{grid-template-columns:20px 1fr!important}
+.ios-native-shell .arx-operation li>span{display:none!important}
+.ios-native-shell .arx-operation-progress b{font-size:18px!important}
+
+@media (orientation:portrait){
+  .ios-native-shell .minimap.expanded{padding:12px!important}
+  .ios-native-shell .minimap.expanded #minimap{width:min(92vw,56vh,500px)!important;height:min(92vw,56vh,500px)!important}
+  .ios-native-shell .minimap.expanded .minimap-nav-details{width:min(94vw,520px)!important;grid-template-columns:1fr 1fr!important;gap:7px!important;margin-top:7px!important}
+}
+@media (orientation:landscape){
+  .ios-native-shell .minimap.expanded{padding:max(8px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))!important}
+}
