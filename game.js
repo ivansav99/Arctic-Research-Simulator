@@ -451,7 +451,7 @@
   if(currentPortCity)state.dockedPort=currentPortCity.name;
 
   // Expedition 13: local saves, title/pause menu, and analytics instrumentation.
-  const GAME_VERSION='1.0.0-rc2',SAVE_VERSION=1;
+  const GAME_VERSION='1.0.0-rc3',SAVE_VERSION=1;
   const SAVE_KEYS={auto:'arctic-research-save-auto-v1',slot1:'arctic-research-save-slot-1-v1',slot2:'arctic-research-save-slot-2-v1',slot3:'arctic-research-save-slot-3-v1'};
   const AUTO_NEW_KEY='arctic-research-start-new-v1';
   let menuOpen=true,autosaveSuspended=false,autosaveTimer=0,lastResearchAnalytics=null,sessionExpeditionActive=false;
