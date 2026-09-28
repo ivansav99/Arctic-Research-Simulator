@@ -1,13 +1,13 @@
 # Arctic Research Simulator — App Store Submission Draft
 
-Prepared for iOS 1.0 / build 2 (RC2).
+Prepared for iOS 1.0 / build 3 (RC3).
 
 ## App identity
 
 - **App Store name:** Arctic Research Simulator
 - **Bundle ID:** `com.ivansavelyev.ArcticResearchSimulator`
 - **Version:** 1.0
-- **Build:** 2
+- **Build:** 3
 - **Primary language:** English (U.S.)
 - **Primary category:** Games
 - **Suggested secondary category:** Simulation
@@ -182,7 +182,7 @@ Use the same review note for each consumable, adjusted to the package:
 
 ## Screenshot plan
 
-Capture 5 strong landscape screenshots in this order:
+Capture 5 strong landscape screenshots on both iPhone and iPad in this order:
 
 1. **Arctic navigation / sailing** — vessel underway with chart, sea ice, weather and HUD visible. Caption concept: "Command an Arctic research expedition."
 2. **Research grant / mission** — a strong mission card or active field operation. Caption concept: "Win grants. Plan real field science."
@@ -196,4 +196,4 @@ Do not include developer/test controls, debug UI, sandbox purchase dialogs, or e
 
 - Public support email address
 - Release-date placeholder
-- Decision: iPhone-only for 1.0, or support iPad too
+- iPhone and iPad are both supported for 1.0; verify the compact native touch layout in portrait and landscape before submission.
