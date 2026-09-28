@@ -1266,10 +1266,12 @@
     const storeNotice=iapAvailable?'<div class="arx-web-preview"><b>APPLE IN-APP PURCHASE</b><span>Payment is processed securely by the App Store. Expedition cash is added only after StoreKit verifies the transaction.</span></div>':'<div class="arx-web-preview"><b>IOS APP REQUIRED</b><span>Private funding purchases are available through the App Store version of Arctic Research.</span></div>';
     modal.innerHTML=`<div class="arx-modal-card arx-funding-card"><button class="arx-close" data-arx-action="close-private-funding" aria-label="Close private funding">×</button><small>PRIVATE RESEARCH BACKING</small><h2>Apply for Private Funding</h2><p>Accelerate the expedition with an unrestricted private research contribution.</p>${storeNotice}<div class="arx-funding-balance"><small>CURRENT EXPEDITION CASH</small><b data-arx-cash>${cash(state.money)}</b></div><div class="arx-funding-grid">${PRIVATE_FUNDING_PACKAGES.map((item,index)=>`<article class="${index===1?'featured':''}"><small>${index===0?'STARTER BACKING':index===1?'POPULAR':'MAJOR SPONSOR'}</small><b>${item.label}</b><span>game cash</span><button data-arx-action="buy-private-funding" data-id="${item.id}" ${iapAvailable?'':'disabled'}>${item.price}</button></article>`).join('')}</div><p class="arx-funding-note">Private funding is a consumable purchase: each successful transaction adds the selected amount to expedition cash and does not alter research progress, career level, or vessel requirements.</p></div>`;
     modal.classList.add('open');
+    window.ARAnalytics?.track?.('private_funding_viewed',{iap_available:iapAvailable?1:0});
   }
   async function purchasePrivateFunding(id,button) {
     const item=PRIVATE_FUNDING_PACKAGES.find(pack=>pack.id===id); if(!item)return;
     const originalLabel=button?.textContent||item.price;
+    window.ARAnalytics?.track?.('private_funding_purchase_started',{product_id:item.productId,game_cash:item.gameCash,display_price:item.price});
     if(button){button.disabled=true;button.textContent='PROCESSING…';}
     let result={success:false,mode:'storekit',message:'App Store purchase service is unavailable'};
     try {
@@ -1282,7 +1284,8 @@
     } catch(error) {
       result={success:false,mode:'storekit',message:error?.message||'Purchase failed'};
     }
-    if(!result.success){if(button){button.disabled=false;button.textContent=originalLabel;}toast((result.message||'PURCHASE NOT COMPLETED').toUpperCase());return;}
+    if(!result.success){const reason=/cancel/i.test(result.message||'')?'cancelled':/pending/i.test(result.message||'')?'pending':/not available|unavailable/i.test(result.message||'')?'unavailable':'failed';window.ARAnalytics?.track?.('private_funding_purchase_failed',{product_id:item.productId,game_cash:item.gameCash,outcome:reason});if(button){button.disabled=false;button.textContent=originalLabel;}toast((result.message||'PURCHASE NOT COMPLETED').toUpperCase());return;}
+    window.ARAnalytics?.track?.('private_funding_purchase_succeeded',{product_id:item.productId,game_cash:item.gameCash,display_price:item.price});
     adjustMoney(item.gameCash);
     addLog(`Private funding received: ${cash(item.gameCash)} · App Store transaction.`);
     root.querySelector('#arx-funding-modal')?.classList.remove('open');
