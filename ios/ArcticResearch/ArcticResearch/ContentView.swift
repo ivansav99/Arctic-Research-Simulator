@@ -68,7 +68,7 @@ struct GameWebView: UIViewRepresentable {
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
-        webView.isOpaque = true
+        webView.isOpaque = false
         webView.backgroundColor = UIColor(red: 0.03, green: 0.18, blue: 0.29, alpha: 1)
         webView.scrollView.backgroundColor = webView.backgroundColor
         webView.scrollView.contentInsetAdjustmentBehavior = .never
@@ -79,7 +79,7 @@ struct GameWebView: UIViewRepresentable {
         #endif
 
         context.coordinator.webView = webView
-        webView.load(URLRequest(url: Self.gameURL, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 30))
+        webView.load(URLRequest(url: Self.gameURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 30))
         return webView
     }
 
@@ -88,6 +88,7 @@ struct GameWebView: UIViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         let appSchemeHandler = OfflineAppSchemeHandler()
         weak var webView: WKWebView?
+        private var retriedAfterWebProcessTermination = false
         private let allowedProductIDs: Set<String> = [
             "ars.private_funding.1m",
             "ars.private_funding.10m",
@@ -206,6 +207,31 @@ struct GameWebView: UIViewRepresentable {
 
             let script = "window.ArcticResearchIAP && window.ArcticResearchIAP._complete(\(requestJSON), \(resultJSON));"
             webView.evaluateJavaScript(script, completionHandler: nil)
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            retriedAfterWebProcessTermination = false
+        }
+
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            #if DEBUG
+            print("Arctic Research web content process terminated")
+            #endif
+            guard !retriedAfterWebProcessTermination else { return }
+            retriedAfterWebProcessTermination = true
+            webView.load(URLRequest(url: GameWebView.gameURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 30))
+        }
+
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            #if DEBUG
+            print("Arctic Research provisional navigation failed: \(error)")
+            #endif
+        }
+
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            #if DEBUG
+            print("Arctic Research navigation failed: \(error)")
+            #endif
         }
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
