@@ -56,7 +56,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ArcticResearch-iOS-Release-Candidate-5
-          path: ios/ArcticResearch
+          path: |
+            ios/ArcticResearch
+            !ios/ArcticResearch/build/**
           if-no-files-found: error
           compression-level: 6
           retention-days: 30
