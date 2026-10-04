@@ -1,13 +1,13 @@
 # Arctic Research Simulator — App Store Submission Draft
 
-Prepared for iOS 1.0 / build 4 (RC4).
+Prepared for iOS 1.0 / build 5 (RC5).
 
 ## App identity
 
 - **App Store name:** Arctic Research Simulator
 - **Bundle ID:** `com.ivansavelyev.ArcticResearchSimulator`
 - **Version:** 1.0
-- **Build:** 4
+- **Build:** 5
 - **Primary language:** English (U.S.)
 - **Primary category:** Games
 - **Suggested secondary category:** Simulation
