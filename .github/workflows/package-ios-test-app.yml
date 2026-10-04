@@ -3,7 +3,7 @@ name: Package iOS Offline Test App
 on:
   workflow_dispatch:
   push:
-    branches: [main, release-candidate-1, release-candidate-2, release-candidate-3, release-candidate-4]
+    branches: [main, release-candidate-1, release-candidate-2, release-candidate-3, release-candidate-4, release-candidate-5]
     paths:
       - 'ios/ArcticResearch/**'
       - 'ios/prepare-offline-ios-package.py'
@@ -55,7 +55,7 @@ jobs:
       - name: Upload installable-test Xcode package
         uses: actions/upload-artifact@v4
         with:
-          name: ArcticResearch-iOS-Release-Candidate-4
+          name: ArcticResearch-iOS-Release-Candidate-5
           path: ios/ArcticResearch
           if-no-files-found: error
           compression-level: 6
