@@ -853,7 +853,7 @@
   function drawWorldCached(now){
     const scaleMatch=worldCacheValid&&Math.abs(worldCacheScale-scale)<.0001,dx=scaleMatch?(worldCacheX-state.x)*scale:0,dy=scaleMatch?(worldCacheY-state.y)*scale:0;
     const cacheCssWidth=worldCacheCanvas.width/dpr,cacheCssHeight=worldCacheCanvas.height/dpr,marginX=Math.max(0,(cacheCssWidth-width)/2),marginY=Math.max(0,(cacheCssHeight-height)/2);
-    const refreshMs=IS_IOS_SHELL?9000:IS_COARSE_POINTER?5000:900,safeX=Math.max(24,marginX-18),safeY=Math.max(24,marginY-18);
+    const refreshMs=IS_IOS_SHELL?30000:IS_COARSE_POINTER?12000:1500,safeX=Math.max(24,marginX-4),safeY=Math.max(24,marginY-4);
     if(!scaleMatch||!worldCacheValid||now-worldCacheAt>=refreshMs||Math.abs(dx)>safeX||Math.abs(dy)>safeY)rebuildWorldCache(now);
     const freshMarginX=Math.max(0,(worldCacheCanvas.width/dpr-width)/2),freshMarginY=Math.max(0,(worldCacheCanvas.height/dpr-height)/2),freshDx=(worldCacheX-state.x)*scale,freshDy=(worldCacheY-state.y)*scale;
     const sx=Math.max(0,Math.min(worldCacheCanvas.width-canvas.width,Math.round((freshMarginX-freshDx)*dpr))),sy=Math.max(0,Math.min(worldCacheCanvas.height-canvas.height,Math.round((freshMarginY-freshDy)*dpr)));
