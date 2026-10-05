@@ -1,13 +1,13 @@
 # Arctic Research Simulator — App Store Submission Draft
 
-Prepared for iOS 1.0 / build 5 (RC5).
+Prepared for iOS 1.0 / build 6 (RC6).
 
 ## App identity
 
 - **App Store name:** Arctic Research Simulator
 - **Bundle ID:** `com.ivansavelyev.ArcticResearchSimulator`
 - **Version:** 1.0
-- **Build:** 5
+- **Build:** 6
 - **Primary language:** English (U.S.)
 - **Primary category:** Games
 - **Suggested secondary category:** Simulation
@@ -47,7 +47,7 @@ Arctic Research Simulator is a science-management and exploration game inspired 
 
 ## App privacy — planned App Store Connect answers
 
-The current RC2 intentionally uses privacy-minimized PostHog analytics.
+The current RC6 intentionally uses privacy-minimized PostHog analytics.
 
 ### Data collected
 
@@ -64,6 +64,13 @@ The current RC2 intentionally uses privacy-minimized PostHog analytics.
 - Linked to the user's identity: No
 - Used for tracking: No
 - Examples: which Private Funding package was attempted and whether the StoreKit purchase succeeded, failed, was cancelled, or remained pending.
+
+**Performance Data**
+- Collected: Yes
+- Purposes: Analytics; App Functionality
+- Linked to the user's identity: No
+- Used for tracking: No
+- Examples: approximate frame-rate/performance samples used to diagnose and improve gameplay performance.
 
 ### Not collected by the developer analytics implementation
 
@@ -122,7 +129,7 @@ This policy may be updated when the app's features or data practices change. The
 
 ### Contact
 
-Support and privacy questions: [PUBLIC SUPPORT EMAIL]
+Support and privacy questions: ivansav@gmail.com
 
 ## Support page draft
 
@@ -194,6 +201,5 @@ Do not include developer/test controls, debug UI, sandbox purchase dialogs, or e
 
 ## Remaining inputs needed before publishing support/privacy pages
 
-- Public support email address
 - Release-date placeholder
 - iPhone and iPad are both supported for 1.0; verify the compact native touch layout in portrait and landscape before submission.
